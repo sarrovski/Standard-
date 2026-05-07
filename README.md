@@ -39,21 +39,71 @@ Standard is a SaaS marketplace for comparing gaming sellers/tools with a trust l
 
 ## Stripe setup
 
-1. Create a seller subscription product and price in Stripe.
-2. Create a featured slot one-time payment price in Stripe.
-3. Add these env vars:
-   - `STRIPE_SECRET_KEY`
-   - `STRIPE_WEBHOOK_SECRET`
-   - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
-   - `STRIPE_SELLER_SUBSCRIPTION_PRICE_ID`
-   - `STRIPE_FEATURED_SLOT_PRICE_ID`
-4. Configure webhook endpoint:
-   - Local with Stripe CLI: `stripe listen --forward-to localhost:3000/api/stripe/webhook`
-   - Production: `https://your-domain.com/api/stripe/webhook`
-5. Handle these events first:
-   - `checkout.session.completed`
-   - `customer.subscription.updated`
-   - `customer.subscription.deleted`
+The Stripe ↔ Supabase flow is implemented as of Batch 4. Subscriptions and
+featured slots are activated **only by the webhook** after Stripe confirms
+payment — never from client code.
+
+1. **Products and prices in Stripe.**
+   - Create a recurring product for the seller subscription.
+   - Create a one-time product for featured slots.
+   - Copy each price id.
+
+2. **Environment variables.** Add these to `.env.local` for dev and to Vercel
+   for prod:
+   ```
+   STRIPE_SECRET_KEY=sk_test_...           # secret, server-only
+   STRIPE_WEBHOOK_SECRET=whsec_...         # secret, server-only
+   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+   STRIPE_SELLER_SUBSCRIPTION_PRICE_ID=price_...
+   STRIPE_FEATURED_SLOT_PRICE_ID=price_...
+   ```
+   Also required (set during Supabase setup):
+   ```
+   SUPABASE_SERVICE_ROLE_KEY=...           # server-only, used by webhook
+   NEXT_PUBLIC_SITE_URL=https://...        # used for success/cancel URLs
+   ```
+
+3. **Webhook endpoint.**
+   - **Production:** add an endpoint in the Stripe Dashboard pointing at
+     `https://<your-domain>/api/stripe/webhook` and subscribe to:
+     - `checkout.session.completed`
+     - `customer.subscription.created`
+     - `customer.subscription.updated`
+     - `customer.subscription.deleted`
+
+     Copy the resulting `whsec_...` into `STRIPE_WEBHOOK_SECRET`.
+   - **Local development:** forward events with the Stripe CLI:
+     ```
+     stripe listen --forward-to localhost:3000/api/stripe/webhook
+     ```
+     The CLI prints a `whsec_...` for the local environment — set it as
+     `STRIPE_WEBHOOK_SECRET` in `.env.local`.
+
+4. **What the webhook does.**
+   - On a `seller_subscription` checkout completing it creates the
+     `stripe_customers` row, creates a `sellers` row if missing, **promotes
+     the profile to `role = 'seller'`**, and upserts the `subscriptions` row.
+     The webhook is the only place that promotes a user to seller.
+   - On a `featured_slot` checkout completing it inserts a `featured_slots`
+     row with `status = 'active'`, `starts_at = now()`, and `ends_at = now()
+     + 30 days`. It re-checks slot availability inside the webhook to handle
+     race conditions; if a clash is detected the row is not inserted (the
+     duplicate paying customer must be refunded manually).
+   - On subscription updates it upserts the `subscriptions` row with the
+     mapped Stripe status. **It never demotes `profile.role`** — sellers keep
+     their seller role even when the subscription goes `canceled` /
+     `past_due`. The authoritative "can this seller currently sell" signal
+     is `subscriptions.status`, which dashboards should read.
+
+5. **Testing locally.** With the Stripe CLI running:
+   ```
+   stripe trigger checkout.session.completed
+   stripe trigger customer.subscription.updated
+   ```
+   Then check the corresponding rows in Supabase. Note that triggered events
+   from the CLI use synthetic data, so metadata like `profile_id` won't match
+   a real user — for end-to-end testing, complete a real checkout in test
+   mode.
 
 ## Vercel deploy
 
