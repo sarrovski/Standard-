@@ -1,5 +1,13 @@
 import { Badge, Card, MiniStat, Nav, SectionHeader, Shell, Tabs } from "@/components/ui";
-import { analytics, paymentMethods, plans, resellerOffers, sellerProducts, trafficSources } from "@/lib/data";
+import {
+  analytics,
+  paymentMethods,
+  plans,
+  providerTagRequests,
+  sellerOffers,
+  sellerProducts,
+  trafficSources,
+} from "@/lib/data";
 
 const tabs = [
   { key: "overview", label: "Overview" },
@@ -8,26 +16,25 @@ const tabs = [
   { key: "offers", label: "Offers" },
   { key: "payments", label: "Payments" },
   { key: "analytics", label: "Analytics" },
+  { key: "verification", label: "Provider Tag" },
   { key: "billing", label: "Billing" },
 ];
 
 export default function DashboardPage({
   searchParams,
 }: {
-  searchParams?: { role?: string; tab?: string };
+  searchParams?: { tab?: string };
 }) {
-  const role = searchParams?.role ?? "seller";
   const tab = searchParams?.tab ?? "overview";
-  const isReseller = role === "reseller";
 
   return (
     <Shell>
       <Nav />
       <section className="mx-auto max-w-7xl px-6 py-10">
         <SectionHeader
-          eyebrow={isReseller ? "Reseller Dashboard" : "Seller Dashboard"}
-          title={isReseller ? "Manage reseller offers" : "Manage products and seller operations"}
-          text="A cleaner dashboard with focused sections instead of one long page. Access depends on active seller or reseller subscription."
+          eyebrow="Seller Dashboard"
+          title="Manage products, offers, payments, and verification"
+          text="Every seller gets the same dashboard. You can list your own products, create offers, and request the Provider / Developer tag if you are the official developer."
         />
 
         <div className="mt-8">
@@ -41,6 +48,7 @@ export default function DashboardPage({
           {tab === "offers" && <Offers />}
           {tab === "payments" && <Payments />}
           {tab === "analytics" && <Analytics />}
+          {tab === "verification" && <Verification />}
           {tab === "billing" && <Billing />}
         </div>
       </section>
@@ -61,7 +69,12 @@ function Overview() {
           <Badge tone="purple">Today</Badge>
           <h2 className="mt-4 text-2xl font-black">Priority actions</h2>
           <div className="mt-5 space-y-3">
-            {["Submit proof for Shadow Overlay", "Verify PayPal G&S payment policy", "Respond to 2 buyer reviews", "Review reseller offer from NovaKeys"].map((item) => (
+            {[
+              "Submit provider verification for Shadow Overlay",
+              "Verify PayPal G&S payment policy",
+              "Respond to 2 buyer reviews",
+              "Review seller offer pricing before boost",
+            ].map((item) => (
               <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-300">
                 {item}
               </div>
@@ -70,9 +83,13 @@ function Overview() {
         </Card>
         <Card className="p-6">
           <Badge tone="cyan">Status</Badge>
-          <h2 className="mt-4 text-2xl font-black">Subscription access</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-400">
-            Active Pro Seller subscription. Product listing limit: 10. Reseller offers require Reseller Pro or Big Seller.
+          <h2 className="mt-4 text-2xl font-black">Seller profile</h2>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge tone="green">Verified Seller</Badge>
+            <Badge tone="purple">Pro Seller</Badge>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-slate-400">
+            Official developers can request the Provider / Developer tag from the verification tab.
           </p>
         </Card>
       </section>
@@ -105,9 +122,19 @@ function Listings() {
                   ))}
                 </div>
               </div>
-              <div className="min-w-[240px] rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <div className="text-sm text-slate-400">Next action</div>
-                <div className="mt-1 text-sm font-semibold">{product.nextAction}</div>
+              <div className="grid min-w-[260px] grid-cols-2 gap-3 rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm">
+                <div>
+                  <div className="text-slate-500">Views</div>
+                  <div className="font-bold">{product.views}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500">Clicks</div>
+                  <div className="font-bold">{product.outboundClicks}</div>
+                </div>
+                <div className="col-span-2">
+                  <div className="text-slate-500">Next action</div>
+                  <div className="font-semibold">{product.nextAction}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -121,9 +148,9 @@ function Builder() {
   return (
     <Card className="p-6">
       <Badge tone="cyan">Builder</Badge>
-      <h2 className="mt-4 text-2xl font-black">Listing Builder</h2>
+      <h2 className="mt-4 text-2xl font-black">Create or update a listing</h2>
       <p className="mt-2 text-sm leading-6 text-slate-400">
-        This is the seller flow for creating or updating a product listing.
+        Seller builder for creating products or updating existing listings with clean, factual data.
       </p>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         {["Product name", "Game", "Category", "Architecture", "Features", "Price points", "Accepted payments", "Delivery time", "Refund policy", "Tool status"].map((field) => (
@@ -140,15 +167,18 @@ function Builder() {
 function Offers() {
   return (
     <Card className="p-6">
-      <Badge tone="cyan">Reseller offers</Badge>
+      <Badge tone="cyan">Seller offers</Badge>
       <h2 className="mt-4 text-2xl font-black">Offer management</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-400">
+        Sellers can also publish offers for existing products. This covers what used to be separate reseller behavior.
+      </p>
       <div className="mt-5 space-y-3">
-        {resellerOffers.map((offer) => (
-          <div key={offer.tool} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+        {sellerOffers.map((offer) => (
+          <div key={offer.tool + offer.seller} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
               <div>
                 <div className="font-bold">{offer.tool}</div>
-                <div className="mt-1 text-xs text-slate-500">{offer.status} • {offer.stock} • {offer.delivery}</div>
+                <div className="mt-1 text-xs text-slate-500">{offer.seller} • {offer.status} • {offer.stock} • {offer.delivery}</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {offer.payments.map((payment) => (
                     <Badge key={payment}>{payment}</Badge>
@@ -173,7 +203,7 @@ function Payments() {
       <Badge tone="cyan">Payment profile</Badge>
       <h2 className="mt-4 text-2xl font-black">Accepted payment methods</h2>
       <p className="mt-2 text-sm leading-6 text-slate-400">
-        Payment methods are central to Standard. Sellers and resellers should clearly list what they accept.
+        Payment methods are central to Standard. Sellers should clearly list what they accept and keep their risk profile understandable.
       </p>
       <div className="mt-5 grid gap-3 md:grid-cols-3">
         {paymentMethods.map((method) => (
@@ -214,6 +244,54 @@ function Analytics() {
               </div>
               <div className="mt-2 h-2 rounded-full bg-white/10">
                 <div className="h-full rounded-full bg-purple-400" style={{ width: `${share}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+function Verification() {
+  return (
+    <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+      <Card className="p-6">
+        <Badge tone="purple">Provider tag request</Badge>
+        <h2 className="mt-4 text-2xl font-black">Request Provider / Developer tag</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          If you are the official developer or provider, submit your public proof here. Admin reviews requests manually.
+        </p>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {[
+            ["Product name", "PhantomX Tracker"],
+            ["Official website", "https://your-site.com"],
+            ["Discord", "your-discord"],
+            ["Telegram", "@yourtelegram"],
+            ["Proof note", "Explain why you are the official developer"],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <div className="text-xs text-slate-500">{label}</div>
+              <div className="mt-1 text-sm font-semibold">{value}</div>
+            </div>
+          ))}
+        </div>
+        <button className="mt-6 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold">
+          Submit provider request
+        </button>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="text-2xl font-black">Existing requests</h2>
+        <div className="mt-5 space-y-3">
+          {providerTagRequests.map((request) => (
+            <div key={request.seller + request.product} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-bold">{request.product}</div>
+                  <div className="mt-1 text-xs text-slate-500">{request.seller}</div>
+                </div>
+                <Badge tone={request.status === "Approved" ? "green" : "amber"}>{request.status}</Badge>
               </div>
             </div>
           ))}

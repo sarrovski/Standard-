@@ -9,16 +9,16 @@ export default function LoginPage() {
       <section className="mx-auto max-w-6xl px-6 py-10">
         <SectionHeader
           eyebrow="Login"
-          title="One login, role-based access"
-          text="In production this will be handled by real auth. For now, this mock flow shows where each account type lands."
+          title="One login for everyone"
+          text="Users, sellers, and admins all enter from the same login. Sellers can manage products, offers, payments, and request the Provider / Developer tag."
         />
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {demoAccounts.map((account) => (
             <Card key={account.id} className="p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <Badge tone={account.role === "Admin" ? "red" : account.role === "Seller" ? "purple" : account.role === "Reseller" ? "cyan" : "default"}>
+                  <Badge tone={account.role === "Admin" ? "red" : account.role === "Seller" ? "purple" : "default"}>
                     {account.role}
                   </Badge>
                   <h2 className="mt-4 text-2xl font-black">{account.name}</h2>
@@ -31,11 +31,18 @@ export default function LoginPage() {
               </div>
 
               <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
-                {account.role === "User" && "Users can save listings, post reviews, and manage payment preferences."}
-                {account.role === "Seller" && "Sellers with an active subscription get access to product listings, builder, analytics, boosts, and reviews."}
-                {account.role === "Reseller" && "Resellers with an active subscription get access to offers, stock, delivery, payment methods, and service reviews."}
-                {account.role === "Admin" && "Admins review claims, sellers, payment risk, moderation, and audit logs."}
+                {account.role === "User" && "Users can save listings, reviews, and payment preferences."}
+                {account.role === "Seller" && "Sellers can manage their own products, seller offers, payment methods, analytics, and provider tag verification."}
+                {account.role === "Admin" && "Admins review seller submissions, provider tag requests, payment risk, and moderation."}
               </div>
+
+              {"sellerTag" in account && (
+                <div className="mt-4">
+                  <Badge tone={account.sellerTag === "Provider / Developer" ? "green" : "cyan"}>
+                    {account.sellerTag}
+                  </Badge>
+                </div>
+              )}
 
               <Link
                 href={account.redirect}
