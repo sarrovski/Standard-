@@ -25,7 +25,8 @@ export function Nav() {
         <Link href="/marketplace" className="transition hover:text-white">Marketplace</Link>
         <Link href="/account?view=sell" className="transition hover:text-white">Sell on Standard</Link>
         <Link href="/#how-it-works" className="transition hover:text-white">How it works</Link>
-        <Link href="/#trust" className="transition hover:text-white">Trust</Link>
+        <Link href="/trust" className="transition hover:text-white">Trust</Link>
+        <Link href="/terms" className="transition hover:text-white">Terms</Link>
       </div>
 
       <div className="flex items-center gap-3">

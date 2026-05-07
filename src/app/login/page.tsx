@@ -1,71 +1,113 @@
 import Link from "next/link";
-import { Badge, Card, Nav, SectionHeader, Shell } from "@/components/ui";
-import { demoAccounts } from "@/lib/data";
+import { Badge, ButtonLink, Card, Nav, Shell } from "@/components/ui";
+import { AccountMenuPreview } from "@/components/account-menu";
+import { mockSessions, getPostLoginRedirect } from "@/lib/auth";
 
 export default function LoginPage() {
   return (
     <Shell>
       <Nav />
-      <section className="mx-auto max-w-6xl px-6 py-10">
-        <SectionHeader
-          eyebrow="Login"
-          title="One access point, clear role logic"
-          text="Everyone logs in from here. Buyers go to their account, sellers with an active subscription get the seller dashboard, sellers without a subscription go to onboarding, and admins go to moderation."
-        />
+      <section className="mx-auto grid min-h-[calc(100vh-96px)] max-w-7xl items-center gap-10 px-6 py-10 lg:grid-cols-[0.9fr_1.1fr]">
+        <div>
+          <Badge tone="purple">Standard account</Badge>
+          <h1 className="mt-5 text-5xl font-black tracking-tight md:text-6xl">
+            Welcome back.
+          </h1>
+          <p className="mt-5 max-w-xl text-lg leading-8 text-slate-400">
+            Sign in once. Standard automatically routes you to the right place based on your account:
+            buyer account, seller dashboard, seller onboarding, or admin control.
+          </p>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <Card className="p-6">
-            <h2 className="text-2xl font-black">How access works</h2>
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {[
-                ["Buyer", "Log in → Account", "Save listings, set payment preferences, and write reviews."],
-                ["Seller with active subscription", "Log in → Dashboard", "Manage listings, offers, payment methods, analytics, and provider tag requests."],
-                ["Seller without subscription", "Log in → Onboarding", "Upgrade to unlock the seller dashboard and publish listings."],
-                ["Admin", "Log in → Admin", "Review provider tags, listings, payment risk, and moderation signals."],
-              ].map(([title, flow, desc]) => (
-                <div key={title} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="font-bold">{title}</div>
-                  <div className="mt-1 text-sm text-purple-300">{flow}</div>
-                  <div className="mt-2 text-sm text-slate-400">{desc}</div>
-                </div>
-              ))}
+          <div className="mt-8 grid gap-3 text-sm text-slate-400">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+              No public role picker. Your account permissions determine your access.
             </div>
-          </Card>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+              Sellers need an active subscription before they access the full seller dashboard.
+            </div>
+          </div>
 
-          <Card className="p-6">
-            <h2 className="text-2xl font-black">Demo access</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Use one of these mock accounts to preview the current logic.
-            </p>
-            <div className="mt-5 space-y-3">
-              {demoAccounts.map((account) => (
-                <div key={account.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge tone={account.role === "Admin" ? "red" : account.role === "Seller" ? "purple" : "default"}>{account.role}</Badge>
-                        {"sellerTag" in account && (
-                          <Badge tone={account.sellerTag === "Provider / Developer" ? "green" : "cyan"}>{account.sellerTag}</Badge>
-                        )}
-                      </div>
-                      <div className="mt-3 font-bold">{account.name}</div>
-                      <div className="mt-1 text-sm text-slate-500">{account.email}</div>
-                    </div>
-                    <div className="text-right text-xs text-slate-500">
-                      <div>{account.subscription}</div>
-                      {"plan" in account && <div>{account.plan}</div>}
-                    </div>
-                  </div>
-                  <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
-                    Access: {account.access}
-                  </div>
-                  <Link href={account.redirect} className="mt-4 inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold">
-                    Continue
+          <div className="mt-8">
+            <ButtonLink href="/auth-routing" variant="secondary">View routing logic</ButtonLink>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <Card className="p-6 md:p-8">
+            <div className="mb-8">
+              <h2 className="text-3xl font-black">Sign in</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                Access your account, seller tools, or admin workspace.
+              </p>
+            </div>
+
+            <form className="space-y-4">
+              <label className="block">
+                <span className="mb-2 block text-sm text-slate-400">Email</span>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50"
+                />
+              </label>
+
+              <label className="block">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-sm text-slate-400">Password</span>
+                  <Link href="/login" className="text-xs text-purple-300 hover:text-purple-200">
+                    Forgot password?
                   </Link>
                 </div>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50"
+                />
+              </label>
+
+              <Link
+                href="/auth-routing?session=seller-active"
+                className="inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20"
+              >
+                Sign in
+              </Link>
+            </form>
+
+            <div className="mt-6 border-t border-white/10 pt-6 text-center text-sm text-slate-400">
+              New to Standard?{" "}
+              <Link href="/signup" className="font-semibold text-purple-300 hover:text-purple-200">
+                Create an account
+              </Link>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <div className="font-bold">Demo redirects</div>
+                <p className="mt-1 text-sm text-slate-500">
+                  Temporary preview until real auth is connected.
+                </p>
+              </div>
+              <Badge tone="amber">Mock</Badge>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {mockSessions.map((session) => (
+                <Link
+                  key={session.id}
+                  href={`/auth-routing?session=${session.id}`}
+                  className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300 transition hover:border-purple-400/40 hover:text-white"
+                >
+                  <div className="font-semibold">{session.name}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {session.role} → {getPostLoginRedirect(session)}
+                  </div>
+                </Link>
               ))}
             </div>
           </Card>
+
+          <AccountMenuPreview />
         </div>
       </section>
     </Shell>

@@ -1,16 +1,39 @@
-# Standard v12 — Cleaner Navigation
+# Standard v14 — Realistic Auth Flow
 
 ## Main changes
 
-- Reworked the navbar so it feels public-product focused instead of internal-tool focused.
-- Removed confusing public nav links:
-  - Seller Studio
-  - Admin
-  - Account
-- New nav is built around the real product journey:
+- Reworked login to feel like a real SaaS auth flow.
+- Removed visible role-picking cards from `/login`.
+- Added one clean login form:
+  - email
+  - password
+  - forgot password
+  - create account
+- Added `/signup`.
+- Added `/auth-routing` to explain/simulate automatic post-login routing.
+- Role detection is now described as backend logic:
+  - Admin -> `/admin`
+  - Seller + active subscription -> `/dashboard`
+  - Seller without active subscription -> `/account?view=sell`
+  - User -> `/account`
+- Navbar stays public and simple:
   - Marketplace
   - Sell on Standard
   - How it works
   - Trust
+  - Terms
   - Login
-- Internal areas like dashboard, account, and admin are still accessible by route or after login, but they are no longer promoted in the public navbar.
+- Internal pages are still reachable after login/redirect, but are not shown as public nav items.
+
+## Routes
+
+- `/`
+- `/marketplace`
+- `/trust`
+- `/terms`
+- `/login`
+- `/signup`
+- `/auth-routing`
+- `/account`
+- `/dashboard`
+- `/admin`

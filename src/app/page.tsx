@@ -8,17 +8,18 @@ export default function HomePage() {
       <Nav />
       <section className="mx-auto max-w-7xl px-6 pb-16 pt-12">
         <div className="mx-auto max-w-4xl text-center">
-          <Badge tone="purple">One login. One marketplace. One seller system.</Badge>
+          <Badge tone="purple">Third-party seller verification for gaming tools</Badge>
           <h1 className="mt-6 text-5xl font-black leading-[1.04] tracking-tight md:text-7xl">
-            The simplest marketplace for
-            <span className="bg-gradient-to-r from-purple-400 to-cyan-300 bg-clip-text text-transparent"> gaming tools.</span>
+            Compare sellers before
+            <span className="bg-gradient-to-r from-purple-400 to-cyan-300 bg-clip-text text-transparent"> you buy.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-400">
-            Standard helps users choose a game, compare trusted listings, and find sellers that support the payment methods they actually use.
+            Standard acts as an independent trust layer where customers can compare sellers,
+            payment methods, reviews, and verification status before making a purchase.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <ButtonLink href="/marketplace">Open Marketplace</ButtonLink>
-            <ButtonLink href="/account?view=sell" variant="secondary">Sell on Standard</ButtonLink>
+            <ButtonLink href="/trust" variant="secondary">How trust works</ButtonLink>
           </div>
         </div>
 
@@ -36,9 +37,9 @@ export default function HomePage() {
             </p>
           </Card>
           <Card className="p-6">
-            <h3 className="text-xl font-bold">3. Sell on Standard</h3>
+            <h3 className="text-xl font-bold">3. Reduce scam risk</h3>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Sellers subscribe, manage listings and offers, then request the Provider / Developer tag if they are official.
+              Verified Sellers are manually reviewed by Standard. Reviews are designed to come from real customers and cannot be directly edited by sellers.
             </p>
           </Card>
         </section>
@@ -68,26 +69,26 @@ export default function HomePage() {
         <section id="trust" className="mt-14 scroll-mt-24">
           <SectionHeader
             eyebrow="Trust"
-            title="Why users can read listings faster"
-            text="Standard is designed to make comparison easier: public seller tags, visual payment methods, and clear listing status."
+            title="A third-party layer between buyers and sellers"
+            text="Standard does not simply list products. It helps buyers compare seller verification, payment risk, reviews, and public trust signals."
           />
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <Card className="p-6">
-              <h3 className="text-xl font-bold">Seller tags</h3>
+              <h3 className="text-xl font-bold">Verified Sellers</h3>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Users can instantly distinguish between Seller, Verified Seller, and Provider / Developer.
+                Every Verified Seller is reviewed and approved by the Standard team before receiving the badge.
               </p>
             </Card>
             <Card className="p-6">
-              <h3 className="text-xl font-bold">Payment clarity</h3>
+              <h3 className="text-xl font-bold">Real customer reviews</h3>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Real payment methods are visualized clearly. Unverified payment information is shown separately.
+                Reviews are designed to reflect real customer experiences. Sellers cannot edit, remove, or manipulate them.
               </p>
             </Card>
             <Card className="p-6">
-              <h3 className="text-xl font-bold">Admin review</h3>
+              <h3 className="text-xl font-bold">Clear limitations</h3>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Listings, provider tags, and risky payment profiles are reviewed from a dedicated admin workflow.
+                Standard helps reduce risk, but sellers remain responsible for their listings, delivery, support, and payment policies.
               </p>
             </Card>
           </div>
