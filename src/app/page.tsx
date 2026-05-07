@@ -23,7 +23,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <section id="how-it-works" className="mt-14 grid gap-4 scroll-mt-24 md:grid-cols-3">
+        <section className="mt-14 grid gap-4 md:grid-cols-3">
           <Card className="p-6">
             <h3 className="text-xl font-bold">1. Pick a game</h3>
             <p className="mt-2 text-sm leading-6 text-slate-400">

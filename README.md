@@ -1,14 +1,15 @@
-# Standard v18 — Plans + Featured Slots
+# Standard v19 — Start Selling + Seller How It Works
 
 ## Main changes
 
-- Moved Terms out of the main navbar.
-- Added Terms in the footer.
-- Replaced navbar Terms link with **Plans**.
-- Added `/plans` page with seller subscription options and featured placement logic.
-- Added a featured placement system:
-  - sellers can pay to be featured at the top of a game category
-  - featured is category-based
-  - only one seller/product can occupy a featured slot per category at a time
-  - if the category already has an active featured slot, the seller sees it as unavailable
-- Added featured logic to Marketplace and Seller Dashboard Produits.
+- Renamed navbar item **Sell on Standard** to **Start Selling**.
+- Removed public navbar link to `How it works`.
+- Incorporated the seller-focused "How it works" content into the Start Selling flow.
+- Start Selling now explains:
+  - create seller account
+  - choose plan
+  - build product page
+  - verify payment methods
+  - optionally request Provider / Developer tag
+  - optionally buy featured category slot
+  - drive traffic to seller website

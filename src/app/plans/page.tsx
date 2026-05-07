@@ -43,7 +43,7 @@ export default function PlansPage() {
           ))}
         </section>
 
-        <section className="mt-12 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <section id="featured" className="mt-12 grid gap-6 scroll-mt-24 lg:grid-cols-[0.9fr_1.1fr]">
           <Card className="p-6">
             <Badge tone="cyan">Featured placement</Badge>
             <h2 className="mt-4 text-3xl font-black">Appear at the top of a category</h2>

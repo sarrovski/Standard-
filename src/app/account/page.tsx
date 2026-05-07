@@ -18,40 +18,81 @@ export default function AccountPage({
         />
 
         {sellView ? (
-          <section className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <Card className="p-6">
-              <Badge tone="purple">Seller onboarding</Badge>
-              <h2 className="mt-4 text-2xl font-black">What you unlock</h2>
-              <div className="mt-5 grid gap-3 md:grid-cols-2">
-                {[
-                  "Product listings",
-                  "Seller offers",
-                  "Payment profile",
-                  "Analytics",
-                  "Billing controls",
-                  "Provider / Developer tag request",
-                ].map((item) => (
-                  <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm">
-                    {item}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 flex gap-3">
-                <ButtonLink href="/dashboard">Preview dashboard</ButtonLink>
-                <ButtonLink href="/dashboard?tab=billing" variant="secondary">View plans</ButtonLink>
-              </div>
-            </Card>
+          <div className="mt-8 space-y-8">
+            <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+              <Card className="p-6">
+                <Badge tone="purple">Start Selling</Badge>
+                <h2 className="mt-4 text-2xl font-black">How selling on Standard works</h2>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  Standard helps sellers create trusted product announcements, verify payment methods, and send qualified users to their own website.
+                </p>
 
-            <Card className="p-6">
-              <h2 className="text-2xl font-black">Access logic</h2>
-              <div className="mt-5 space-y-3 text-sm text-slate-400">
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">1. Create or log into your Standard account.</div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">2. Activate a seller subscription.</div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">3. Get access to the full Seller Dashboard.</div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">4. If you are the official developer, request the Provider / Developer tag.</div>
-              </div>
-            </Card>
-          </section>
+                <div className="mt-6 grid gap-3 md:grid-cols-2">
+                  {[
+                    ["1. Create your seller account", "Start from one Standard account and enable seller access."],
+                    ["2. Choose a seller plan", "Unlock product announcements, builder access, payment verification, and analytics."],
+                    ["3. Build your product page", "Use the builder to add product details, media, pricing, features, FAQ, and website CTA."],
+                    ["4. Verify payment methods", "Submit proof before a payment method appears publicly as accepted."],
+                    ["5. Request Provider / Developer tag", "Official developers can submit website, Discord, Telegram, and proof for admin review."],
+                    ["6. Drive traffic to your site", "Your Standard page builds trust, then pushes buyers to your official website or offer page."],
+                  ].map(([title, text]) => (
+                    <div key={title} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                      <div className="font-bold">{title}</div>
+                      <div className="mt-2 text-sm leading-6 text-slate-400">{text}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <ButtonLink href="/plans">View plans</ButtonLink>
+                  <ButtonLink href="/dashboard?tab=builder" variant="secondary">Preview builder</ButtonLink>
+                </div>
+              </Card>
+
+              <Card className="p-6">
+                <Badge tone="cyan">Seller tools</Badge>
+                <h2 className="mt-4 text-2xl font-black">What you unlock</h2>
+                <div className="mt-5 grid gap-3">
+                  {[
+                    "Product announcements",
+                    "Advanced product page builder",
+                    "Image upload placeholders / media gallery",
+                    "Verified payment method workflow",
+                    "Outbound click analytics",
+                    "Featured category placement",
+                    "Provider / Developer tag request",
+                  ].map((item) => (
+                    <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </section>
+
+            <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+              <Card className="p-6">
+                <Badge tone="green">Featured slots</Badge>
+                <h2 className="mt-4 text-2xl font-black">Pay to appear higher</h2>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  Sellers can reserve one featured placement per category when the slot is available.
+                  If another product already owns the slot, it becomes unavailable until the placement expires.
+                </p>
+                <div className="mt-6">
+                  <ButtonLink href="/plans#featured" variant="secondary">Check featured availability</ButtonLink>
+                </div>
+              </Card>
+
+              <Card className="p-6">
+                <Badge tone="amber">Important</Badge>
+                <h2 className="mt-4 text-2xl font-black">Verification still matters</h2>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  Featured placement boosts visibility, but it does not replace verification. Seller tags, payment methods,
+                  and trust signals are still reviewed separately by Standard.
+                </p>
+              </Card>
+            </section>
+          </div>
         ) : (
           <>
             <section className="mt-8 grid gap-4 md:grid-cols-4">
