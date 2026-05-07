@@ -2,9 +2,9 @@ import type { PaymentMethod, PaymentVerificationStatus } from "@/lib/data";
 
 export type LocalSession = {
   email: string;
-  role: "USER" | "SELLER" | "ADMIN";
-  sellerSubscriptionStatus: "NONE" | "ACTIVE";
-  sellerTag: "NONE" | "VERIFIED_SELLER" | "PROVIDER_DEVELOPER";
+  role: "user" | "seller" | "admin";
+  sellerSubscriptionStatus: "none" | "active";
+  sellerTag: "none" | "verified_seller" | "provider_developer";
 };
 
 export type LocalProduct = {

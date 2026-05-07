@@ -12,42 +12,42 @@ function detectSession(email: string): LocalSession {
   if (normalized.includes("admin")) {
     return {
       email,
-      role: "ADMIN",
-      sellerSubscriptionStatus: "ACTIVE",
-      sellerTag: "NONE",
+      role: "admin",
+      sellerSubscriptionStatus: "active",
+      sellerTag: "none",
     };
   }
 
   if (normalized.includes("seller") || normalized.includes("dev") || normalized.includes("provider")) {
     return {
       email,
-      role: "SELLER",
-      sellerSubscriptionStatus: "ACTIVE",
-      sellerTag: normalized.includes("provider") || normalized.includes("dev") ? "PROVIDER_DEVELOPER" : "VERIFIED_SELLER",
+      role: "seller",
+      sellerSubscriptionStatus: "active",
+      sellerTag: normalized.includes("provider") || normalized.includes("dev") ? "provider_developer" : "verified_seller",
     };
   }
 
   if (normalized.includes("new")) {
     return {
       email,
-      role: "SELLER",
-      sellerSubscriptionStatus: "NONE",
-      sellerTag: "NONE",
+      role: "seller",
+      sellerSubscriptionStatus: "none",
+      sellerTag: "none",
     };
   }
 
   return {
     email,
-    role: "USER",
-    sellerSubscriptionStatus: "NONE",
-    sellerTag: "NONE",
+    role: "user",
+    sellerSubscriptionStatus: "none",
+    sellerTag: "none",
   };
 }
 
 function destinationFor(session: LocalSession) {
-  if (session.role === "ADMIN") return "/admin";
-  if (session.role === "SELLER" && session.sellerSubscriptionStatus === "ACTIVE") return "/dashboard";
-  if (session.role === "SELLER") return "/account?view=sell";
+  if (session.role === "admin") return "/admin";
+  if (session.role === "seller" && session.sellerSubscriptionStatus === "active") return "/dashboard";
+  if (session.role === "seller") return "/account?view=sell";
   return "/account";
 }
 
@@ -123,12 +123,12 @@ export function LoginClient() {
           <Badge tone="amber">Local</Badge>
         </div>
         <div className="grid gap-2 md:grid-cols-2">
-          {[
+          {([
             ["user@standard.gg", "Buyer account"],
             ["seller@standard.gg", "Seller dashboard"],
             ["new@standard.gg", "Seller onboarding"],
             ["admin@standard.gg", "Admin panel"],
-          ].map(([mail, label]) => (
+          ] as const).map(([mail, label]) => (
             <button
               key={mail}
               onClick={() => setEmail(mail)}

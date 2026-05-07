@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe, getSiteUrl } from "@/lib/stripe";
+import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/roles";
 
 export async function POST(request: NextRequest) {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_FEATURED_SLOT_PRICE_ID) {
     return NextResponse.json({ error: "Stripe featured slot env vars are not configured." }, { status: 500 });
+  }
+
+  if (isSupabaseConfigured()) {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { slotId, productId, game, category } = await request.json();

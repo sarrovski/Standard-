@@ -7,7 +7,9 @@ export default function AuthRoutingPage({
 }: {
   searchParams?: { session?: string };
 }) {
-  const session = mockSessions.find((item) => item.id === searchParams?.session) ?? mockSessions[1];
+  const fallback = mockSessions[1] ?? mockSessions[0];
+  if (!fallback) throw new Error("mockSessions is empty");
+  const session = mockSessions.find((item) => item.id === searchParams?.session) ?? fallback;
   const redirect = getPostLoginRedirect(session);
 
   return (

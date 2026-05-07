@@ -1,6 +1,6 @@
-export type AccountRole = "USER" | "SELLER" | "ADMIN";
-export type SellerSubscriptionStatus = "NONE" | "TRIAL" | "ACTIVE" | "PAST_DUE";
-export type SellerTag = "NONE" | "VERIFIED_SELLER" | "PROVIDER_DEVELOPER";
+export type AccountRole = "user" | "seller" | "admin";
+export type SellerSubscriptionStatus = "none" | "trial" | "active" | "past_due";
+export type SellerTag = "none" | "verified_seller" | "provider_developer";
 
 export type MockSession = {
   id: string;
@@ -16,67 +16,67 @@ export const mockSessions: MockSession[] = [
     id: "user-demo",
     email: "user@standard.gg",
     name: "Standard User",
-    role: "USER",
-    sellerSubscriptionStatus: "NONE",
-    sellerTag: "NONE",
+    role: "user",
+    sellerSubscriptionStatus: "none",
+    sellerTag: "none",
   },
   {
     id: "seller-active",
     email: "seller@standard.gg",
     name: "DevStudio",
-    role: "SELLER",
-    sellerSubscriptionStatus: "ACTIVE",
-    sellerTag: "PROVIDER_DEVELOPER",
+    role: "seller",
+    sellerSubscriptionStatus: "active",
+    sellerTag: "provider_developer",
   },
   {
     id: "seller-no-sub",
     email: "new@standard.gg",
     name: "New Seller",
-    role: "SELLER",
-    sellerSubscriptionStatus: "NONE",
-    sellerTag: "NONE",
+    role: "seller",
+    sellerSubscriptionStatus: "none",
+    sellerTag: "none",
   },
   {
     id: "admin-demo",
     email: "admin@standard.gg",
     name: "Standard Admin",
-    role: "ADMIN",
-    sellerSubscriptionStatus: "ACTIVE",
-    sellerTag: "NONE",
+    role: "admin",
+    sellerSubscriptionStatus: "active",
+    sellerTag: "none",
   },
 ];
 
 export function getPostLoginRedirect(session: MockSession) {
-  if (session.role === "ADMIN") return "/admin";
-  if (session.role === "SELLER" && session.sellerSubscriptionStatus === "ACTIVE") {
+  if (session.role === "admin") return "/admin";
+  if (session.role === "seller" && session.sellerSubscriptionStatus === "active") {
     return "/dashboard";
   }
-  if (session.role === "SELLER") return "/account?view=sell";
+  if (session.role === "seller") return "/account?view=sell";
   return "/account";
 }
 
 export const authLogicSteps = [
   {
     label: "User",
-    condition: "role === USER",
+    condition: 'role === "user"',
     redirect: "/account",
     description: "Buyer account with watchlist, reviews, alerts, and payment preferences.",
   },
   {
     label: "Seller, active subscription",
-    condition: "role === SELLER && sellerSubscriptionStatus === ACTIVE",
+    condition: 'role === "seller" && sellerSubscriptionStatus === "active"',
     redirect: "/dashboard",
     description: "Full seller dashboard with products, offers, payments, analytics, verification, and billing.",
   },
   {
     label: "Seller, no active subscription",
-    condition: "role === SELLER && sellerSubscriptionStatus !== ACTIVE",
+    condition: 'role === "seller" && sellerSubscriptionStatus !== "active"',
     redirect: "/account?view=sell",
     description: "Seller onboarding and plan selection before dashboard access.",
   },
   {
     label: "Admin",
-    condition: "role === ADMIN",
+    condition: 'role === "admin"',
     redirect: "/admin",
     description: "Admin control center for submissions, provider tags, payment risk, and moderation.",
   },

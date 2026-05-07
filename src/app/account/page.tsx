@@ -1,10 +1,12 @@
 import { Card, MiniStat, Nav, SectionHeader, Shell, Badge, ButtonLink } from "@/components/ui";
+import { requireRole } from "@/lib/roles";
 
-export default function AccountPage({
+export default async function AccountPage({
   searchParams,
 }: {
   searchParams?: { view?: string };
 }) {
+  await requireRole(["user", "seller", "admin"]);
   const sellView = searchParams?.view === "sell";
 
   return (
