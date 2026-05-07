@@ -1,6 +1,6 @@
 import { Badge, Card, MiniStat, Nav, SectionHeader, Shell } from "@/components/ui";
-import { adminSignals, listings, providerTagRequests, sellerOffers, submissionQueue } from "@/lib/data";
-import { PaymentPill } from "@/components/payment-pill";
+import { adminSignals, listings, paymentVerificationQueue, providerTagRequests, sellerOffers, submissionQueue } from "@/lib/data";
+import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
 export default function AdminPage() {
   return (
@@ -94,6 +94,41 @@ export default function AdminPage() {
                     <div className="text-right text-sm text-slate-400">
                       <div>{offer.status}</div>
                       <div className="mt-1 text-xs text-slate-500">{offer.disputes}</div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </Panel>
+        </section>
+
+
+        <section className="mt-6">
+          <Panel title="Payment Verification Queue">
+            <div className="grid gap-4 md:grid-cols-2">
+              {paymentVerificationQueue.map((item) => (
+                <Card key={item.seller + item.listing + item.method} className="p-5">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold">{item.seller}</h3>
+                        <p className="mt-1 text-sm text-slate-500">{item.listing}</p>
+                      </div>
+                      <PaymentStatusPill status={item.status} />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <PaymentPill method={item.method} />
+                      <Badge tone={item.risk === "High" ? "red" : item.risk === "Medium" ? "amber" : "green"}>{item.risk} risk</Badge>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
+                      <div><span className="text-slate-500">Proof:</span> {item.submittedProof}</div>
+                      <div className="mt-2"><span className="text-slate-500">Checkout:</span> {item.checkoutUrl}</div>
+                      <div className="mt-2"><span className="text-slate-500">Refund policy:</span> {item.refundPolicy}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">Approve</button>
+                      <button className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300">Request more proof</button>
+                      <button className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300">Reject</button>
                     </div>
                   </div>
                 </Card>

@@ -1,39 +1,21 @@
-# Standard v14 — Realistic Auth Flow
+# Standard v16 — Payment Verification
 
 ## Main changes
 
-- Reworked login to feel like a real SaaS auth flow.
-- Removed visible role-picking cards from `/login`.
-- Added one clean login form:
-  - email
-  - password
-  - forgot password
-  - create account
-- Added `/signup`.
-- Added `/auth-routing` to explain/simulate automatic post-login routing.
-- Role detection is now described as backend logic:
-  - Admin -> `/admin`
-  - Seller + active subscription -> `/dashboard`
-  - Seller without active subscription -> `/account?view=sell`
-  - User -> `/account`
-- Navbar stays public and simple:
-  - Marketplace
-  - Sell on Standard
-  - How it works
-  - Trust
-  - Terms
-  - Login
-- Internal pages are still reachable after login/redirect, but are not shown as public nav items.
+- Sellers can no longer simply claim they accept a payment method.
+- Every payment method now has a verification status:
+  - Pending verification
+  - Verified
+  - Rejected
+  - Needs re-check
+- Public marketplace filters only use **Verified** payment methods.
+- Public cards/pages show:
+  - Verified accepted payments
+  - Payment methods under review
+- Rejected methods are kept for admin/seller context, not public promotion.
+- Seller dashboard now has a stronger Payment Verification workflow.
+- Admin has a Payment Verification Queue.
 
-## Routes
+## Why
 
-- `/`
-- `/marketplace`
-- `/trust`
-- `/terms`
-- `/login`
-- `/signup`
-- `/auth-routing`
-- `/account`
-- `/dashboard`
-- `/admin`
+This prevents sellers from listing Card, PayPal, Crypto, or other methods just to attract buyers if they do not actually accept them.

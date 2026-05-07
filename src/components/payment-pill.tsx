@@ -1,5 +1,5 @@
 import { cn } from "@/lib/helpers";
-import type { PaymentMethod } from "@/lib/data";
+import type { PaymentMethod, PaymentVerificationStatus } from "@/lib/data";
 
 const paymentStyles: Record<PaymentMethod, { icon: string; label: string; className: string }> = {
   Crypto: { icon: "₿", label: "Crypto", className: "border-amber-400/20 bg-amber-500/10 text-amber-100" },
@@ -13,6 +13,13 @@ const paymentStyles: Record<PaymentMethod, { icon: string; label: string; classN
   "Bank Transfer": { icon: "⇄", label: "Bank Transfer", className: "border-indigo-400/20 bg-indigo-500/10 text-indigo-100" },
 };
 
+const statusStyles: Record<PaymentVerificationStatus, string> = {
+  Verified: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100",
+  "Pending verification": "border-amber-400/20 bg-amber-500/10 text-amber-100",
+  "Needs re-check": "border-orange-400/20 bg-orange-500/10 text-orange-100",
+  Rejected: "border-red-400/20 bg-red-500/10 text-red-100",
+};
+
 export function PaymentPill({ method, compact = false }: { method: PaymentMethod; compact?: boolean }) {
   const style = paymentStyles[method];
   return (
@@ -24,6 +31,14 @@ export function PaymentPill({ method, compact = false }: { method: PaymentMethod
     >
       <span className={cn("inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/15 bg-black/15 text-[11px] font-bold", compact && "h-4 w-4 text-[10px]")}>{style.icon}</span>
       <span>{style.label}</span>
+    </span>
+  );
+}
+
+export function PaymentStatusPill({ status }: { status: PaymentVerificationStatus }) {
+  return (
+    <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-xs font-medium", statusStyles[status])}>
+      {status}
     </span>
   );
 }
