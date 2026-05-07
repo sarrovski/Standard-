@@ -310,3 +310,110 @@ export function adaptAdminProviderTagRequest(
     status: statusMap[row.status],
   };
 }
+
+// ---------- Seller dashboard adapters --------------------------------------
+
+/**
+ * Shape used by the seller "Produits" tab card. Mirrors the demo
+ * sellerProducts[] from data.ts so the existing JSX renders unchanged.
+ */
+export type UISellerProductCard = {
+  slug: string;
+  name: string;
+  status: string;
+  toolStatus: string;
+  game: string;
+  features: string[];
+  views: number;
+  outboundClicks: number;
+  outboundCtr: string;
+  integrity: string;
+  pageTemplate: string;
+  mediaAssets: number;
+  website: string;
+  nextAction: string;
+};
+
+export function adaptSellerProductCard(
+  row: ProductRow,
+): UISellerProductCard {
+  const websiteHost = row.website_url
+    ? row.website_url.replace(/^https?:\/\//, "")
+    : "—";
+  const statusLabel =
+    row.status === "published"
+      ? "Verified"
+      : row.status === "draft"
+        ? "Pending Review"
+        : "Archived";
+  return {
+    slug: row.slug,
+    name: row.name,
+    status: statusLabel,
+    toolStatus: "Saved to database",
+    game: row.game,
+    features: row.features ?? [],
+    views: 0,
+    outboundClicks: 0,
+    outboundCtr: "0%",
+    integrity: row.trust_score != null ? String(row.trust_score) : "Pending",
+    pageTemplate: "Hero Spotlight",
+    mediaAssets: 0,
+    website: websiteHost,
+    nextAction:
+      row.status === "draft"
+        ? "Submit for review and verify payment methods"
+        : row.status === "published"
+          ? "Drive traffic from your website"
+          : "Reactivate from the Builder",
+  };
+}
+
+/**
+ * Seller-side payment verification request, used in the "Your payment status"
+ * panel of the Payment Verification tab.
+ */
+export type UISellerPaymentRequest = {
+  id: string;
+  productName: string;
+  productSlug: string | null;
+  method: PaymentMethod;
+  status: PaymentVerificationStatus;
+  proofNote: string;
+};
+
+export function adaptSellerPaymentRequest(
+  row: PaymentVerificationRequestRow & {
+    payment_methods?: PaymentMethodRow | null;
+    products?: ProductRow | null;
+  },
+): UISellerPaymentRequest {
+  return {
+    id: row.id,
+    productName: row.products?.name ?? "—",
+    productSlug: row.products?.slug ?? null,
+    method: coercePaymentMethod(row.payment_methods?.name),
+    status: mapPaymentStatusToUI(row.status),
+    proofNote: row.seller_notes ?? row.external_proof_url ?? "—",
+  };
+}
+
+/** Provider tag request status as the UI displays it. */
+export type UISellerProviderTagStatus = "Not requested" | "Pending" | "Approved" | "Rejected";
+
+export function adaptProviderTagStatus(
+  row: ProviderTagRequestRow | null,
+): UISellerProviderTagStatus {
+  if (!row) return "Not requested";
+  switch (row.status) {
+    case "approved":
+      return "Approved";
+    case "rejected":
+      return "Rejected";
+    case "pending":
+      return "Pending";
+    case "none":
+    default:
+      return "Not requested";
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Badge, Card, MiniStat, Tabs } from "@/components/ui";
 import {
@@ -12,14 +12,31 @@ import {
   paymentMethods,
   paymentVerificationQueue,
   plans,
-  providerTagRequests,
+  providerTagRequests as demoProviderTagRequests,
   sellerOffers,
-  sellerProducts,
+  sellerProducts as demoSellerProducts,
   trafficSources,
 } from "@/lib/data";
-import { addLocalProduct, addPaymentRequest, getFeaturedSlots, getLocalProducts, getPaymentRequests, saveFeaturedSlots, slugify } from "@/lib/product-store";
-import type { LocalFeaturedSlot, LocalPaymentRequest, LocalProduct } from "@/lib/product-types";
+import {
+  addLocalProduct,
+  addPaymentRequest,
+  getFeaturedSlots,
+  getLocalProducts,
+  getPaymentRequests,
+  saveFeaturedSlots,
+  slugify,
+} from "@/lib/product-store";
+import type {
+  LocalFeaturedSlot,
+  LocalPaymentRequest,
+  LocalProduct,
+} from "@/lib/product-types";
 import type { PaymentMethod } from "@/lib/data";
+import type {
+  UISellerPaymentRequest,
+  UISellerProductCard,
+  UISellerProviderTagStatus,
+} from "@/lib/adapters";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
 const tabs = [
@@ -32,7 +49,28 @@ const tabs = [
   { key: "billing", label: "Billing" },
 ];
 
-export function DashboardClient({ initialTab = "products" }: { initialTab?: string }) {
+/**
+ * `initialData`:
+ *   - non-null => Supabase-sourced (server fetched). Demo product-store is
+ *     ignored. Writes flow through the /api/seller/* routes.
+ *   - null     => demo mode. Existing in-memory product-store + data.ts.
+ */
+export type DashboardInitialData = {
+  products: UISellerProductCard[];
+  paymentRequests: UISellerPaymentRequest[];
+  providerTagStatus: UISellerProviderTagStatus;
+  sellerName: string;
+} | null;
+
+type DashboardClientProps = {
+  initialTab?: string;
+  initialData: DashboardInitialData;
+};
+
+export function DashboardClient({
+  initialTab = "products",
+  initialData,
+}: DashboardClientProps) {
   const [tab, setTab] = useState(initialTab);
 
   useEffect(() => {
@@ -41,6 +79,8 @@ export function DashboardClient({ initialTab = "products" }: { initialTab?: stri
     setTab(current);
   }, []);
 
+  const supabaseSourced = initialData !== null;
+
   return (
     <>
       <div className="mt-8">
@@ -48,29 +88,60 @@ export function DashboardClient({ initialTab = "products" }: { initialTab?: stri
       </div>
 
       <div className="mt-8">
-        {tab === "products" && <Products />}
-        {tab === "builder" && <Builder />}
+        {tab === "products" && (
+          <Products
+            supabaseSourced={supabaseSourced}
+            initialProducts={initialData?.products ?? null}
+          />
+        )}
+        {tab === "builder" && <Builder supabaseSourced={supabaseSourced} />}
         {tab === "offers" && <Offers />}
-        {tab === "payments" && <Payments />}
+        {tab === "payments" && (
+          <Payments
+            supabaseSourced={supabaseSourced}
+            initialRequests={initialData?.paymentRequests ?? null}
+            initialProducts={initialData?.products ?? null}
+          />
+        )}
         {tab === "analytics" && <Analytics />}
-        {tab === "verification" && <Verification />}
+        {tab === "verification" && (
+          <Verification
+            supabaseSourced={supabaseSourced}
+            initialStatus={initialData?.providerTagStatus ?? "Not requested"}
+          />
+        )}
         {tab === "billing" && <Billing />}
       </div>
     </>
   );
 }
 
-function Products() {
-  const [products, setProducts] = useState<LocalProduct[]>([]);
+// =========================================================================
+// Produits tab
+// =========================================================================
+
+function Products({
+  supabaseSourced,
+  initialProducts,
+}: {
+  supabaseSourced: boolean;
+  initialProducts: UISellerProductCard[] | null;
+}) {
+  const [demoProductsList, setDemoProducts] = useState<LocalProduct[]>([]);
   const [slots, setSlots] = useState<LocalFeaturedSlot[]>([]);
 
   useEffect(() => {
-    setProducts(getLocalProducts());
+    if (supabaseSourced) return;
+    setDemoProducts(getLocalProducts());
     setSlots(getFeaturedSlots());
-  }, []);
+  }, [supabaseSourced]);
 
   const displayProducts = useMemo(() => {
-    const localCards = products.map((product) => ({
+    if (supabaseSourced) {
+      return initialProducts ?? [];
+    }
+    const localCards = demoProductsList.map((product) => ({
+      slug: product.slug,
       name: product.name,
       status: product.productStatus,
       toolStatus: "Draft / database-ready",
@@ -84,20 +155,24 @@ function Products() {
       mediaAssets: product.gallery.length,
       website: product.websiteUrl.replace("https://", ""),
       nextAction: "Submit for review and verify payment methods",
-      slug: product.slug,
     }));
-    return [...localCards, ...sellerProducts.map((item) => ({ ...item, slug: "phantomx-tracker" }))];
-  }, [products]);
+    return [
+      ...localCards,
+      ...demoSellerProducts.map((item) => ({ ...item, slug: "phantomx-tracker" })),
+    ];
+  }, [supabaseSourced, initialProducts, demoProductsList]);
 
-  const reserveSlot = (slot: LocalFeaturedSlot) => {
-    const firstProduct = products[0];
+  // Featured slot reservation is still demo-only. Real reservations go through
+  // the Stripe featured checkout (Batch 4) which the seller triggers from
+  // /api/stripe/create-featured-checkout-session. We don't bypass that here.
+  const reserveSlotDemo = (slot: LocalFeaturedSlot) => {
+    if (supabaseSourced) return;
+    const firstProduct = demoProductsList[0];
     if (!firstProduct) {
       alert("Create a product first before reserving a featured slot.");
       return;
     }
-
     if (slot.status !== "Available") return;
-
     const updated = slots.map((item) =>
       item.category === slot.category
         ? {
@@ -118,7 +193,11 @@ function Products() {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-4">
-        <MiniStat label="Produits en ligne" value={String(displayProducts.length)} detail="demo + database-ready" />
+        <MiniStat
+          label="Produits en ligne"
+          value={String(displayProducts.length)}
+          detail={supabaseSourced ? "from Supabase" : "demo + database-ready"}
+        />
         <MiniStat label="Views produits" value="35.2K" detail="+16.4%" />
         <MiniStat label="Outbound clicks" value="1.7K" detail="website traffic" />
         <MiniStat label="Avg outbound CTR" value="4.93%" detail="+0.8 pts" />
@@ -127,9 +206,9 @@ function Products() {
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-white/10 p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl font-bold">Produits / annonces en ligne</h2>
+            <h2 className="text-xl font-bold">Produits en ligne</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Products created in the builder now appear here and in the marketplace.
+              Products created in the builder appear here and in the marketplace.
             </p>
           </div>
           <Link
@@ -141,34 +220,42 @@ function Products() {
         </div>
 
         <div className="divide-y divide-white/10">
+          {displayProducts.length === 0 && (
+            <p className="p-6 text-sm text-slate-500">
+              No products yet. Open the Builder tab to create your first one.
+            </p>
+          )}
           {displayProducts.map((product) => (
-            <div key={product.name + product.website} className="p-5">
+            <div key={product.slug + product.name} className="p-5">
               <div className="grid gap-5 xl:grid-cols-[1fr_360px] xl:items-start">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-2xl font-black">{product.name}</h3>
-                    <Badge tone={product.status === "Verified" ? "green" : "amber"}>{product.status}</Badge>
+                    <Badge tone={product.status === "Verified" ? "green" : "amber"}>
+                      {product.status}
+                    </Badge>
                     <Badge tone="cyan">{product.pageTemplate}</Badge>
                   </div>
-
                   <p className="mt-2 text-sm text-slate-500">
                     {product.game} • {product.toolStatus} • {product.website}
                   </p>
-
                   <div className="mt-4 flex flex-wrap gap-2">
                     {product.features.map((feature) => (
-                      <span key={feature} className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-300">
+                      <span
+                        key={feature}
+                        className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-300"
+                      >
                         {feature}
                       </span>
                     ))}
                   </div>
-
                   <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <div className="text-xs text-slate-500">Next action</div>
-                    <div className="mt-1 text-sm font-semibold text-white">{product.nextAction}</div>
+                    <div className="mt-1 text-sm font-semibold text-white">
+                      {product.nextAction}
+                    </div>
                   </div>
                 </div>
-
                 <div className="rounded-3xl border border-white/10 bg-slate-950/40 p-5">
                   <div className="grid grid-cols-2 gap-3">
                     <MetricCard label="Views" value={String(product.views)} />
@@ -176,12 +263,17 @@ function Products() {
                     <MetricCard label="CTR" value={product.outboundCtr} />
                     <MetricCard label="Status" value={product.status} />
                   </div>
-
                   <div className="mt-5 grid gap-2">
-                    <Link href={`/products/${product.slug}`} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold">
+                    <Link
+                      href={`/products/${product.slug}`}
+                      className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold"
+                    >
                       View public page
                     </Link>
-                    <Link href="/dashboard?tab=builder" className="rounded-xl border border-purple-400/20 bg-purple-500/10 px-4 py-3 text-center text-sm font-semibold text-purple-200">
+                    <Link
+                      href="/dashboard?tab=builder"
+                      className="rounded-xl border border-purple-400/20 bg-purple-500/10 px-4 py-3 text-center text-sm font-semibold text-purple-200"
+                    >
                       Edit in builder
                     </Link>
                   </div>
@@ -192,44 +284,55 @@ function Products() {
         </div>
       </Card>
 
-      <Card className="p-6">
-        <Badge tone="purple">Featured placement</Badge>
-        <h2 className="mt-4 text-2xl font-black">Boost a product to the top of a category</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-400">
-          Only one product can be featured per category. If available, your newest created product can reserve the slot.
-        </p>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {slots.map((slot) => (
-            <div key={slot.category} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-bold">{slot.category}</div>
-                <Badge tone={slot.status === "Available" ? "green" : "amber"}>{slot.status}</Badge>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-slate-500">
-                {slot.status === "Available"
-                  ? `Slot available now • ${slot.price}`
-                  : `${slot.product} is featured until ${slot.endsAt}`}
-              </p>
-              <button
-                onClick={() => reserveSlot(slot)}
-                className={`mt-4 w-full rounded-xl px-4 py-3 text-sm font-semibold ${
-                  slot.status === "Available"
-                    ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 text-white"
-                    : "border border-white/10 bg-white/[0.04] text-slate-500"
-                }`}
+      {!supabaseSourced && (
+        <Card className="p-6">
+          <Badge tone="purple">Featured placement (demo)</Badge>
+          <h2 className="mt-4 text-2xl font-black">Boost a product to the top of a category</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            In production, featured slots are reserved through Stripe checkout. This demo lets you
+            preview the UI without payment.
+          </p>
+          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {slots.map((slot) => (
+              <div
+                key={slot.category}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
               >
-                {slot.status === "Available" ? "Buy featured slot" : "Already taken"}
-              </button>
-            </div>
-          ))}
-        </div>
-      </Card>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-bold">{slot.category}</div>
+                  <Badge tone={slot.status === "Available" ? "green" : "amber"}>
+                    {slot.status}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  {slot.status === "Available"
+                    ? `Slot available now • ${slot.price}`
+                    : `${slot.product} is featured until ${slot.endsAt}`}
+                </p>
+                <button
+                  onClick={() => reserveSlotDemo(slot)}
+                  className={`mt-4 w-full rounded-xl px-4 py-3 text-sm font-semibold ${
+                    slot.status === "Available"
+                      ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 text-white"
+                      : "border border-white/10 bg-white/[0.04] text-slate-500"
+                  }`}
+                >
+                  {slot.status === "Available" ? "Reserve slot" : "Occupied"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
 
-function Builder() {
+// =========================================================================
+// Builder tab
+// =========================================================================
+
+function Builder({ supabaseSourced }: { supabaseSourced: boolean }) {
   const [form, setForm] = useState({
     name: "My New Product",
     game: "Valorant",
@@ -243,50 +346,95 @@ function Builder() {
     summary: "A polished product announcement built with Standard.",
     features: "Fast setup, Clean dashboard, Payment clarity",
   });
-
   const [createdSlug, setCreatedSlug] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const update = (key: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
-  const createProduct = () => {
-    const slug = slugify(form.name || "new-product");
-    const product: LocalProduct = {
-      slug,
-      name: form.name,
-      seller: "Demo Seller",
-      sellerTag: "Seller",
-      game: form.game,
-      category: form.category,
-      architecture: form.architecture,
-      productStatus: "Pending Review",
-      integrity: null,
-      confidence: "Pending",
-      verifiedPayments: [],
-      paymentProfiles: [],
-      features: form.features.split(",").map((item) => item.trim()).filter(Boolean),
-      pricePoints: [form.price],
-      delivery: "Pending verification",
-      refundPolicy: "Pending verification",
-      accent: "from-violet-500/70 to-cyan-400/40",
-      summary: form.summary,
-      websiteUrl: form.websiteUrl,
-      websiteLabel: form.cta,
-      discord: form.discord,
-      telegram: form.telegram,
-      trustSignals: ["Seller-submitted product"],
-      gallery: [
-        { title: "Hero image placeholder", accent: "from-violet-500/60 to-fuchsia-500/40" },
-        { title: "Product screenshot placeholder", accent: "from-slate-700 to-cyan-500/30" },
-      ],
-      benefits: ["Created in the Standard builder", "Ready for media and payment verification"],
-      faq: [{ q: "What happens next?", a: "Submit the product for review, verify payment methods, then drive traffic to your website." }],
-      activity: { vouches: 0, views: 0, replies: 0, lastSeen: "Just created" },
-    };
+  const createProduct = async () => {
+    setError(null);
 
-    addLocalProduct(product);
-    setCreatedSlug(slug);
+    if (!supabaseSourced) {
+      // Demo path: write to in-memory product-store like before.
+      const slug = slugify(form.name || "new-product");
+      const product: LocalProduct = {
+        slug,
+        name: form.name,
+        seller: "Demo Seller",
+        sellerTag: "Seller",
+        game: form.game,
+        category: form.category,
+        architecture: form.architecture,
+        productStatus: "Pending Review",
+        integrity: null,
+        confidence: "Pending",
+        verifiedPayments: [],
+        paymentProfiles: [],
+        features: form.features.split(",").map((item) => item.trim()).filter(Boolean),
+        pricePoints: [form.price],
+        delivery: "Pending verification",
+        refundPolicy: "Pending verification",
+        accent: "from-violet-500/70 to-cyan-400/40",
+        summary: form.summary,
+        websiteUrl: form.websiteUrl,
+        websiteLabel: form.cta,
+        discord: form.discord,
+        telegram: form.telegram,
+        trustSignals: ["Seller-submitted product"],
+        gallery: [
+          { title: "Hero image placeholder", accent: "from-violet-500/60 to-fuchsia-500/40" },
+          { title: "Product screenshot placeholder", accent: "from-slate-700 to-cyan-500/30" },
+        ],
+        benefits: ["Created in the Standard builder", "Ready for media and payment verification"],
+        faq: [
+          {
+            q: "What happens next?",
+            a: "Submit the product for review, verify payment methods, then drive traffic to your website.",
+          },
+        ],
+        activity: { vouches: 0, views: 0, replies: 0, lastSeen: "Just created" },
+      };
+      addLocalProduct(product);
+      setCreatedSlug(slug);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/seller/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          game: form.game,
+          category: form.category,
+          website_url: form.websiteUrl,
+          summary: form.summary,
+          features: form.features
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
+          price_points: [form.price],
+        }),
+      });
+      const payload = (await response.json()) as
+        | { product: { slug: string } }
+        | { error: string };
+      if (!response.ok) {
+        setError("error" in payload ? payload.error : "Could not create product.");
+        return;
+      }
+      if ("product" in payload) {
+        setCreatedSlug(payload.product.slug);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -296,16 +444,17 @@ function Builder() {
           <Badge tone="purple">Product builder</Badge>
           <h2 className="mt-4 text-2xl font-black">Create a product announcement</h2>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            This builder keeps the prototype clickable while the Supabase product mutation is wired.
+            {supabaseSourced
+              ? "Saved as a draft to your seller account. Submit for review when ready."
+              : "Demo mode: products are stored in memory only and won't survive a refresh."}
           </p>
-
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <BuilderInput label="Product name" value={form.name} onChange={(value) => update("name", value)} />
-            <BuilderInput label="Game" value={form.game} onChange={(value) => update("game", value)} />
-            <BuilderInput label="Category" value={form.category} onChange={(value) => update("category", value)} />
-            <BuilderInput label="Architecture" value={form.architecture} onChange={(value) => update("architecture", value)} />
-            <BuilderInput label="Starting price" value={form.price} onChange={(value) => update("price", value)} />
-            <BuilderInput label="Features, comma-separated" value={form.features} onChange={(value) => update("features", value)} />
+            <BuilderInput label="Product name" value={form.name} onChange={(v) => update("name", v)} />
+            <BuilderInput label="Game" value={form.game} onChange={(v) => update("game", v)} />
+            <BuilderInput label="Category" value={form.category} onChange={(v) => update("category", v)} />
+            <BuilderInput label="Architecture" value={form.architecture} onChange={(v) => update("architecture", v)} />
+            <BuilderInput label="Starting price" value={form.price} onChange={(v) => update("price", v)} />
+            <BuilderInput label="Features, comma-separated" value={form.features} onChange={(v) => update("features", v)} />
           </div>
         </Card>
 
@@ -313,10 +462,10 @@ function Builder() {
           <Badge tone="cyan">Conversion</Badge>
           <h2 className="mt-4 text-2xl font-black">Website traffic goal</h2>
           <div className="mt-6 grid gap-4">
-            <BuilderInput label="Official website / offer URL" value={form.websiteUrl} onChange={(value) => update("websiteUrl", value)} />
-            <BuilderInput label="Primary CTA label" value={form.cta} onChange={(value) => update("cta", value)} />
-            <BuilderInput label="Discord" value={form.discord} onChange={(value) => update("discord", value)} />
-            <BuilderInput label="Telegram" value={form.telegram} onChange={(value) => update("telegram", value)} />
+            <BuilderInput label="Official website / offer URL" value={form.websiteUrl} onChange={(v) => update("websiteUrl", v)} />
+            <BuilderInput label="Primary CTA label" value={form.cta} onChange={(v) => update("cta", v)} />
+            <BuilderInput label="Discord" value={form.discord} onChange={(v) => update("discord", v)} />
+            <BuilderInput label="Telegram" value={form.telegram} onChange={(v) => update("telegram", v)} />
           </div>
         </Card>
       </section>
@@ -325,18 +474,21 @@ function Builder() {
         <Badge tone="green">Media upload</Badge>
         <h2 className="mt-4 text-2xl font-black">Upload product visuals</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
-          Uploads are represented as placeholders in this MVP. Real storage comes next.
+          Storage upload is wired in a follow-up batch. For now placeholders only.
         </p>
-
         <div className="mt-6 rounded-3xl border border-dashed border-purple-400/30 bg-purple-500/10 p-8 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl">+</div>
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl">
+            +
+          </div>
           <h3 className="mt-4 text-lg font-bold">Drop images here</h3>
           <p className="mt-2 text-sm text-slate-400">Hero image, screenshots, thumbnails, feature visuals</p>
         </div>
-
         <div className="mt-6 grid gap-3 md:grid-cols-2">
           {mediaUploadGuide.map((item) => (
-            <div key={item.label} className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <div
+              key={item.label}
+              className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+            >
               <div>
                 <div className="font-semibold">{item.label}</div>
                 <div className="mt-1 text-xs text-slate-500">{item.note}</div>
@@ -353,13 +505,18 @@ function Builder() {
           <h2 className="mt-4 text-2xl font-black">Pick a template</h2>
           <div className="mt-5 grid gap-3">
             {pageTemplates.map((template, index) => (
-              <div key={template.name} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <div
+                key={template.name}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <div className="font-bold">{template.name}</div>
                     <div className="mt-1 text-sm text-slate-400">{template.description}</div>
                   </div>
-                  <Badge tone={index === 0 ? "green" : "default"}>{index === 0 ? "Selected" : "Available"}</Badge>
+                  <Badge tone={index === 0 ? "green" : "default"}>
+                    {index === 0 ? "Selected" : "Available"}
+                  </Badge>
                 </div>
               </div>
             ))}
@@ -370,17 +527,32 @@ function Builder() {
           <Badge tone="amber">Publishing</Badge>
           <h2 className="mt-4 text-2xl font-black">Save product</h2>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            After saving, the product appears in Produits and Marketplace. Then you can verify payments or reserve featured slots.
+            After saving, the product appears in Produits and Marketplace once published.
           </p>
           <button
             onClick={createProduct}
-            className="mt-6 w-full rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold"
+            disabled={submitting}
+            className="mt-6 w-full rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
           >
-            Save product draft
+            {submitting ? "Saving…" : "Save product draft"}
           </button>
-          {createdSlug && (
+          {error && (
+            <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
+              {error}
+            </div>
+          )}
+          {createdSlug && !error && (
             <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-              Product created. <Link href={`/products/${createdSlug}`} className="font-bold underline">Open product page</Link>
+              Product created.{" "}
+              <Link href={`/products/${createdSlug}`} className="font-bold underline">
+                Open product page
+              </Link>
+              {supabaseSourced && (
+                <span>
+                  {" "}
+                  — refresh the dashboard to see it under Produits.
+                </span>
+              )}
             </div>
           )}
         </Card>
@@ -389,18 +561,30 @@ function Builder() {
   );
 }
 
+// =========================================================================
+// Offers tab — unchanged demo, no DB writes in this batch
+// =========================================================================
+
 function Offers() {
   return (
     <Card className="p-6">
       <Badge tone="cyan">Seller offers</Badge>
       <h2 className="mt-4 text-2xl font-black">Offer management</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-400">
+        Offer table read-only for now. Editable offers come in a follow-up batch.
+      </p>
       <div className="mt-5 space-y-3">
         {sellerOffers.map((offer) => (
-          <div key={offer.tool + offer.seller} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+          <div
+            key={offer.tool + offer.seller}
+            className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+          >
             <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
               <div>
                 <div className="font-bold">{offer.tool}</div>
-                <div className="mt-1 text-xs text-slate-500">{offer.seller} • {offer.status} • {offer.stock} • {offer.delivery}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {offer.seller} • {offer.status} • {offer.stock} • {offer.delivery}
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {offer.payments.map((payment) => (
                     <PaymentPill key={payment} method={payment} compact />
@@ -408,8 +592,8 @@ function Offers() {
                 </div>
               </div>
               <div className="text-right text-sm">
-                <div className="font-bold">{offer.price}</div>
-                <div className="text-xs text-slate-500">{offer.disputes}</div>
+                <div className="text-slate-400">{offer.price}</div>
+                <div className="mt-1 text-xs text-slate-500">{offer.disputes}</div>
               </div>
             </div>
           </div>
@@ -419,46 +603,147 @@ function Offers() {
   );
 }
 
-function Payments() {
-  const [requests, setRequests] = useState<LocalPaymentRequest[]>([]);
+// =========================================================================
+// Payment Verification tab
+// =========================================================================
+
+function Payments({
+  supabaseSourced,
+  initialRequests,
+  initialProducts,
+}: {
+  supabaseSourced: boolean;
+  initialRequests: UISellerPaymentRequest[] | null;
+  initialProducts: UISellerProductCard[] | null;
+}) {
+  // Demo state
+  const [demoRequests, setDemoRequests] = useState<LocalPaymentRequest[]>([]);
+  const [demoProducts, setDemoProducts] = useState<LocalProduct[]>([]);
+
+  // Form state (used in both modes)
   const [method, setMethod] = useState<PaymentMethod>("Card");
   const [productSlug, setProductSlug] = useState("");
   const [processor, setProcessor] = useState("Stripe");
   const [checkoutUrl, setCheckoutUrl] = useState("https://example.com/checkout");
   const [refundPolicy, setRefundPolicy] = useState("https://example.com/refunds");
   const [proofNote, setProofNote] = useState("Payment method visible at checkout.");
-  const [products, setProducts] = useState<LocalProduct[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitOk, setSubmitOk] = useState<string | null>(null);
 
   useEffect(() => {
-    setProducts(getLocalProducts());
-    setRequests(getPaymentRequests());
-  }, []);
+    if (supabaseSourced) return;
+    setDemoProducts(getLocalProducts());
+    setDemoRequests(getPaymentRequests());
+  }, [supabaseSourced]);
 
-  const submit = () => {
-    const product = products.find((item) => item.slug === productSlug) || products[0];
-    if (!product) {
-      alert("Create a product first.");
+  const productOptions = supabaseSourced
+    ? initialProducts ?? []
+    : demoProducts.map((p) => ({ slug: p.slug, name: p.name }));
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitError(null);
+    setSubmitOk(null);
+
+    if (!supabaseSourced) {
+      const product = demoProducts.find((item) => item.slug === productSlug) || demoProducts[0];
+      if (!product) {
+        setSubmitError("Create a product first.");
+        return;
+      }
+      const request: LocalPaymentRequest = {
+        id: crypto.randomUUID(),
+        seller: product.seller,
+        productSlug: product.slug,
+        productName: product.name,
+        method,
+        processor,
+        checkoutUrl,
+        refundPolicy,
+        proofNote,
+        status: "Pending verification",
+        risk:
+          method === "Gift Cards" || method === "PayPal F&F"
+            ? "High"
+            : method === "Crypto"
+              ? "Medium"
+              : "Low",
+        createdAt: new Date().toISOString(),
+      };
+      addPaymentRequest(request);
+      setDemoRequests([request, ...demoRequests]);
+      setSubmitOk("Submitted. Admin will review.");
       return;
     }
 
-    const request: LocalPaymentRequest = {
-      id: crypto.randomUUID(),
-      seller: product.seller,
-      productSlug: product.slug,
-      productName: product.name,
-      method,
-      processor,
-      checkoutUrl,
-      refundPolicy,
-      proofNote,
-      status: "Pending verification",
-      risk: method === "Gift Cards" || method === "PayPal F&F" ? "High" : method === "Crypto" ? "Medium" : "Low",
-      createdAt: new Date().toISOString(),
-    };
-
-    addPaymentRequest(request);
-    setRequests([request, ...requests]);
+    // Supabase path: requires a real product_id and payment_method_id (uuids).
+    // The current selector lists products by slug in supabaseSourced mode too,
+    // but we need the product id. In Supabase mode the initialProducts items
+    // currently expose only slugs/names — we resolve product_id by matching
+    // the slug client-side via a small fetch, or we re-derive via the row.
+    // Simpler: leave the form requiring the seller to paste/select a product
+    // they own. For this batch we send slug as an opaque key and have the
+    // server resolve. To keep API contracts strict, we POST nothing about the
+    // payment_method id — we send the textual method, and have the server
+    // look up payment_methods by name. Adjust here if you want a stricter
+    // selector later.
+    setSubmitting(true);
+    try {
+      // Resolve product_id by slug from initialProducts (we don't carry ids
+      // in the UI shape today — let the seller pick by slug and the server
+      // does the rest).
+      const response = await fetch("/api/seller/payment-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // The API expects payment_method_id (uuid) and product_id (uuid).
+          // For this batch we keep the API strict; the dashboard surfaces a
+          // "wired in a follow-up" note because resolving slug->uuid +
+          // method-name->method-uuid client-side requires another fetch and
+          // a richer payload from the server. See the README for follow-ups.
+          payment_method_id: "PLACEHOLDER",
+          product_id: "PLACEHOLDER",
+          external_proof_url: checkoutUrl,
+          seller_notes: proofNote,
+        }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setSubmitError(
+          payload.error ??
+            "The seller-side submit form is not fully wired yet. See README.",
+        );
+        return;
+      }
+      setSubmitOk("Submitted. Admin will review.");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const requestsToShow = supabaseSourced
+    ? initialRequests ?? []
+    : [
+        ...demoRequests.map((r) => ({
+          id: r.id,
+          productName: r.productName,
+          productSlug: r.productSlug,
+          method: r.method,
+          status: r.status,
+          proofNote: r.proofNote,
+        })),
+        ...paymentVerificationQueue.map((r) => ({
+          id: r.seller + r.product + r.method,
+          productName: r.product,
+          productSlug: null,
+          method: r.method,
+          status: r.status,
+          proofNote: r.submittedProof,
+        })),
+      ];
 
   return (
     <div className="space-y-6">
@@ -466,48 +751,95 @@ function Payments() {
         <Badge tone="cyan">Payment verification</Badge>
         <h2 className="mt-4 text-2xl font-black">Prove the payment methods you accept</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
-          Payment methods stay private or under review until admin approves them.
+          Payment methods stay private or under review until admin approves them. Only verified
+          methods appear on your public product page and in marketplace filters.
         </p>
       </Card>
 
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="p-6">
           <h2 className="text-2xl font-black">Add payment method</h2>
-          <div className="mt-5 grid gap-4">
+          {supabaseSourced ? (
+            <p className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+              Real submission path is partially wired. The server endpoint
+              /api/seller/payment-requests accepts
+              <code className="mx-1">payment_method_id</code> and
+              <code className="mx-1">product_id</code> (UUIDs). The dashboard form below still posts
+              placeholders — wiring the selector to send real UUIDs is a small follow-up. Demo
+              submissions still work locally.
+            </p>
+          ) : null}
+          <form onSubmit={handleSubmit} className="mt-5 grid gap-4">
             <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <span className="text-xs text-slate-500">Product</span>
-              <select value={productSlug} onChange={(event) => setProductSlug(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm">
+              <select
+                value={productSlug}
+                onChange={(event) => setProductSlug(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
+              >
                 <option value="">Latest product</option>
-                {products.map((product) => <option key={product.slug} value={product.slug}>{product.name}</option>)}
+                {productOptions.map((product) => (
+                  <option key={product.slug} value={product.slug}>
+                    {product.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <span className="text-xs text-slate-500">Payment method</span>
-              <select value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                {paymentMethods.map((item) => <option key={item} value={item}>{item}</option>)}
+              <select
+                value={method}
+                onChange={(event) => setMethod(event.target.value as PaymentMethod)}
+                className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
+              >
+                {paymentMethods.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
               </select>
             </label>
             <BuilderInput label="Processor / account label" value={processor} onChange={setProcessor} />
             <BuilderInput label="Checkout URL" value={checkoutUrl} onChange={setCheckoutUrl} />
             <BuilderInput label="Refund policy" value={refundPolicy} onChange={setRefundPolicy} />
             <BuilderInput label="Proof note" value={proofNote} onChange={setProofNote} />
-          </div>
-          <button onClick={submit} className="mt-6 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold">
-            Submit payment verification
-          </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="mt-2 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
+            >
+              {submitting ? "Submitting…" : "Submit payment verification"}
+            </button>
+            {submitError && (
+              <div className="rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
+                {submitError}
+              </div>
+            )}
+            {submitOk && (
+              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+                {submitOk}
+              </div>
+            )}
+          </form>
         </Card>
 
         <Card className="p-6">
           <h2 className="text-2xl font-black">Your payment status</h2>
           <div className="mt-5 space-y-3">
-            {[...requests, ...paymentVerificationQueue].map((item) => (
-              <div key={(item as any).id || item.seller + ("product" in item ? item.product : item.productName) + item.method} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            {requestsToShow.length === 0 && (
+              <p className="text-sm text-slate-500">No payment verification requests yet.</p>
+            )}
+            {requestsToShow.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <PaymentPill method={item.method} />
                   <PaymentStatusPill status={item.status} />
                 </div>
-                <div className="mt-3 text-sm font-semibold">{"productName" in item ? item.productName : item.product}</div>
-                <div className="mt-1 text-xs text-slate-500">{"submittedProof" in item ? item.submittedProof : item.proofNote}</div>
+                <div className="mt-3 text-sm font-semibold">{item.productName}</div>
+                <div className="mt-1 text-xs text-slate-500">{item.proofNote}</div>
               </div>
             ))}
           </div>
@@ -517,12 +849,19 @@ function Payments() {
   );
 }
 
+// =========================================================================
+// Analytics tab — read-only, demo data only for this batch
+// =========================================================================
+
 function Analytics() {
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
       <Card className="p-6">
         <Badge tone="green">Analytics</Badge>
         <h2 className="mt-4 text-2xl font-black">Performance</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Real analytics integration comes after the storage / events tracking batch.
+        </p>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {analytics.map((item) => (
             <MiniStat key={item.label} label={item.label} value={item.value} detail={item.change} />
@@ -539,7 +878,10 @@ function Analytics() {
                 <span>{share}%</span>
               </div>
               <div className="mt-2 h-2 rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-purple-400" style={{ width: `${share}%` }} />
+                <div
+                  className="h-full rounded-full bg-purple-400"
+                  style={{ width: `${share}%` }}
+                />
               </div>
             </div>
           ))}
@@ -549,45 +891,193 @@ function Analytics() {
   );
 }
 
-function Verification() {
+// =========================================================================
+// Provider Tag tab
+// =========================================================================
+
+function Verification({
+  supabaseSourced,
+  initialStatus,
+}: {
+  supabaseSourced: boolean;
+  initialStatus: UISellerProviderTagStatus;
+}) {
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [discord, setDiscord] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [proofUrl, setProofUrl] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [currentStatus, setCurrentStatus] = useState<UISellerProviderTagStatus>(initialStatus);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setOk(null);
+
+    if (!supabaseSourced) {
+      setOk("Demo: request not actually submitted. Connect Supabase to make this real.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch("/api/seller/provider-tag-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          website_url: websiteUrl || undefined,
+          discord_handle: discord || undefined,
+          telegram_handle: telegram || undefined,
+          proof_url: proofUrl || undefined,
+          seller_notes: notes || undefined,
+        }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "Could not submit provider tag request.");
+        return;
+      }
+      setOk("Submitted. Admin will review.");
+      setCurrentStatus("Pending");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
       <Card className="p-6">
         <Badge tone="purple">Provider tag request</Badge>
         <h2 className="mt-4 text-2xl font-black">Request Provider / Developer tag</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
-          If you are the official developer or provider, submit your public proof here. Admin reviews requests manually.
+          If you are the official developer or provider, submit your public proof here. Admin
+          reviews requests manually.
         </p>
+        <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
+          <BuilderInput label="Website URL" value={websiteUrl} onChange={setWebsiteUrl} />
+          <BuilderInput label="Discord handle" value={discord} onChange={setDiscord} />
+          <BuilderInput label="Telegram handle" value={telegram} onChange={setTelegram} />
+          <BuilderInput label="Proof URL (optional)" value={proofUrl} onChange={setProofUrl} />
+          <BuilderInput label="Notes for admin" value={notes} onChange={setNotes} />
+          <button
+            type="submit"
+            disabled={submitting || currentStatus === "Pending"}
+            className="rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
+          >
+            {currentStatus === "Pending"
+              ? "Request pending review"
+              : submitting
+                ? "Submitting…"
+                : "Submit provider tag request"}
+          </button>
+          {error && (
+            <div className="rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
+              {error}
+            </div>
+          )}
+          {ok && (
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+              {ok}
+            </div>
+          )}
+        </form>
       </Card>
 
       <Card className="p-6">
-        <h2 className="text-2xl font-black">Existing requests</h2>
+        <h2 className="text-2xl font-black">Status</h2>
         <div className="mt-5 space-y-3">
-          {providerTagRequests.map((request) => (
-            <div key={request.seller + request.product} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+          {supabaseSourced ? (
+            <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <div className="font-bold">{request.product}</div>
-                  <div className="mt-1 text-xs text-slate-500">{request.seller}</div>
+                  <div className="font-bold">Your request</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {currentStatus === "Not requested"
+                      ? "You haven't requested the tag yet."
+                      : `Latest status from Supabase.`}
+                  </div>
                 </div>
-                <Badge tone={request.status === "Approved" ? "green" : "amber"}>{request.status}</Badge>
+                <Badge
+                  tone={
+                    currentStatus === "Approved"
+                      ? "green"
+                      : currentStatus === "Pending"
+                        ? "amber"
+                        : currentStatus === "Rejected"
+                          ? "red"
+                          : "default"
+                  }
+                >
+                  {currentStatus}
+                </Badge>
               </div>
             </div>
-          ))}
+          ) : (
+            demoProviderTagRequests.map((request) => (
+              <div
+                key={request.seller + request.product}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="font-bold">{request.product}</div>
+                    <div className="mt-1 text-xs text-slate-500">{request.seller}</div>
+                  </div>
+                  <Badge tone={request.status === "Approved" ? "green" : "amber"}>
+                    {request.status}
+                  </Badge>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </Card>
     </section>
   );
 }
 
+// =========================================================================
+// Billing tab — placeholder pointing at Stripe
+// =========================================================================
+
 function Billing() {
   return (
     <Card className="p-6">
       <Badge tone="purple">Billing</Badge>
       <h2 className="mt-4 text-2xl font-black">Subscription plans</h2>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
+      <p className="mt-2 text-sm text-slate-500">
+        Open the customer portal to manage your subscription and payment methods. The portal is
+        provided by Stripe.
+      </p>
+      <button
+        onClick={async () => {
+          try {
+            const response = await fetch("/api/stripe/billing-portal", { method: "POST" });
+            const payload = (await response.json()) as { url?: string; error?: string };
+            if (response.ok && payload.url) {
+              window.location.href = payload.url;
+            } else {
+              alert(payload.error ?? "Billing portal unavailable.");
+            }
+          } catch (err) {
+            alert(err instanceof Error ? err.message : "Network error.");
+          }
+        }}
+        className="mt-5 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold"
+      >
+        Open billing portal
+      </button>
+      <div className="mt-8 grid gap-3 md:grid-cols-2">
         {plans.map((plan) => (
-          <div key={plan.name} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+          <div
+            key={plan.name}
+            className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+          >
             <div className="flex justify-between gap-3">
               <div>
                 <div className="font-bold">{plan.name}</div>
@@ -602,11 +1092,27 @@ function Billing() {
   );
 }
 
-function BuilderInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+// =========================================================================
+// Shared bits
+// =========================================================================
+
+function BuilderInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
       <div className="text-xs text-slate-500">{label}</div>
-      <input value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none" />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none"
+      />
     </label>
   );
 }
