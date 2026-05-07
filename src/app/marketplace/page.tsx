@@ -25,8 +25,8 @@ export default function MarketplacePage({
       <section className="mx-auto max-w-7xl px-6 py-10">
         <SectionHeader
           eyebrow="Marketplace"
-          title="Choose a game, then compare listings"
-          text="A simpler marketplace: game first, then product references, sellers, resellers, payment methods, and trust signals."
+          title="Choose a game, then compare products"
+          text="Game first, then product listings, providers, resellers, payment methods, and trust signals."
         />
 
         <Card className="mt-8 p-5">
@@ -64,7 +64,8 @@ export default function MarketplacePage({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-xl font-bold">{listing.name}</h2>
-                    <Badge tone="amber">{listing.claimStatus}</Badge>
+                    <Badge tone={listing.listingStatus === "Verified" ? "green" : "amber"}>{listing.listingStatus}</Badge>
+                    <Badge>{listing.sellerType}</Badge>
                     <Badge>{listing.architecture}</Badge>
                   </div>
                   <p className="mt-1 text-sm text-slate-500">

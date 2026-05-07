@@ -10,16 +10,16 @@ export default function HomePage() {
         <div className="mx-auto max-w-4xl text-center">
           <Badge tone="purple">One login for users, sellers, resellers, and admins</Badge>
           <h1 className="mt-6 text-5xl font-black leading-[1.04] tracking-tight md:text-7xl">
-            The simplest way to find and verify
+            The simplest marketplace for
             <span className="bg-gradient-to-r from-purple-400 to-cyan-300 bg-clip-text text-transparent"> gaming tools.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-400">
-            Standard helps users compare marketplace references, seller trust, payment methods,
-            reseller offers, and verified product facts before buying.
+            Standard helps users choose a game, compare trusted listings, and find sellers or resellers
+            that support the payment methods they actually use.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <ButtonLink href="/marketplace">Open Marketplace</ButtonLink>
-            <ButtonLink href="/login" variant="secondary">Login / Claim access</ButtonLink>
+            <ButtonLink href="/login" variant="secondary">Login</ButtonLink>
           </div>
         </div>
 
@@ -27,7 +27,7 @@ export default function HomePage() {
           <Card className="p-6">
             <h3 className="text-xl font-bold">Marketplace first</h3>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Users pick a game, then see references, claimed sellers, resellers, payment options, and trust signals.
+              Users pick a game, then see products, providers, resellers, payment options, and trust signals.
             </p>
           </Card>
           <Card className="p-6">
@@ -59,7 +59,7 @@ export default function HomePage() {
               >
                 <div className="font-bold">{game}</div>
                 <div className="mt-1 text-sm text-slate-500">
-                  {listings.filter((listing) => listing.game === game).length} references
+                  {listings.filter((listing) => listing.game === game).length} listings
                 </div>
               </Link>
             ))}

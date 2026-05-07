@@ -1,5 +1,5 @@
 import { Badge, Card, MiniStat, Nav, SectionHeader, Shell } from "@/components/ui";
-import { adminSignals, claimQueue, listings, resellerOffers } from "@/lib/data";
+import { adminSignals, listings, resellerOffers, submissionQueue } from "@/lib/data";
 
 export default function AdminPage() {
   return (
@@ -8,26 +8,26 @@ export default function AdminPage() {
       <section className="mx-auto max-w-7xl px-6 py-10">
         <SectionHeader
           eyebrow="Admin"
-          title="Control claims, sellers, resellers, and payments"
-          text="Admin reviews claim requests, seller subscriptions, risky payment profiles, reseller offers, and integrity signals."
+          title="Control submissions, sellers, resellers, and payments"
+          text="The claim system is removed. Admin now reviews seller submissions, reseller offers, payment risk, and listing moderation."
         />
 
         <section className="mt-8 grid gap-4 md:grid-cols-4">
-          <MiniStat label="Open claims" value={String(claimQueue.length)} detail="Need review" />
-          <MiniStat label="Unclaimed listings" value={String(listings.filter((l) => l.claimStatus === "Unclaimed").length)} detail="Outreach targets" />
+          <MiniStat label="Open submissions" value={String(submissionQueue.length)} detail="Need review" />
+          <MiniStat label="Verified listings" value={String(listings.filter((l) => l.listingStatus === "Verified").length)} detail="Public trust" />
           <MiniStat label="Reseller offers" value={String(resellerOffers.length)} detail="Payment profiles" />
           <MiniStat label="Risk signals" value={String(adminSignals.length)} detail="Watchlist" />
         </section>
 
         <section className="mt-8 grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-          <Panel title="Claim requests">
+          <Panel title="Submission queue">
             <div className="space-y-3">
-              {claimQueue.map((claim) => (
+              {submissionQueue.map((item) => (
                 <Row
-                  key={claim.listing}
-                  title={claim.listing}
-                  meta={`${claim.type} • ${claim.requester}`}
-                  right={<Badge tone="amber">{claim.status}</Badge>}
+                  key={item.listing}
+                  title={item.listing}
+                  meta={`${item.type} • ${item.requester}`}
+                  right={<Badge tone="amber">{item.status}</Badge>}
                 />
               ))}
             </div>
@@ -56,7 +56,7 @@ export default function AdminPage() {
                     <th className="px-4 py-3">Listing</th>
                     <th className="px-4 py-3">Seller</th>
                     <th className="px-4 py-3">Game</th>
-                    <th className="px-4 py-3">Claim</th>
+                    <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Payments</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
@@ -67,7 +67,7 @@ export default function AdminPage() {
                       <td className="px-4 py-4 font-semibold">{listing.name}</td>
                       <td className="px-4 py-4 text-slate-400">{listing.seller}</td>
                       <td className="px-4 py-4 text-slate-400">{listing.game}</td>
-                      <td className="px-4 py-4"><Badge tone="amber">{listing.claimStatus}</Badge></td>
+                      <td className="px-4 py-4"><Badge tone={listing.listingStatus === "Verified" ? "green" : "amber"}>{listing.listingStatus}</Badge></td>
                       <td className="px-4 py-4 text-slate-400">{listing.verifiedPayments.length || "Pending"}</td>
                       <td className="px-4 py-4 text-right">
                         <button className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">

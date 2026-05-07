@@ -69,26 +69,34 @@ export const listings = [
     game: "Valorant",
     category: "Analytics / Overlay",
     architecture: "External",
-    claimStatus: "Unclaimed",
-    integrity: null as number | null,
-    confidence: "Pending",
+    listingStatus: "Verified",
+    sellerType: "Provider",
+    integrity: 92 as number | null,
+    confidence: "High",
     activity: { vouches: 326, views: 28400, replies: 184, lastSeen: "Recently active" },
-    verifiedPayments: [] as string[],
-    pendingFacts: ["Pricing", "Payment methods", "Provider proof", "Feature set"],
+    verifiedPayments: ["Crypto", "Card", "PayPal G&S"],
+    features: ["Match analytics", "Overlay HUD", "Rank tracking", "Agent insights"],
+    pricePoints: ["$6 daily", "$19 weekly", "$49 monthly"],
+    delivery: "Instant",
+    refundPolicy: "Visible after seller login integration",
   },
   {
     slug: "shadow-overlay-reference",
-    name: "Shadow Overlay Reference",
+    name: "Shadow Overlay",
     seller: "Shadow Market",
     game: "CS2",
     category: "Overlay / Utility",
     architecture: "Unknown",
-    claimStatus: "Unclaimed",
+    listingStatus: "Pending Review",
+    sellerType: "Provider",
     integrity: null as number | null,
     confidence: "Pending",
     activity: { vouches: 84, views: 6840, replies: 51, lastSeen: "Unknown" },
-    verifiedPayments: [] as string[],
-    pendingFacts: ["Architecture", "Payment profile", "Seller identity"],
+    verifiedPayments: [],
+    features: ["Overlay HUD", "Crosshair sync", "Map awareness"],
+    pricePoints: [],
+    delivery: "Pending verification",
+    refundPolicy: "Pending verification",
   },
   {
     slug: "novakeys-reseller-offer",
@@ -97,29 +105,33 @@ export const listings = [
     game: "Valorant",
     category: "Reseller Offer",
     architecture: "Unknown",
-    claimStatus: "Claim Pending",
+    listingStatus: "Pending Review",
+    sellerType: "Reseller",
     integrity: null as number | null,
     confidence: "Low",
     activity: { vouches: 0, views: 0, replies: 0, lastSeen: "Submitted" },
     verifiedPayments: ["Crypto", "PayPal G&S"],
-    pendingFacts: ["Authorization proof", "Stock proof", "Refund policy"],
+    features: ["Manual delivery", "Support relay", "Payment flexibility"],
+    pricePoints: ["$27 monthly"],
+    delivery: "15 min manual",
+    refundPolicy: "Pending admin review",
   },
 ];
 
 export const sellerProducts = [
   {
     name: "PhantomX Tracker",
-    status: "Unclaimed Reference",
-    toolStatus: "Pending Verification",
+    status: "Verified",
+    toolStatus: "Working",
     game: "Valorant",
     features: ["Match analytics", "Overlay", "Rank tracking"],
     views: 28400,
     outboundClicks: 1320,
-    integrity: "Pending",
-    nextAction: "Claim and verify listing facts",
+    integrity: "92",
+    nextAction: "Keep pricing and payments updated",
   },
   {
-    name: "Shadow Overlay Reference",
+    name: "Shadow Overlay",
     status: "Pending Review",
     toolStatus: "Updating",
     game: "CS2",
@@ -127,7 +139,7 @@ export const sellerProducts = [
     views: 6840,
     outboundClicks: 412,
     integrity: "Pending",
-    nextAction: "Submit proof and payment profile",
+    nextAction: "Submit verification proof and payment profile",
   },
 ];
 
@@ -143,7 +155,7 @@ export const resellerOffers = [
     disputes: "0 open",
   },
   {
-    tool: "Shadow Overlay Reference",
+    tool: "Shadow Overlay",
     reseller: "ByteMarket",
     status: "Needs Proof",
     stock: "Limited",
@@ -157,8 +169,8 @@ export const resellerOffers = [
 export const analytics = [
   { label: "Listing views", value: "38.6K", change: "+18.6%" },
   { label: "Outbound clicks", value: "2.1K", change: "+12.4%" },
-  { label: "Claim conversion", value: "7.8%", change: "+2.1%" },
   { label: "Payment filter usage", value: "41%", change: "+9.3%" },
+  { label: "Verified buyer reviews", value: "186", change: "+7.4%" },
 ];
 
 export const trafficSources = [
@@ -170,8 +182,8 @@ export const trafficSources = [
 
 export const adminSignals = [
   {
-    title: "Claim proof missing",
-    meta: "PhantomX Tracker needs provider proof before verification.",
+    title: "Seller verification needed",
+    meta: "Shadow Overlay needs proof before going live.",
     risk: "Medium",
   },
   {
@@ -186,17 +198,17 @@ export const adminSignals = [
   },
 ];
 
-export const claimQueue = [
+export const submissionQueue = [
   {
-    listing: "PhantomX Tracker",
+    listing: "Shadow Overlay",
     requester: "seller@standard.gg",
-    type: "Provider claim",
+    type: "Provider listing",
     status: "Needs proof",
   },
   {
     listing: "NovaKeys Reseller Offer",
     requester: "reseller@standard.gg",
-    type: "Reseller application",
+    type: "Reseller offer",
     status: "Under review",
   },
 ];

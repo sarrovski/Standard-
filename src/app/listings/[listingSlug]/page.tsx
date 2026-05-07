@@ -18,15 +18,16 @@ export default function ListingPage({ params }: { params: { listingSlug: string 
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-4xl font-black">{listing.name}</h1>
-                <Badge tone="amber">{listing.claimStatus}</Badge>
+                <Badge tone={listing.listingStatus === "Verified" ? "green" : "amber"}>{listing.listingStatus}</Badge>
               </div>
               <p className="mt-3 max-w-2xl text-slate-400">
-                This reference is not fully verified until the provider or reseller claims it and submits official facts.
+                Product listing with seller status, reseller availability, payment methods, delivery, and trust signals.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Badge tone="purple">{listing.game}</Badge>
                 <Badge>{listing.category}</Badge>
                 <Badge>{listing.architecture}</Badge>
+                <Badge>{listing.sellerType}</Badge>
               </div>
             </div>
             <div className="min-w-[260px]">
@@ -36,7 +37,7 @@ export default function ListingPage({ params }: { params: { listingSlug: string 
                 <div className="mt-1 text-xs text-slate-500">{listing.confidence} confidence</div>
               </Card>
               <Link href="/login" className="mt-3 inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold">
-                Claim / Login
+                Login to manage / review
               </Link>
             </div>
           </div>
@@ -44,37 +45,42 @@ export default function ListingPage({ params }: { params: { listingSlug: string 
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_340px]">
           <div className="space-y-6">
-            <Panel title="Verified payment methods">
+            <Panel title="Features">
+              <div className="grid gap-3 md:grid-cols-2">
+                {listing.features.map((feature) => (
+                  <div key={feature} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm">
+                    {feature}
+                  </div>
+                ))}
+              </div>
+            </Panel>
+            <Panel title="Payment methods">
               <div className="flex flex-wrap gap-2">
-                {(listing.verifiedPayments.length ? listing.verifiedPayments : ["Pending seller verification"]).map((payment) => (
-                  <Badge key={payment} tone={payment === "Pending seller verification" ? "amber" : "cyan"}>
+                {(listing.verifiedPayments.length ? listing.verifiedPayments : ["Pending verification"]).map((payment) => (
+                  <Badge key={payment} tone={payment === "Pending verification" ? "amber" : "cyan"}>
                     {payment}
                   </Badge>
                 ))}
               </div>
             </Panel>
-            <Panel title="Pending facts">
-              <div className="grid gap-3">
-                {listing.pendingFacts.map((fact) => (
-                  <div key={fact} className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-                    {fact}
-                  </div>
+            <Panel title="Price points">
+              <div className="flex flex-wrap gap-2">
+                {(listing.pricePoints.length ? listing.pricePoints : ["Pending verification"]).map((price) => (
+                  <Badge key={price}>{price}</Badge>
                 ))}
               </div>
             </Panel>
           </div>
           <aside className="space-y-6">
-            <Panel title="Public activity">
+            <Panel title="Activity">
               <Fact label="Vouches" value={String(listing.activity.vouches)} />
               <Fact label="Views" value={String(listing.activity.views)} />
               <Fact label="Replies" value={String(listing.activity.replies)} />
               <Fact label="Last seen" value={listing.activity.lastSeen} />
             </Panel>
-            <Panel title="Seller">
-              <p className="text-sm text-slate-400">{listing.seller}</p>
-              <p className="mt-3 text-sm leading-6 text-slate-500">
-                Seller profile becomes richer after claim verification.
-              </p>
+            <Panel title="Delivery / Refund">
+              <Fact label="Delivery" value={listing.delivery} />
+              <Fact label="Refund policy" value={listing.refundPolicy} />
             </Panel>
           </aside>
         </section>
