@@ -1,15 +1,27 @@
-# Standard v19 — Start Selling + Seller How It Works
+# Standard v20 — Working MVP
 
-## Main changes
+## Main change
 
-- Renamed navbar item **Sell on Standard** to **Start Selling**.
-- Removed public navbar link to `How it works`.
-- Incorporated the seller-focused "How it works" content into the Start Selling flow.
-- Start Selling now explains:
-  - create seller account
-  - choose plan
-  - build product page
-  - verify payment methods
-  - optionally request Provider / Developer tag
-  - optionally buy featured category slot
-  - drive traffic to seller website
+This version connects the main product flows using browser localStorage.
+
+It is not production backend yet, but it lets the product work end-to-end in-browser:
+
+- login redirects by account type
+- seller can create products
+- products appear in seller dashboard
+- products appear in marketplace
+- dynamic product pages work for created products
+- seller can submit payment verification requests
+- admin can approve / reject payment requests
+- featured category slots can be reserved only if available
+
+## Important
+
+This is the correct bridge before real backend.
+
+Next production step:
+- Auth: Clerk / Supabase Auth
+- Database: Supabase Postgres / Prisma
+- Uploads: UploadThing / S3 / Supabase Storage
+- Payments: Stripe
+- Admin permissions: backend-enforced role checks
