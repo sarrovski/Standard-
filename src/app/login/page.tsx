@@ -1,10 +1,14 @@
 
 import { Badge, ButtonLink, Nav, Shell } from "@/components/ui";
-import { AccountMenuPreview } from "@/components/account-menu";
 import { LoginClient } from "@/components/login-client";
+import { isSupabaseConfigured } from "@/lib/roles";
+import { getSiteUrl } from "@/lib/site-url";
 
 
 export default function LoginPage() {
+  const supabaseConfigured = isSupabaseConfigured();
+  const siteUrl = getSiteUrl();
+
   return (
     <Shell>
       <Nav />
@@ -33,7 +37,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <LoginClient />
+        <LoginClient supabaseConfigured={supabaseConfigured} siteUrl={siteUrl} />
       </section>
     </Shell>
   );

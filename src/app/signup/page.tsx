@@ -1,7 +1,12 @@
-import Link from "next/link";
-import { Badge, Card, Nav, Shell } from "@/components/ui";
+import { Badge, Nav, Shell } from "@/components/ui";
+import { SignupClient } from "@/components/signup-client";
+import { isSupabaseConfigured } from "@/lib/roles";
+import { getSiteUrl } from "@/lib/site-url";
 
 export default function SignupPage() {
+  const supabaseConfigured = isSupabaseConfigured();
+  const siteUrl = getSiteUrl();
+
   return (
     <Shell>
       <Nav />
@@ -25,62 +30,7 @@ export default function SignupPage() {
           </div>
         </div>
 
-        <Card className="p-6 md:p-8">
-          <div className="mb-8">
-            <h2 className="text-3xl font-black">Create your account</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              One account can become a buyer, seller, or admin depending on permissions.
-            </p>
-          </div>
-
-          <form className="space-y-4">
-            <label className="block">
-              <span className="mb-2 block text-sm text-slate-400">Email</span>
-              <input
-                type="email"
-                placeholder="you@example.com"
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm text-slate-400">Password</span>
-              <input
-                type="password"
-                placeholder="Create a password"
-                className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm text-slate-400">Primary use</span>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl border border-purple-400/30 bg-purple-500/10 p-4">
-                  <div className="font-semibold">Browse / buy</div>
-                  <div className="mt-1 text-xs text-slate-400">Default account mode</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="font-semibold">Sell on Standard</div>
-                  <div className="mt-1 text-xs text-slate-400">Enable seller onboarding after signup</div>
-                </div>
-              </div>
-            </label>
-
-            <Link
-              href="/account"
-              className="inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20"
-            >
-              Create account
-            </Link>
-          </form>
-
-          <div className="mt-6 border-t border-white/10 pt-6 text-center text-sm text-slate-400">
-            Already have an account?{" "}
-            <Link href="/login" className="font-semibold text-purple-300 hover:text-purple-200">
-              Sign in
-            </Link>
-          </div>
-        </Card>
+        <SignupClient supabaseConfigured={supabaseConfigured} siteUrl={siteUrl} />
       </section>
     </Shell>
   );
