@@ -8,6 +8,7 @@ import {
   sellerProducts,
   trafficSources,
 } from "@/lib/data";
+import { PaymentPill } from "@/components/payment-pill";
 
 const tabs = [
   { key: "overview", label: "Overview" },
@@ -71,7 +72,7 @@ function Overview() {
           <div className="mt-5 space-y-3">
             {[
               "Submit provider verification for Shadow Overlay",
-              "Verify PayPal G&S payment policy",
+              "Verify your payment profile",
               "Respond to 2 buyer reviews",
               "Review seller offer pricing before boost",
             ].map((item) => (
@@ -181,7 +182,7 @@ function Offers() {
                 <div className="mt-1 text-xs text-slate-500">{offer.seller} • {offer.status} • {offer.stock} • {offer.delivery}</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {offer.payments.map((payment) => (
-                    <Badge key={payment}>{payment}</Badge>
+                    <PaymentPill key={payment} method={payment} compact />
                   ))}
                 </div>
               </div>
@@ -208,8 +209,8 @@ function Payments() {
       <div className="mt-5 grid gap-3 md:grid-cols-3">
         {paymentMethods.map((method) => (
           <div key={method} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <div className="font-bold">{method}</div>
-            <div className="mt-1 text-xs text-slate-500">
+            <PaymentPill method={method} />
+            <div className="mt-3 text-xs text-slate-500">
               {method === "Crypto" || method === "Gift Cards" || method === "PayPal F&F"
                 ? "Higher risk, admin review recommended"
                 : "Standard verification required"}

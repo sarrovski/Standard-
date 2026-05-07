@@ -1,23 +1,39 @@
 import Link from "next/link";
 import { Badge, Card, Nav, SectionHeader, Shell } from "@/components/ui";
-import { games, listings, paymentMethods } from "@/lib/data";
+import { listings, games, paymentMethods, sellerTags, listingStatuses } from "@/lib/data";
+import { PaymentPill, NoVerifiedPayments } from "@/components/payment-pill";
 
 export default function MarketplacePage({
   searchParams,
 }: {
-  searchParams?: { game?: string; payment?: string };
+  searchParams?: { game?: string; payment?: string; sellerTag?: string; status?: string };
 }) {
   const selectedGame = searchParams?.game ?? "All";
   const selectedPayment = searchParams?.payment ?? "All";
+  const selectedTag = searchParams?.sellerTag ?? "All";
+  const selectedStatus = searchParams?.status ?? "All";
 
   const filtered = listings.filter((listing) => {
     const matchesGame = selectedGame === "All" || listing.game === selectedGame;
-    const matchesPayment =
-      selectedPayment === "All" ||
-      listing.verifiedPayments.includes(selectedPayment) ||
-      (selectedPayment === "Pending" && listing.verifiedPayments.length === 0);
-    return matchesGame && matchesPayment;
+    const matchesPayment = selectedPayment === "All" || listing.verifiedPayments.includes(selectedPayment as never);
+    const matchesTag = selectedTag === "All" || listing.sellerTag === selectedTag;
+    const matchesStatus = selectedStatus === "All" || listing.listingStatus === selectedStatus;
+    return matchesGame && matchesPayment && matchesTag && matchesStatus;
   });
+
+  const makeHref = (next: { game?: string; payment?: string; sellerTag?: string; status?: string }) => {
+    const params = new URLSearchParams();
+    const game = next.game ?? selectedGame;
+    const payment = next.payment ?? selectedPayment;
+    const sellerTag = next.sellerTag ?? selectedTag;
+    const status = next.status ?? selectedStatus;
+    if (game !== "All") params.set("game", game);
+    if (payment !== "All") params.set("payment", payment);
+    if (sellerTag !== "All") params.set("sellerTag", sellerTag);
+    if (status !== "All") params.set("status", status);
+    const query = params.toString();
+    return `/marketplace${query ? `?${query}` : ""}`;
+  };
 
   return (
     <Shell>
@@ -30,43 +46,27 @@ export default function MarketplacePage({
         />
 
         <Card className="mt-8 p-5">
-          <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-            <div>
-              <div className="text-sm font-semibold text-slate-300">Games</div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {["All", ...games].map((game) => (
-                  <a
-                    key={game}
-                    href={`/marketplace${game === "All" ? "" : `?game=${encodeURIComponent(game)}`}`}
-                    className={`rounded-full border px-3 py-1.5 text-sm ${
-                      selectedGame === game
-                        ? "border-purple-400/40 bg-purple-500/15 text-purple-100"
-                        : "border-white/10 bg-white/[0.04] text-slate-300"
-                    }`}
-                  >
-                    {game}
-                  </a>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-slate-300">Payment method</div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {["All", "Pending", ...paymentMethods.slice(0, 5)].map((payment) => (
-                  <a
-                    key={payment}
-                    href={`/marketplace?${selectedGame !== "All" ? `game=${encodeURIComponent(selectedGame)}&` : ""}payment=${encodeURIComponent(payment)}`}
-                    className={`rounded-full border px-3 py-1.5 text-sm ${
-                      selectedPayment === payment
-                        ? "border-cyan-400/40 bg-cyan-500/15 text-cyan-100"
-                        : "border-white/10 bg-white/[0.04] text-slate-300"
-                    }`}
-                  >
-                    {payment}
-                  </a>
-                ))}
-              </div>
-            </div>
+          <div className="grid gap-6 xl:grid-cols-4">
+            <FilterBlock title="Games">
+              {(["All", ...games] as const).map((game) => (
+                <FilterLink key={game} href={makeHref({ game })} active={selectedGame === game}>{game}</FilterLink>
+              ))}
+            </FilterBlock>
+            <FilterBlock title="Payments">
+              {(["All", ...paymentMethods] as const).map((payment) => (
+                <FilterLink key={payment} href={makeHref({ payment })} active={selectedPayment === payment}>{payment}</FilterLink>
+              ))}
+            </FilterBlock>
+            <FilterBlock title="Seller tag">
+              {sellerTags.map((tag) => (
+                <FilterLink key={tag} href={makeHref({ sellerTag: tag })} active={selectedTag === tag}>{tag}</FilterLink>
+              ))}
+            </FilterBlock>
+            <FilterBlock title="Status">
+              {listingStatuses.map((status) => (
+                <FilterLink key={status} href={makeHref({ status })} active={selectedStatus === status}>{status}</FilterLink>
+              ))}
+            </FilterBlock>
           </div>
         </Card>
 
@@ -123,11 +123,11 @@ export default function MarketplacePage({
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {(listing.verifiedPayments.length ? listing.verifiedPayments.slice(0, 3) : ["Payments pending"]).map((payment) => (
-                    <span key={payment} className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-100">
-                      {payment}
-                    </span>
-                  ))}
+                  {listing.verifiedPayments.length ? (
+                    listing.verifiedPayments.slice(0, 3).map((payment) => <PaymentPill key={payment} method={payment} compact />)
+                  ) : (
+                    <NoVerifiedPayments />
+                  )}
                 </div>
 
                 <div className="mt-5 flex items-center justify-between gap-4">
@@ -148,6 +148,28 @@ export default function MarketplacePage({
         </div>
       </section>
     </Shell>
+  );
+}
+
+function FilterBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-sm font-semibold text-slate-300">{title}</div>
+      <div className="mt-3 flex flex-wrap gap-2">{children}</div>
+    </div>
+  );
+}
+
+function FilterLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      className={`rounded-full border px-3 py-1.5 text-sm ${
+        active ? "border-purple-400/40 bg-purple-500/15 text-purple-100" : "border-white/10 bg-white/[0.04] text-slate-300"
+      }`}
+    >
+      {children}
+    </a>
   );
 }
 

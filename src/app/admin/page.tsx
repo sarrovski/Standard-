@@ -1,5 +1,6 @@
 import { Badge, Card, MiniStat, Nav, SectionHeader, Shell } from "@/components/ui";
 import { adminSignals, listings, providerTagRequests, sellerOffers, submissionQueue } from "@/lib/data";
+import { PaymentPill } from "@/components/payment-pill";
 
 export default function AdminPage() {
   return (
@@ -86,9 +87,7 @@ export default function AdminPage() {
                       <p className="mt-1 text-sm text-slate-500">{offer.tool}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {offer.payments.map((payment) => (
-                          <Badge key={payment} tone={payment === "Gift Cards" ? "red" : payment === "Crypto" ? "amber" : "default"}>
-                            {payment}
-                          </Badge>
+                          <PaymentPill key={payment} method={payment} compact />
                         ))}
                       </div>
                     </div>
@@ -124,7 +123,7 @@ export default function AdminPage() {
                       <td className="px-4 py-4 text-slate-400">{listing.seller}</td>
                       <td className="px-4 py-4"><Badge tone={listing.sellerTag === "Provider / Developer" ? "cyan" : listing.sellerTag === "Verified Seller" ? "green" : "default"}>{listing.sellerTag}</Badge></td>
                       <td className="px-4 py-4"><Badge tone={listing.listingStatus === "Verified" ? "green" : "amber"}>{listing.listingStatus}</Badge></td>
-                      <td className="px-4 py-4 text-slate-400">{listing.verifiedPayments.length || "Pending"}</td>
+                      <td className="px-4 py-4 text-slate-400">{listing.verifiedPayments.length || "None"}</td>
                       <td className="px-4 py-4 text-right">
                         <button className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
                           Review

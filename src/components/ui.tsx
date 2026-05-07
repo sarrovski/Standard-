@@ -20,18 +20,19 @@ export function Nav() {
         </span>
         <span className="text-2xl font-black tracking-tight">Standard</span>
       </Link>
+
       <div className="hidden items-center gap-7 text-sm font-medium text-slate-300 md:flex">
-        <Link href="/marketplace" className="hover:text-white">Marketplace</Link>
-        <Link href="/account" className="hover:text-white">Account</Link>
-        <Link href="/dashboard" className="hover:text-white">Seller Studio</Link>
-        <Link href="/admin" className="hover:text-white">Admin</Link>
+        <Link href="/marketplace" className="transition hover:text-white">Marketplace</Link>
+        <Link href="/account?view=sell" className="transition hover:text-white">Sell on Standard</Link>
+        <Link href="/#how-it-works" className="transition hover:text-white">How it works</Link>
+        <Link href="/#trust" className="transition hover:text-white">Trust</Link>
       </div>
-      <Link
-        href="/login"
-        className="rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold shadow-lg shadow-purple-500/20"
-      >
-        Login
-      </Link>
+
+      <div className="flex items-center gap-3">
+        <Link href="/login" className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white">
+          Login
+        </Link>
+      </div>
     </nav>
   );
 }

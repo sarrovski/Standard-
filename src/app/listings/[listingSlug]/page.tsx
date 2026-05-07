@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Card, Nav, Shell } from "@/components/ui";
 import { listings } from "@/lib/data";
+import { NoVerifiedPayments, PaymentPill } from "@/components/payment-pill";
 
 export default function ListingPage({ params }: { params: { listingSlug: string } }) {
   const listing = listings.find((item) => item.slug === params.listingSlug);
@@ -50,11 +51,11 @@ export default function ListingPage({ params }: { params: { listingSlug: string 
 
                 <Panel title="Payment methods">
                   <div className="flex flex-wrap gap-2">
-                    {(listing.verifiedPayments.length ? listing.verifiedPayments : ["Pending verification"]).map((payment) => (
-                      <Badge key={payment} tone={payment === "Pending verification" ? "amber" : "cyan"}>
-                        {payment}
-                      </Badge>
-                    ))}
+                    {listing.verifiedPayments.length ? (
+                      listing.verifiedPayments.map((payment) => <PaymentPill key={payment} method={payment} />)
+                    ) : (
+                      <NoVerifiedPayments />
+                    )}
                   </div>
                 </Panel>
 
