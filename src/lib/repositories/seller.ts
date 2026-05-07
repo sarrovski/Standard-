@@ -13,10 +13,12 @@ import type { Database } from "@/lib/supabase/types";
 
 type SellerRow = Database["public"]["Tables"]["sellers"]["Row"];
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
+type PaymentMethodRow = Database["public"]["Tables"]["payment_methods"]["Row"];
 type PaymentVerificationRow =
   Database["public"]["Tables"]["payment_verification_requests"]["Row"];
 type ProviderTagRequestRow =
   Database["public"]["Tables"]["provider_tag_requests"]["Row"];
+type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
 
 /** Returns null when the profile has no sellers row yet (pre-subscription). */
 export async function getSellerByProfileId(profileId: string) {
@@ -58,6 +60,36 @@ export async function getSellerProviderTagRequest(sellerId: string) {
 }
 
 /**
+ * Lookup all payment_methods rows. Used to populate the seller's "payment
+ * method" dropdown so the UI can submit real payment_method_id UUIDs to
+ * /api/seller/payment-requests.
+ *
+ * payment_methods is a global lookup table — every seller sees the same list,
+ * so no seller_id filter is needed. RLS policies in migration 001 make this
+ * row-readable to authenticated users.
+ */
+export async function getPaymentMethods() {
+  const supabase = createClient();
+  return supabase.from("payment_methods").select("*").order("name");
+}
+
+/**
+ * Most recent subscription row for the seller. Returns null when there's no
+ * subscription yet (e.g. user just promoted to seller, webhook still
+ * arriving). The Billing page uses this to show status and current_period_end.
+ */
+export async function getSellerSubscription(sellerId: string) {
+  const supabase = createClient();
+  return supabase
+    .from("subscriptions")
+    .select("*")
+    .eq("seller_id", sellerId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<SubscriptionRow>();
+}
+
+/**
  * Bundle of everything the seller dashboard needs in a single shot.
  * Returns null if the profile isn't a seller yet (so the page can render an
  * onboarding state instead of crashing).
@@ -67,6 +99,8 @@ export type SellerDashboardData = {
   products: ProductRow[];
   paymentRequests: PaymentVerificationRow[];
   providerTagRequest: ProviderTagRequestRow | null;
+  paymentMethods: PaymentMethodRow[];
+  subscription: SubscriptionRow | null;
 };
 
 export async function getSellerDashboardData(
@@ -81,10 +115,12 @@ export async function getSellerDashboardData(
   }
   const seller = sellerRes.data;
 
-  const [productsRes, paymentsRes, tagRes] = await Promise.all([
+  const [productsRes, paymentsRes, tagRes, methodsRes, subRes] = await Promise.all([
     getSellerProducts(seller.id),
     getSellerPaymentVerificationRequests(seller.id),
     getSellerProviderTagRequest(seller.id),
+    getPaymentMethods(),
+    getSellerSubscription(seller.id),
   ]);
 
   return {
@@ -92,5 +128,7 @@ export async function getSellerDashboardData(
     products: productsRes.data ?? [],
     paymentRequests: (paymentsRes.data ?? []) as PaymentVerificationRow[],
     providerTagRequest: tagRes.data ?? null,
+    paymentMethods: methodsRes.data ?? [],
+    subscription: subRes.data ?? null,
   };
 }

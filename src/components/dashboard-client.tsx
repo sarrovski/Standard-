@@ -9,7 +9,7 @@ import {
   featuredSlots as defaultSlots,
   mediaUploadGuide,
   pageTemplates,
-  paymentMethods,
+  paymentMethods as paymentMethodsList,
   paymentVerificationQueue,
   plans,
   providerTagRequests as demoProviderTagRequests,
@@ -33,9 +33,11 @@ import type {
 } from "@/lib/product-types";
 import type { PaymentMethod } from "@/lib/data";
 import type {
+  UISellerPaymentMethodOption,
   UISellerPaymentRequest,
   UISellerProductCard,
   UISellerProviderTagStatus,
+  UISellerSubscription,
 } from "@/lib/adapters";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
@@ -60,6 +62,8 @@ export type DashboardInitialData = {
   paymentRequests: UISellerPaymentRequest[];
   providerTagStatus: UISellerProviderTagStatus;
   sellerName: string;
+  paymentMethods: UISellerPaymentMethodOption[];
+  subscription: UISellerSubscription | null;
 } | null;
 
 type DashboardClientProps = {
@@ -101,6 +105,7 @@ export function DashboardClient({
             supabaseSourced={supabaseSourced}
             initialRequests={initialData?.paymentRequests ?? null}
             initialProducts={initialData?.products ?? null}
+            paymentMethods={initialData?.paymentMethods ?? []}
           />
         )}
         {tab === "analytics" && <Analytics />}
@@ -129,6 +134,8 @@ function Products({
 }) {
   const [demoProductsList, setDemoProducts] = useState<LocalProduct[]>([]);
   const [slots, setSlots] = useState<LocalFeaturedSlot[]>([]);
+  const [busyProductId, setBusyProductId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (supabaseSourced) return;
@@ -141,9 +148,11 @@ function Products({
       return initialProducts ?? [];
     }
     const localCards = demoProductsList.map((product) => ({
+      id: product.slug, // demo: no real UUID, slug doubles as id
       slug: product.slug,
       name: product.name,
       status: product.productStatus,
+      rawStatus: "draft" as const,
       toolStatus: "Draft / database-ready",
       game: product.game,
       features: product.features,
@@ -158,9 +167,44 @@ function Products({
     }));
     return [
       ...localCards,
-      ...demoSellerProducts.map((item) => ({ ...item, slug: "phantomx-tracker" })),
+      ...demoSellerProducts.map((item) => ({
+        ...item,
+        id: "phantomx-tracker",
+        slug: "phantomx-tracker",
+        rawStatus: "published" as const,
+      })),
     ];
   }, [supabaseSourced, initialProducts, demoProductsList]);
+
+  // Real publish/archive (Supabase mode only). On success we reload the page
+  // so server-side initialData reflects the change. A finer-grained client
+  // refresh (router.refresh) would also work but reload keeps logic simple.
+  const updateProductStatus = async (
+    productId: string,
+    nextStatus: "published" | "archived" | "draft",
+  ) => {
+    if (!supabaseSourced) return;
+    setActionError(null);
+    setBusyProductId(productId);
+    try {
+      const response = await fetch("/api/seller/products", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: productId, status: nextStatus }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setActionError(payload.error ?? "Could not update product status.");
+        return;
+      }
+      // Reload the dashboard so the product list reflects the change.
+      window.location.reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusyProductId(null);
+    }
+  };
 
   // Featured slot reservation is still demo-only. Real reservations go through
   // the Stripe featured checkout (Batch 4) which the seller triggers from
@@ -219,6 +263,12 @@ function Products({
           </Link>
         </div>
 
+        {actionError && (
+          <div className="border-b border-red-400/20 bg-red-500/10 p-4 text-sm text-red-200">
+            {actionError}
+          </div>
+        )}
+
         <div className="divide-y divide-white/10">
           {displayProducts.length === 0 && (
             <p className="p-6 text-sm text-slate-500">
@@ -276,6 +326,33 @@ function Products({
                     >
                       Edit in builder
                     </Link>
+                    {supabaseSourced && product.rawStatus === "draft" && (
+                      <button
+                        onClick={() => updateProductStatus(product.id, "published")}
+                        disabled={busyProductId === product.id}
+                        className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-200 disabled:opacity-60"
+                      >
+                        {busyProductId === product.id ? "Publishing…" : "Publish"}
+                      </button>
+                    )}
+                    {supabaseSourced && product.rawStatus === "published" && (
+                      <button
+                        onClick={() => updateProductStatus(product.id, "archived")}
+                        disabled={busyProductId === product.id}
+                        className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-200 disabled:opacity-60"
+                      >
+                        {busyProductId === product.id ? "Archiving…" : "Archive"}
+                      </button>
+                    )}
+                    {supabaseSourced && product.rawStatus === "archived" && (
+                      <button
+                        onClick={() => updateProductStatus(product.id, "draft")}
+                        disabled={busyProductId === product.id}
+                        className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold disabled:opacity-60"
+                      >
+                        {busyProductId === product.id ? "Restoring…" : "Restore to draft"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -611,25 +688,36 @@ function Payments({
   supabaseSourced,
   initialRequests,
   initialProducts,
+  paymentMethods,
 }: {
   supabaseSourced: boolean;
   initialRequests: UISellerPaymentRequest[] | null;
   initialProducts: UISellerProductCard[] | null;
+  paymentMethods: UISellerPaymentMethodOption[];
 }) {
   // Demo state
   const [demoRequests, setDemoRequests] = useState<LocalPaymentRequest[]>([]);
   const [demoProducts, setDemoProducts] = useState<LocalProduct[]>([]);
 
-  // Form state (used in both modes)
-  const [method, setMethod] = useState<PaymentMethod>("Card");
-  const [productSlug, setProductSlug] = useState("");
+  // Form state — used in both modes; in Supabase mode we send IDs, in demo
+  // mode we send the same labels we always used.
+  const [demoMethod, setDemoMethod] = useState<PaymentMethod>("Card");
+  const [productSelection, setProductSelection] = useState(""); // slug (demo) | id (supabase)
+  const [paymentMethodId, setPaymentMethodId] = useState<string>("");
   const [processor, setProcessor] = useState("Stripe");
   const [checkoutUrl, setCheckoutUrl] = useState("https://example.com/checkout");
-  const [refundPolicy, setRefundPolicy] = useState("https://example.com/refunds");
-  const [proofNote, setProofNote] = useState("Payment method visible at checkout.");
+  const [proofUrl, setProofUrl] = useState("");
+  const [sellerNotes, setSellerNotes] = useState("Payment method visible at checkout.");
+
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitOk, setSubmitOk] = useState<string | null>(null);
+
+  // Local copy of the requests list so the UI updates immediately after submit
+  // without a full page reload. Initial value depends on which mode we're in.
+  const [supabaseRequests, setSupabaseRequests] = useState<UISellerPaymentRequest[]>(
+    initialRequests ?? [],
+  );
 
   useEffect(() => {
     if (supabaseSourced) return;
@@ -637,9 +725,14 @@ function Payments({
     setDemoRequests(getPaymentRequests());
   }, [supabaseSourced]);
 
-  const productOptions = supabaseSourced
-    ? initialProducts ?? []
-    : demoProducts.map((p) => ({ slug: p.slug, name: p.name }));
+  // Default the payment method dropdown to the first option in Supabase mode.
+  useEffect(() => {
+    if (!supabaseSourced) return;
+    if (!paymentMethodId && paymentMethods.length > 0) {
+      const first = paymentMethods[0];
+      if (first) setPaymentMethodId(first.id);
+    }
+  }, [supabaseSourced, paymentMethods, paymentMethodId]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -647,7 +740,8 @@ function Payments({
     setSubmitOk(null);
 
     if (!supabaseSourced) {
-      const product = demoProducts.find((item) => item.slug === productSlug) || demoProducts[0];
+      const product =
+        demoProducts.find((item) => item.slug === productSelection) || demoProducts[0];
       if (!product) {
         setSubmitError("Create a product first.");
         return;
@@ -657,16 +751,16 @@ function Payments({
         seller: product.seller,
         productSlug: product.slug,
         productName: product.name,
-        method,
+        method: demoMethod,
         processor,
         checkoutUrl,
-        refundPolicy,
-        proofNote,
+        refundPolicy: "—",
+        proofNote: sellerNotes,
         status: "Pending verification",
         risk:
-          method === "Gift Cards" || method === "PayPal F&F"
+          demoMethod === "Gift Cards" || demoMethod === "PayPal F&F"
             ? "High"
-            : method === "Crypto"
+            : demoMethod === "Crypto"
               ? "Medium"
               : "Low",
         createdAt: new Date().toISOString(),
@@ -677,45 +771,51 @@ function Payments({
       return;
     }
 
-    // Supabase path: requires a real product_id and payment_method_id (uuids).
-    // The current selector lists products by slug in supabaseSourced mode too,
-    // but we need the product id. In Supabase mode the initialProducts items
-    // currently expose only slugs/names — we resolve product_id by matching
-    // the slug client-side via a small fetch, or we re-derive via the row.
-    // Simpler: leave the form requiring the seller to paste/select a product
-    // they own. For this batch we send slug as an opaque key and have the
-    // server resolve. To keep API contracts strict, we POST nothing about the
-    // payment_method id — we send the textual method, and have the server
-    // look up payment_methods by name. Adjust here if you want a stricter
-    // selector later.
+    // Supabase path: submit real UUIDs.
+    if (!productSelection) {
+      setSubmitError("Select a product.");
+      return;
+    }
+    if (!paymentMethodId) {
+      setSubmitError("Select a payment method.");
+      return;
+    }
+
     setSubmitting(true);
     try {
-      // Resolve product_id by slug from initialProducts (we don't carry ids
-      // in the UI shape today — let the seller pick by slug and the server
-      // does the rest).
       const response = await fetch("/api/seller/payment-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // The API expects payment_method_id (uuid) and product_id (uuid).
-          // For this batch we keep the API strict; the dashboard surfaces a
-          // "wired in a follow-up" note because resolving slug->uuid +
-          // method-name->method-uuid client-side requires another fetch and
-          // a richer payload from the server. See the README for follow-ups.
-          payment_method_id: "PLACEHOLDER",
-          product_id: "PLACEHOLDER",
-          external_proof_url: checkoutUrl,
-          seller_notes: proofNote,
+          product_id: productSelection,
+          payment_method_id: paymentMethodId,
+          external_proof_url: proofUrl || checkoutUrl || undefined,
+          seller_notes: sellerNotes || undefined,
         }),
       });
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as { error?: string; request?: { id: string } };
       if (!response.ok) {
-        setSubmitError(
-          payload.error ??
-            "The seller-side submit form is not fully wired yet. See README.",
-        );
+        setSubmitError(payload.error ?? "Could not submit payment verification.");
         return;
       }
+
+      // Optimistic UI update: prepend a local row so the seller sees their
+      // submission immediately without reloading. Look up the names from our
+      // existing options to render correctly.
+      const product = (initialProducts ?? []).find((p) => p.id === productSelection);
+      const method = paymentMethods.find((m) => m.id === paymentMethodId);
+      if (product && method && payload.request) {
+        const optimistic: UISellerPaymentRequest = {
+          id: payload.request.id,
+          productName: product.name,
+          productSlug: product.slug,
+          method: method.name as PaymentMethod,
+          status: "Pending verification",
+          proofNote: sellerNotes || proofUrl || "—",
+        };
+        setSupabaseRequests((prev) => [optimistic, ...prev]);
+      }
+
       setSubmitOk("Submitted. Admin will review.");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Network error.");
@@ -725,7 +825,7 @@ function Payments({
   };
 
   const requestsToShow = supabaseSourced
-    ? initialRequests ?? []
+    ? supabaseRequests
     : [
         ...demoRequests.map((r) => ({
           id: r.id,
@@ -759,50 +859,82 @@ function Payments({
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="p-6">
           <h2 className="text-2xl font-black">Add payment method</h2>
-          {supabaseSourced ? (
-            <p className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-              Real submission path is partially wired. The server endpoint
-              /api/seller/payment-requests accepts
-              <code className="mx-1">payment_method_id</code> and
-              <code className="mx-1">product_id</code> (UUIDs). The dashboard form below still posts
-              placeholders — wiring the selector to send real UUIDs is a small follow-up. Demo
-              submissions still work locally.
+          {supabaseSourced && (initialProducts?.length ?? 0) === 0 && (
+            <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+              You don't have any products yet. Create one in the Builder first.
             </p>
-          ) : null}
+          )}
+          {supabaseSourced && paymentMethods.length === 0 && (
+            <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+              No payment methods are configured in the database. Ask an admin to seed
+              public.payment_methods.
+            </p>
+          )}
+
           <form onSubmit={handleSubmit} className="mt-5 grid gap-4">
             <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <span className="text-xs text-slate-500">Product</span>
               <select
-                value={productSlug}
-                onChange={(event) => setProductSlug(event.target.value)}
+                value={productSelection}
+                onChange={(event) => setProductSelection(event.target.value)}
                 className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
               >
-                <option value="">Latest product</option>
-                {productOptions.map((product) => (
-                  <option key={product.slug} value={product.slug}>
-                    {product.name}
-                  </option>
-                ))}
+                <option value="">Select…</option>
+                {supabaseSourced
+                  ? (initialProducts ?? []).map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name}
+                      </option>
+                    ))
+                  : demoProducts.map((product) => (
+                      <option key={product.slug} value={product.slug}>
+                        {product.name}
+                      </option>
+                    ))}
               </select>
             </label>
+
             <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <span className="text-xs text-slate-500">Payment method</span>
-              <select
-                value={method}
-                onChange={(event) => setMethod(event.target.value as PaymentMethod)}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
-              >
-                {paymentMethods.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+              {supabaseSourced ? (
+                <select
+                  value={paymentMethodId}
+                  onChange={(event) => setPaymentMethodId(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
+                >
+                  <option value="">Select…</option>
+                  {paymentMethods.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={demoMethod}
+                  onChange={(event) => setDemoMethod(event.target.value as PaymentMethod)}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
+                >
+                  {paymentMethods.length === 0 &&
+                    paymentMethodsList.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  {paymentMethods.map((m) => (
+                    <option key={m.id} value={m.name}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
+
             <BuilderInput label="Processor / account label" value={processor} onChange={setProcessor} />
             <BuilderInput label="Checkout URL" value={checkoutUrl} onChange={setCheckoutUrl} />
-            <BuilderInput label="Refund policy" value={refundPolicy} onChange={setRefundPolicy} />
-            <BuilderInput label="Proof note" value={proofNote} onChange={setProofNote} />
+            <BuilderInput label="Proof URL (optional)" value={proofUrl} onChange={setProofUrl} />
+            <BuilderInput label="Seller notes" value={sellerNotes} onChange={setSellerNotes} />
+
             <button
               type="submit"
               disabled={submitting}

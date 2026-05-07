@@ -318,6 +318,7 @@ export function adaptAdminProviderTagRequest(
  * sellerProducts[] from data.ts so the existing JSX renders unchanged.
  */
 export type UISellerProductCard = {
+  id: string;
   slug: string;
   name: string;
   status: string;
@@ -332,6 +333,9 @@ export type UISellerProductCard = {
   mediaAssets: number;
   website: string;
   nextAction: string;
+  // Raw DB status — the UI uses `status` for the human label, this for the
+  // publish/archive button logic.
+  rawStatus: "draft" | "published" | "archived";
 };
 
 export function adaptSellerProductCard(
@@ -347,9 +351,11 @@ export function adaptSellerProductCard(
         ? "Pending Review"
         : "Archived";
   return {
+    id: row.id,
     slug: row.slug,
     name: row.name,
     status: statusLabel,
+    rawStatus: row.status,
     toolStatus: "Saved to database",
     game: row.game,
     features: row.features ?? [],
@@ -416,4 +422,51 @@ export function adaptProviderTagStatus(
     default:
       return "Not requested";
   }
+}
+
+/**
+ * Payment method dropdown option. Carries the DB id (UUID) so the seller's
+ * verification request submit can post a real payment_method_id.
+ */
+export type UISellerPaymentMethodOption = {
+  id: string;
+  name: string;
+};
+
+export function adaptPaymentMethodOption(
+  row: PaymentMethodRow,
+): UISellerPaymentMethodOption {
+  return { id: row.id, name: row.name };
+}
+
+/**
+ * Subscription summary used on the Billing page. The UI cares about a small
+ * subset of fields; everything else stays in the DB row.
+ */
+export type UISellerSubscription = {
+  status: string;
+  currentPeriodEnd: string | null;
+  stripeSubscriptionId: string | null;
+};
+
+const SUB_STATUS_LABELS: Record<
+  Database["public"]["Enums"]["subscription_status"],
+  string
+> = {
+  active: "Active",
+  trialing: "Trialing",
+  past_due: "Past due",
+  canceled: "Canceled",
+  inactive: "Inactive",
+};
+
+export function adaptSellerSubscription(
+  row: Database["public"]["Tables"]["subscriptions"]["Row"] | null,
+): UISellerSubscription | null {
+  if (!row) return null;
+  return {
+    status: SUB_STATUS_LABELS[row.status] ?? row.status,
+    currentPeriodEnd: row.current_period_end,
+    stripeSubscriptionId: row.stripe_subscription_id,
+  };
 }

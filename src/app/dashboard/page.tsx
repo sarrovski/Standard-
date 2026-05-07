@@ -3,9 +3,11 @@ import { Nav, SectionHeader, Shell } from "@/components/ui";
 import { DashboardClient, type DashboardInitialData } from "@/components/dashboard-client";
 import { getSellerDashboardData } from "@/lib/repositories/seller";
 import {
+  adaptPaymentMethodOption,
   adaptProviderTagStatus,
   adaptSellerPaymentRequest,
   adaptSellerProductCard,
+  adaptSellerSubscription,
 } from "@/lib/adapters";
 
 async function loadDashboardData(): Promise<DashboardInitialData> {
@@ -13,9 +15,6 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
     return null;
   }
 
-  // requireRole already authenticates and authorizes (seller | admin). After
-  // it returns we still need the user object for the seller lookup.
-  // We re-fetch via createClient(); cheap and keeps roles.ts simple.
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = createClient();
   const {
@@ -28,13 +27,14 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
   const data = await getSellerDashboardData(user.id);
   if (!data) {
     // Profile is seller (per requireRole) but no sellers row exists yet —
-    // could happen if the Stripe webhook hasn't fired yet. Fall back to a
-    // minimal data shape so the dashboard doesn't crash.
+    // could happen if the Stripe webhook hasn't fired yet.
     return {
       products: [],
       paymentRequests: [],
       providerTagStatus: "Not requested",
       sellerName: "Pending",
+      paymentMethods: [],
+      subscription: null,
     };
   }
 
@@ -45,6 +45,8 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
     ),
     providerTagStatus: adaptProviderTagStatus(data.providerTagRequest),
     sellerName: data.seller.seller_name,
+    paymentMethods: data.paymentMethods.map(adaptPaymentMethodOption),
+    subscription: adaptSellerSubscription(data.subscription),
   };
 }
 
