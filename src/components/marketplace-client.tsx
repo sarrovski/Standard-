@@ -3,12 +3,24 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
-import { featuredSlots as defaultSlots, games, productStatuses, products, paymentMethods, sellerTags } from "@/lib/data";
+import { featuredSlots as defaultSlots, games, productStatuses, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
 import { getFeaturedSlots, getLocalProducts } from "@/lib/product-store";
 import type { LocalFeaturedSlot, LocalProduct } from "@/lib/product-types";
+import type { UIProductCard } from "@/lib/adapters";
 import { NoVerifiedPayments, PaymentPill } from "@/components/payment-pill";
 
-export function MarketplaceClient() {
+// `initialProducts`:
+//   - non-null => Supabase-sourced (server fetched). Demo product-store is
+//     ignored to keep the public marketplace pure.
+//   - null     => demo mode. Combine in-memory LocalProducts (builder output)
+//     with the data.ts fixture, like before.
+type MarketplaceClientProps = {
+  initialProducts: UIProductCard[] | null;
+};
+
+export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
+  const supabaseSourced = initialProducts !== null;
+
   const [localProducts, setLocalProducts] = useState<LocalProduct[]>([]);
   const [slots, setSlots] = useState<LocalFeaturedSlot[]>([]);
   const [selectedGame, setSelectedGame] = useState("All");
@@ -17,12 +29,17 @@ export function MarketplaceClient() {
   const [selectedStatus, setSelectedStatus] = useState("All");
 
   useEffect(() => {
+    // Only hydrate the demo store when we're not already showing real data.
+    if (supabaseSourced) return;
     setLocalProducts(getLocalProducts());
     const localSlots = getFeaturedSlots();
     setSlots(localSlots.length ? localSlots : defaultSlots.map((slot) => ({ ...slot, productSlug: null })) as LocalFeaturedSlot[]);
-  }, []);
+  }, [supabaseSourced]);
 
-  const allProducts = useMemo(() => [...localProducts, ...products], [localProducts]);
+  const allProducts = useMemo(() => {
+    if (supabaseSourced) return initialProducts ?? [];
+    return [...localProducts, ...demoProducts];
+  }, [supabaseSourced, initialProducts, localProducts]);
 
   const filtered = allProducts.filter((product) => {
     const matchesGame = selectedGame === "All" || product.game === selectedGame;

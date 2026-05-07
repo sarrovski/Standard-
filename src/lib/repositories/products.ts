@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * Read-only product repositories used by Marketplace and product detail pages.
+ * These are called from server components when isSupabaseConfigured() is true.
+ * Writes belong elsewhere (Batch 5).
+ */
+
 export async function getPublishedProducts() {
   const supabase = createClient();
   return supabase
@@ -7,6 +13,18 @@ export async function getPublishedProducts() {
     .select("*, sellers(*), product_media(*)")
     .eq("status", "published")
     .order("created_at", { ascending: false });
+}
+
+export async function getPublishedProductBySlug(productSlug: string) {
+  const supabase = createClient();
+  return supabase
+    .from("products")
+    .select(
+      "*, sellers(*), product_media(*), trust_signals(*), seller_payment_methods(*, payment_methods(*))",
+    )
+    .eq("slug", productSlug)
+    .eq("status", "published")
+    .maybeSingle();
 }
 
 export async function getVerifiedSellerPaymentMethods(sellerId: string) {

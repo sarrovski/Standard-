@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * Read-only admin queue repositories.
+ * Writes (approve/reject) deferred to Batch 5.
+ */
+
 export async function getPendingPaymentVerificationRequests() {
   const supabase = createClient();
   return supabase

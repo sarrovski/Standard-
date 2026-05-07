@@ -3,18 +3,60 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge, ButtonLink, Card } from "@/components/ui";
-import { products } from "@/lib/data";
+import { products as demoProducts } from "@/lib/data";
 import { getLocalProducts } from "@/lib/product-store";
-import type { LocalProduct } from "@/lib/product-types";
+import type { UIProductDetail } from "@/lib/adapters";
+import type { PaymentMethod, PaymentProfile } from "@/lib/data";
 import { NoVerifiedPayments, PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
-export function ProductPageClient({ slug }: { slug: string }) {
-  const [product, setProduct] = useState<any | null>(products.find((item) => item.slug === slug) || null);
+// Shape the page actually renders. UIProductDetail (Supabase-sourced) and the
+// demo products (data.ts) both satisfy this. Fields the UI uses but neither
+// source guarantees are made optional.
+type RenderableProduct = {
+  slug: string;
+  name: string;
+  seller: string;
+  sellerTag: string;
+  game: string;
+  category: string;
+  architecture: string;
+  productStatus: string;
+  summary: string;
+  accent: string;
+  websiteUrl?: string;
+  websiteLabel?: string;
+  discord?: string;
+  telegram?: string;
+  features: string[];
+  pricePoints: string[];
+  verifiedPayments: PaymentMethod[];
+  paymentProfiles: PaymentProfile[];
+  trustSignals?: string[];
+  gallery?: { title: string; accent: string }[];
+  faq?: { q: string; a: string }[];
+};
+
+type ProductPageClientProps = {
+  slug: string;
+  initialProduct: UIProductDetail | null;
+};
+
+export function ProductPageClient({ slug, initialProduct }: ProductPageClientProps) {
+  const supabaseSourced = initialProduct !== null;
+
+  const [product, setProduct] = useState<RenderableProduct | null>(() => {
+    if (initialProduct) return initialProduct;
+    // Demo path: data.ts fixture.
+    const demo = demoProducts.find((item) => item.slug === slug);
+    return demo ? (demo as unknown as RenderableProduct) : null;
+  });
 
   useEffect(() => {
+    // Only fall back to the local builder products in demo mode.
+    if (supabaseSourced) return;
     const local = getLocalProducts().find((item) => item.slug === slug);
-    if (local) setProduct(local);
-  }, [slug]);
+    if (local) setProduct(local as unknown as RenderableProduct);
+  }, [slug, supabaseSourced]);
 
   if (!product) {
     return (
@@ -27,6 +69,14 @@ export function ProductPageClient({ slug }: { slug: string }) {
       </Card>
     );
   }
+
+  const gallery = product.gallery ?? [];
+  const faq = product.faq ?? [];
+  const trustSignals = product.trustSignals ?? [];
+  const websiteUrl = product.websiteUrl ?? "";
+  const websiteLabel = product.websiteLabel ?? "Visit official website";
+  const discord = product.discord ?? "";
+  const telegram = product.telegram ?? "";
 
   return (
     <>
@@ -42,7 +92,7 @@ export function ProductPageClient({ slug }: { slug: string }) {
             <h1 className="mt-6 text-4xl font-black md:text-5xl">{product.name}</h1>
             <p className="mt-4 max-w-3xl text-white/85">{product.summary}</p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <ButtonLink href={product.websiteUrl}>{product.websiteLabel}</ButtonLink>
+              {websiteUrl ? <ButtonLink href={websiteUrl}>{websiteLabel}</ButtonLink> : null}
               <ButtonLink href="/login" variant="secondary">Follow seller</ButtonLink>
             </div>
           </div>
@@ -56,32 +106,36 @@ export function ProductPageClient({ slug }: { slug: string }) {
           </p>
           <div className="mt-5 grid gap-3">
             <Fact label="Seller" value={product.seller} />
-            <Fact label="Official website" value={product.websiteUrl} />
-            <Fact label="Discord" value={product.discord} />
-            <Fact label="Telegram" value={product.telegram} />
+            <Fact label="Official website" value={websiteUrl || "—"} />
+            <Fact label="Discord" value={discord || "—"} />
+            <Fact label="Telegram" value={telegram || "—"} />
           </div>
-          <a href={product.websiteUrl} className="mt-6 inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white">
-            Go to official website
-          </a>
+          {websiteUrl ? (
+            <a href={websiteUrl} className="mt-6 inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white">
+              Go to official website
+            </a>
+          ) : null}
         </Card>
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_320px]">
         <div className="space-y-6">
-          <Panel title="Media gallery" subtitle="Seller-managed visuals from the product builder.">
-            <div className="grid gap-4 md:grid-cols-2">
-              {product.gallery.map((item: any) => (
-                <div key={item.title} className={`h-44 rounded-3xl border border-white/10 bg-gradient-to-br ${item.accent} p-5`}>
-                  <div className="text-xs uppercase tracking-[0.22em] text-white/65">Media block</div>
-                  <div className="mt-20 text-lg font-bold text-white">{item.title}</div>
-                </div>
-              ))}
-            </div>
-          </Panel>
+          {gallery.length > 0 && (
+            <Panel title="Media gallery" subtitle="Seller-managed visuals from the product builder.">
+              <div className="grid gap-4 md:grid-cols-2">
+                {gallery.map((item) => (
+                  <div key={item.title} className={`h-44 rounded-3xl border border-white/10 bg-gradient-to-br ${item.accent} p-5`}>
+                    <div className="text-xs uppercase tracking-[0.22em] text-white/65">Media block</div>
+                    <div className="mt-20 text-lg font-bold text-white">{item.title}</div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
 
           <Panel title="Features">
             <div className="grid gap-3 md:grid-cols-2">
-              {product.features.map((feature: string) => (
+              {product.features.map((feature) => (
                 <div key={feature} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm">
                   {feature}
                 </div>
@@ -89,33 +143,39 @@ export function ProductPageClient({ slug }: { slug: string }) {
             </div>
           </Panel>
 
-          <Panel title="FAQ">
-            <div className="space-y-3">
-              {product.faq.map((item: any) => (
-                <div key={item.q} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="font-semibold">{item.q}</div>
-                  <div className="mt-2 text-sm leading-6 text-slate-400">{item.a}</div>
-                </div>
-              ))}
-            </div>
-          </Panel>
+          {faq.length > 0 && (
+            <Panel title="FAQ">
+              <div className="space-y-3">
+                {faq.map((item) => (
+                  <div key={item.q} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                    <div className="font-semibold">{item.q}</div>
+                    <div className="mt-2 text-sm leading-6 text-slate-400">{item.a}</div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
         </div>
 
         <aside className="space-y-6">
           <Panel title="Trust signals">
             <div className="flex flex-wrap gap-2">
-              {product.trustSignals.map((signal: string) => (
-                <Badge key={signal} tone={signal.includes("Verified") || signal.includes("Provider") ? "green" : "default"}>
-                  {signal}
-                </Badge>
-              ))}
+              {trustSignals.length > 0 ? (
+                trustSignals.map((signal) => (
+                  <Badge key={signal} tone={signal.includes("Verified") || signal.includes("Provider") ? "green" : "default"}>
+                    {signal}
+                  </Badge>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">No trust signals yet.</p>
+              )}
             </div>
           </Panel>
 
           <Panel title="Verified payment methods">
             <div className="flex flex-wrap gap-2">
               {product.verifiedPayments.length ? (
-                product.verifiedPayments.map((payment: any) => <PaymentPill key={payment} method={payment} />)
+                product.verifiedPayments.map((payment) => <PaymentPill key={payment} method={payment} />)
               ) : (
                 <NoVerifiedPayments />
               )}
@@ -125,8 +185,8 @@ export function ProductPageClient({ slug }: { slug: string }) {
           <Panel title="Payment methods under review">
             <div className="space-y-3">
               {product.paymentProfiles
-                .filter((payment: any) => payment.status === "Pending verification" || payment.status === "Needs re-check")
-                .map((payment: any) => (
+                .filter((payment) => payment.status === "Pending verification" || payment.status === "Needs re-check")
+                .map((payment) => (
                   <div key={payment.method} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <PaymentPill method={payment.method} />
@@ -134,7 +194,7 @@ export function ProductPageClient({ slug }: { slug: string }) {
                     </div>
                   </div>
                 ))}
-              {product.paymentProfiles.filter((payment: any) => payment.status === "Pending verification" || payment.status === "Needs re-check").length === 0 && (
+              {product.paymentProfiles.filter((payment) => payment.status === "Pending verification" || payment.status === "Needs re-check").length === 0 && (
                 <p className="text-sm text-slate-500">No payment methods under review.</p>
               )}
             </div>
@@ -142,7 +202,7 @@ export function ProductPageClient({ slug }: { slug: string }) {
 
           <Panel title="Price points">
             <div className="space-y-2">
-              {product.pricePoints.map((price: string) => (
+              {product.pricePoints.map((price) => (
                 <div key={price} className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm font-medium">
                   {price}
                 </div>
