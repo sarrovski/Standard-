@@ -17,8 +17,8 @@ import {
   sellerProducts,
   trafficSources,
 } from "@/lib/data";
-import { addLocalProduct, addPaymentRequest, getFeaturedSlots, getLocalProducts, saveFeaturedSlots, slugify } from "@/lib/local-store";
-import type { LocalFeaturedSlot, LocalPaymentRequest, LocalProduct } from "@/lib/local-types";
+import { addLocalProduct, addPaymentRequest, getFeaturedSlots, getLocalProducts, getPaymentRequests, saveFeaturedSlots, slugify } from "@/lib/product-store";
+import type { LocalFeaturedSlot, LocalPaymentRequest, LocalProduct } from "@/lib/product-types";
 import type { PaymentMethod } from "@/lib/data";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
@@ -72,8 +72,8 @@ function Products() {
   const displayProducts = useMemo(() => {
     const localCards = products.map((product) => ({
       name: product.name,
-      status: product.listingStatus,
-      toolStatus: "Draft / local MVP",
+      status: product.productStatus,
+      toolStatus: "Draft / database-ready",
       game: product.game,
       features: product.features,
       views: product.activity.views,
@@ -118,7 +118,7 @@ function Products() {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-4">
-        <MiniStat label="Produits en ligne" value={String(displayProducts.length)} detail="local + demo" />
+        <MiniStat label="Produits en ligne" value={String(displayProducts.length)} detail="demo + database-ready" />
         <MiniStat label="Views produits" value="35.2K" detail="+16.4%" />
         <MiniStat label="Outbound clicks" value="1.7K" detail="website traffic" />
         <MiniStat label="Avg outbound CTR" value="4.93%" detail="+0.8 pts" />
@@ -178,7 +178,7 @@ function Products() {
                   </div>
 
                   <div className="mt-5 grid gap-2">
-                    <Link href={`/listings/${product.slug}`} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold">
+                    <Link href={`/products/${product.slug}`} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold">
                       View public page
                     </Link>
                     <Link href="/dashboard?tab=builder" className="rounded-xl border border-purple-400/20 bg-purple-500/10 px-4 py-3 text-center text-sm font-semibold text-purple-200">
@@ -255,12 +255,12 @@ function Builder() {
     const product: LocalProduct = {
       slug,
       name: form.name,
-      seller: "Local Seller",
+      seller: "Demo Seller",
       sellerTag: "Seller",
       game: form.game,
       category: form.category,
       architecture: form.architecture,
-      listingStatus: "Pending Review",
+      productStatus: "Pending Review",
       integrity: null,
       confidence: "Pending",
       verifiedPayments: [],
@@ -275,7 +275,7 @@ function Builder() {
       websiteLabel: form.cta,
       discord: form.discord,
       telegram: form.telegram,
-      trustSignals: ["Seller-submitted listing"],
+      trustSignals: ["Seller-submitted product"],
       gallery: [
         { title: "Hero image placeholder", accent: "from-violet-500/60 to-fuchsia-500/40" },
         { title: "Product screenshot placeholder", accent: "from-slate-700 to-cyan-500/30" },
@@ -296,7 +296,7 @@ function Builder() {
           <Badge tone="purple">Product builder</Badge>
           <h2 className="mt-4 text-2xl font-black">Create a product announcement</h2>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            This builder now creates a real local product that appears in your dashboard and marketplace.
+            This builder keeps the prototype clickable while the Supabase product mutation is wired.
           </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -376,11 +376,11 @@ function Builder() {
             onClick={createProduct}
             className="mt-6 w-full rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold"
           >
-            Save product locally
+            Save product draft
           </button>
           {createdSlug && (
             <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-              Product created. <Link href={`/listings/${createdSlug}`} className="font-bold underline">Open product page</Link>
+              Product created. <Link href={`/products/${createdSlug}`} className="font-bold underline">Open product page</Link>
             </div>
           )}
         </Card>
@@ -431,7 +431,7 @@ function Payments() {
 
   useEffect(() => {
     setProducts(getLocalProducts());
-    setRequests(JSON.parse(localStorage.getItem("standard.paymentRequests") || "[]"));
+    setRequests(getPaymentRequests());
   }, []);
 
   const submit = () => {
@@ -501,12 +501,12 @@ function Payments() {
           <h2 className="text-2xl font-black">Your payment status</h2>
           <div className="mt-5 space-y-3">
             {[...requests, ...paymentVerificationQueue].map((item) => (
-              <div key={(item as any).id || item.seller + ("listing" in item ? item.listing : item.productName) + item.method} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <div key={(item as any).id || item.seller + ("product" in item ? item.product : item.productName) + item.method} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <PaymentPill method={item.method} />
                   <PaymentStatusPill status={item.status} />
                 </div>
-                <div className="mt-3 text-sm font-semibold">{"productName" in item ? item.productName : item.listing}</div>
+                <div className="mt-3 text-sm font-semibold">{"productName" in item ? item.productName : item.product}</div>
                 <div className="mt-1 text-xs text-slate-500">{"submittedProof" in item ? item.submittedProof : item.proofNote}</div>
               </div>
             ))}

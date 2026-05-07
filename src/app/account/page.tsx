@@ -14,7 +14,7 @@ export default function AccountPage({
         <SectionHeader
           eyebrow={sellView ? "Seller onboarding" : "User account"}
           title={sellView ? "Become a seller on Standard" : "Buyer workspace"}
-          text={sellView ? "If you do not have an active seller subscription yet, start here. Choose a plan, then unlock the seller dashboard." : "Normal users get a simple account area for saved listings, reviews, alerts, and payment preferences."}
+          text={sellView ? "If you do not have an active seller subscription yet, start here. Choose a plan, then unlock the seller dashboard." : "Normal users get a simple account area for saved products, reviews, alerts, and payment preferences."}
         />
 
         {sellView ? (
@@ -96,10 +96,10 @@ export default function AccountPage({
         ) : (
           <>
             <section className="mt-8 grid gap-4 md:grid-cols-4">
-              <MiniStat label="Saved listings" value="12" detail="3 updated recently" />
+              <MiniStat label="Saved products" value="12" detail="3 updated recently" />
               <MiniStat label="Reviews posted" value="8" detail="2 verified" />
               <MiniStat label="Payment preferences" value="3" detail="Crypto, Card, PayPal" />
-              <MiniStat label="Alerts" value="4" detail="Listing changes" />
+              <MiniStat label="Alerts" value="4" detail="Product changes" />
             </section>
 
             <section className="mt-8 grid gap-6 lg:grid-cols-2">

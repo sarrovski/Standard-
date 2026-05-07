@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge, ButtonLink, Card } from "@/components/ui";
-import { listings } from "@/lib/data";
-import { getLocalProducts } from "@/lib/local-store";
-import type { LocalProduct } from "@/lib/local-types";
+import { products } from "@/lib/data";
+import { getLocalProducts } from "@/lib/product-store";
+import type { LocalProduct } from "@/lib/product-types";
 import { NoVerifiedPayments, PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
 export function ProductPageClient({ slug }: { slug: string }) {
-  const [product, setProduct] = useState<any | null>(listings.find((item) => item.slug === slug) || null);
+  const [product, setProduct] = useState<any | null>(products.find((item) => item.slug === slug) || null);
 
   useEffect(() => {
     const local = getLocalProducts().find((item) => item.slug === slug);
@@ -20,7 +20,7 @@ export function ProductPageClient({ slug }: { slug: string }) {
     return (
       <Card className="mt-6 p-8">
         <h1 className="text-3xl font-black">Product not found</h1>
-        <p className="mt-3 text-slate-400">This product does not exist in local MVP storage.</p>
+        <p className="mt-3 text-slate-400">This product is not available in the demo fallback yet.</p>
         <Link href="/marketplace" className="mt-6 inline-flex rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-950">
           Back to marketplace
         </Link>
@@ -34,7 +34,7 @@ export function ProductPageClient({ slug }: { slug: string }) {
         <Card className="overflow-hidden border-purple-400/30">
           <div className={`bg-gradient-to-br ${product.accent} p-8`}>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={product.listingStatus === "Verified" ? "green" : "amber"}>{product.listingStatus}</Badge>
+              <Badge tone={product.productStatus === "Verified" ? "green" : "amber"}>{product.productStatus}</Badge>
               <Badge tone={product.sellerTag === "Provider / Developer" ? "cyan" : product.sellerTag === "Verified Seller" ? "green" : "default"}>{product.sellerTag}</Badge>
               <Badge>{product.game}</Badge>
               <Badge>{product.architecture}</Badge>

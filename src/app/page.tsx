@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Badge, ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
-import { games, listings } from "@/lib/data";
+import { games, products } from "@/lib/data";
 
 export default function HomePage() {
   return (
@@ -27,13 +27,13 @@ export default function HomePage() {
           <Card className="p-6">
             <h3 className="text-xl font-bold">1. Pick a game</h3>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Users start from the marketplace, choose a game, and browse a gallery of listings.
+              Users start from the marketplace, choose a game, and browse a gallery of products.
             </p>
           </Card>
           <Card className="p-6">
             <h3 className="text-xl font-bold">2. Compare sellers</h3>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Listings show seller tags, payment methods, trust signals, delivery speed, and starting prices.
+              Products show seller tags, payment methods, trust signals, delivery speed, and starting prices.
             </p>
           </Card>
           <Card className="p-6">
@@ -48,7 +48,7 @@ export default function HomePage() {
           <SectionHeader
             eyebrow="Game hubs"
             title="Start with a game"
-            text="Standard keeps the experience simple: choose a game, compare listings, then choose the safest way to buy."
+            text="Standard keeps the experience simple: choose a game, compare products, then choose the safest way to buy."
           />
           <div className="mt-6 grid gap-3 md:grid-cols-4">
             {games.map((game) => (
@@ -59,7 +59,7 @@ export default function HomePage() {
               >
                 <div className="font-bold">{game}</div>
                 <div className="mt-1 text-sm text-slate-500">
-                  {listings.filter((listing) => listing.game === game).length} listings
+                  {products.filter((product) => product.game === game).length} products
                 </div>
               </Link>
             ))}
@@ -88,7 +88,7 @@ export default function HomePage() {
             <Card className="p-6">
               <h3 className="text-xl font-bold">Clear limitations</h3>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Standard helps reduce risk, but sellers remain responsible for their listings, delivery, support, and payment policies.
+                Standard helps reduce risk, but sellers remain responsible for their products, delivery, support, and payment policies.
               </p>
             </Card>
           </div>

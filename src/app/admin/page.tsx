@@ -1,7 +1,10 @@
+import { requireRole } from "@/lib/roles";
 import { Nav, SectionHeader, Shell } from "@/components/ui";
 import { AdminClient } from "@/components/admin-client";
 
-export default function AdminPage() {
+export default async function AdminPage() {
+  await requireRole(["admin"]);
+
   return (
     <Shell>
       <Nav />

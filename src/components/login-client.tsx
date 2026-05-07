@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Badge, ButtonLink, Card } from "@/components/ui";
-import { saveSession } from "@/lib/local-store";
-import type { LocalSession } from "@/lib/local-types";
+import { saveSession } from "@/lib/product-store";
+import type { LocalSession } from "@/lib/product-types";
 
 function detectSession(email: string): LocalSession {
   const normalized = email.toLowerCase().trim();

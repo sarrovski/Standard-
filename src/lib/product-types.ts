@@ -15,7 +15,7 @@ export type LocalProduct = {
   game: string;
   category: string;
   architecture: string;
-  listingStatus: string;
+  productStatus: string;
   integrity: number | null;
   confidence: string;
   verifiedPayments: PaymentMethod[];

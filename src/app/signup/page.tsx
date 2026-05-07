@@ -17,7 +17,7 @@ export default function SignupPage() {
           </p>
           <div className="mt-8 grid gap-3 text-sm text-slate-400">
             <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
-              Buyer accounts can save listings, write reviews, and set payment preferences.
+              Buyer accounts can save products, write reviews, and set payment preferences.
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
               Seller access is enabled after signup from your account onboarding.

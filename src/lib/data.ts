@@ -96,9 +96,9 @@ export function getVerifiedPayments(paymentProfiles: PaymentProfile[]) {
 
 
 export const sellerTags = ["All", "Seller", "Verified Seller", "Provider / Developer"] as const;
-export const listingStatuses = ["All", "Verified", "Pending Review"] as const;
+export const productStatuses = ["All", "Verified", "Pending Review"] as const;
 
-export const listings = [
+export const products = [
   {
     slug: "phantomx-tracker",
     name: "PhantomX Tracker",
@@ -107,7 +107,7 @@ export const listings = [
     game: "Valorant",
     category: "Analytics / Overlay",
     architecture: "External",
-    listingStatus: "Verified",
+    productStatus: "Verified",
     integrity: 92 as number | null,
     confidence: "High",
     activity: { vouches: 326, views: 28400, replies: 184, lastSeen: "Recently active" },
@@ -169,7 +169,7 @@ export const listings = [
     ],
     faq: [
       { q: "What is the main goal of this page?", a: "To help interested users understand the product quickly and then click through to the official website." },
-      { q: "Can buyers see payment methods before leaving Standard?", a: "Yes. Standard surfaces verified payment methods directly on the listing page." },
+      { q: "Can buyers see payment methods before leaving Standard?", a: "Yes. Standard surfaces verified payment methods directly on the product page." },
       { q: "Can sellers edit their own media and features?", a: "Yes. Sellers manage gallery items, feature blocks, pricing, and CTA settings from the dashboard builder." },
     ],
   },
@@ -181,7 +181,7 @@ export const listings = [
     game: "CS2",
     category: "Overlay / Utility",
     architecture: "Unknown",
-    listingStatus: "Pending Review",
+    productStatus: "Pending Review",
     integrity: null as number | null,
     confidence: "Pending",
     activity: { vouches: 84, views: 6840, replies: 51, lastSeen: "Unknown" },
@@ -209,7 +209,7 @@ export const listings = [
     delivery: "Pending verification",
     refundPolicy: "Pending verification",
     accent: "from-fuchsia-500/60 to-slate-500/30",
-    summary: "A reference listing that still needs more seller proof before it becomes a strong conversion page.",
+    summary: "A reference product that still needs more seller proof before it becomes a strong conversion page.",
     websiteUrl: "https://shadow.example",
     websiteLabel: "Go to seller website",
     discord: "shadowtools",
@@ -221,7 +221,7 @@ export const listings = [
     ],
     benefits: ["Needs more proof", "Needs media refinement", "Needs payment verification"],
     faq: [
-      { q: "Why is this page lighter on detail?", a: "The listing is still under review and some fields remain unverified." },
+      { q: "Why is this page lighter on detail?", a: "The product is still under review and some fields remain unverified." },
     ],
   },
   {
@@ -232,7 +232,7 @@ export const listings = [
     game: "Valorant",
     category: "Seller Offer",
     architecture: "Unknown",
-    listingStatus: "Pending Review",
+    productStatus: "Pending Review",
     integrity: 74 as number | null,
     confidence: "Medium",
     activity: { vouches: 18, views: 910, replies: 14, lastSeen: "1 day ago" },
@@ -283,7 +283,7 @@ export const listings = [
     game: "Fortnite",
     category: "Utility / Companion",
     architecture: "Cloud",
-    listingStatus: "Verified",
+    productStatus: "Verified",
     integrity: 88 as number | null,
     confidence: "High",
     activity: { vouches: 143, views: 11200, replies: 63, lastSeen: "Today" },
@@ -327,7 +327,7 @@ export const listings = [
     websiteLabel: "Visit official website",
     discord: "tacticalforge",
     telegram: "@stratpad",
-    trustSignals: ["Verified listing", "Card payment available"],
+    trustSignals: ["Verified product", "Card payment available"],
     gallery: [
       { title: "Landing hero", accent: "from-indigo-500/50 to-cyan-500/30" },
       { title: "Workflow section", accent: "from-slate-700 to-indigo-500/20" },
@@ -346,7 +346,7 @@ export const listings = [
     game: "Apex Legends",
     category: "Analytics",
     architecture: "External",
-    listingStatus: "Verified",
+    productStatus: "Verified",
     integrity: 90 as number | null,
     confidence: "High",
     activity: { vouches: 201, views: 16700, replies: 92, lastSeen: "Recently active" },
@@ -376,12 +376,12 @@ export const listings = [
     delivery: "Instant",
     refundPolicy: "Visible after checkout integration",
     accent: "from-orange-500/60 to-purple-500/30",
-    summary: "A professional listing page for an official provider that mixes analytics value with strong trust and outbound conversion cues.",
+    summary: "A professional product page for an official provider that mixes analytics value with strong trust and outbound conversion cues.",
     websiteUrl: "https://apexscan.example",
     websiteLabel: "Open official website",
     discord: "pulseworks",
     telegram: "@pulseworks",
-    trustSignals: ["Provider / Developer", "Verified listing", "Official site provided"],
+    trustSignals: ["Provider / Developer", "Verified product", "Official site provided"],
     gallery: [
       { title: "Main screenshot", accent: "from-orange-500/40 to-fuchsia-500/30" },
       { title: "Analytics block", accent: "from-slate-700 to-orange-500/20" },
@@ -400,7 +400,7 @@ export const listings = [
     game: "League of Legends",
     category: "Assistant / Utility",
     architecture: "External",
-    listingStatus: "Pending Review",
+    productStatus: "Pending Review",
     integrity: 68 as number | null,
     confidence: "Medium",
     activity: { vouches: 59, views: 4200, replies: 28, lastSeen: "3 days ago" },
@@ -428,12 +428,12 @@ export const listings = [
     delivery: "Manual",
     refundPolicy: "Pending review",
     accent: "from-emerald-500/60 to-cyan-500/20",
-    summary: "A work-in-progress listing that still needs richer media and stronger section design.",
+    summary: "A work-in-progress product that still needs richer media and stronger section design.",
     websiteUrl: "https://riftcontrol.example",
     websiteLabel: "Visit website",
     discord: "macrolane",
     telegram: "@riftcontrol",
-    trustSignals: ["Seller-submitted listing"],
+    trustSignals: ["Seller-submitted product"],
     gallery: [
       { title: "Placeholder visual", accent: "from-emerald-500/30 to-slate-700" },
     ],
@@ -501,7 +501,7 @@ export const sellerOffers = [
 ];
 
 export const analytics = [
-  { label: "Listing views", value: "38.6K", change: "+18.6%" },
+  { label: "Product views", value: "38.6K", change: "+18.6%" },
   { label: "Outbound clicks", value: "2.1K", change: "+12.4%" },
   { label: "Outbound CTR", value: "5.44%", change: "+1.1 pts" },
   { label: "Verified buyer reviews", value: "186", change: "+7.4%" },
@@ -527,20 +527,20 @@ export const adminSignals = [
   },
   {
     title: "Review pattern watch",
-    meta: "8 new positive reviews from low-age accounts on one listing.",
+    meta: "8 new positive reviews from low-age accounts on one product.",
     risk: "Medium",
   },
 ];
 
 export const submissionQueue = [
   {
-    listing: "Shadow Overlay",
+    product: "Shadow Overlay",
     requester: "seller@standard.gg",
-    type: "Provider listing",
+    type: "Provider product",
     status: "Needs proof",
   },
   {
-    listing: "NovaKeys Offer",
+    product: "NovaKeys Offer",
     requester: "offers@standard.gg",
     type: "Seller offer",
     status: "Under review",
@@ -571,7 +571,7 @@ export const providerTagRequests = [
 export const paymentVerificationQueue = [
   {
     seller: "PhantomX Labs",
-    listing: "PhantomX Tracker",
+    product: "PhantomX Tracker",
     method: "PayPal G&S" as PaymentMethod,
     status: "Pending verification" as PaymentVerificationStatus,
     risk: "Medium",
@@ -582,7 +582,7 @@ export const paymentVerificationQueue = [
   },
   {
     seller: "Shadow Market",
-    listing: "Shadow Overlay",
+    product: "Shadow Overlay",
     method: "Card" as PaymentMethod,
     status: "Pending verification" as PaymentVerificationStatus,
     risk: "Low",
@@ -593,7 +593,7 @@ export const paymentVerificationQueue = [
   },
   {
     seller: "Shadow Market",
-    listing: "Shadow Overlay",
+    product: "Shadow Overlay",
     method: "PayPal F&F" as PaymentMethod,
     status: "Rejected" as PaymentVerificationStatus,
     risk: "High",
@@ -608,19 +608,19 @@ export const plans = [
   {
     name: "Starter Seller",
     price: "$29",
-    limit: "5 product listings",
+    limit: "5 product products",
     target: "Small providers",
   },
   {
     name: "Pro Seller",
     price: "$79",
-    limit: "10 product listings + analytics",
+    limit: "10 product products + analytics",
     target: "Active sellers",
   },
   {
     name: "Big Seller",
     price: "$199",
-    limit: "30 listings / 100 offers",
+    limit: "30 products / 100 offers",
     target: "Large catalogs",
   },
 ];
@@ -746,7 +746,7 @@ export const sellerPlans = [
       "100 seller offers",
       "Advanced analytics",
       "Priority support",
-      "Bulk listing management",
+      "Bulk product management",
     ],
   },
   {

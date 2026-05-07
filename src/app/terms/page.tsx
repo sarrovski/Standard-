@@ -4,7 +4,7 @@ const sections = [
   {
     title: "1. Standard's role",
     text:
-      "Standard is a marketplace discovery, comparison, and seller verification platform. Standard does not directly sell third-party products listed by sellers. Sellers are responsible for their own listings, payment policies, delivery, customer support, and product claims.",
+      "Standard is a marketplace discovery, comparison, and seller verification platform. Standard does not directly sell third-party products listed by sellers. Sellers are responsible for their own products, payment policies, delivery, customer support, and product claims.",
   },
   {
     title: "2. Seller verification",
@@ -19,7 +19,7 @@ const sections = [
   {
     title: "4. Reviews",
     text:
-      "Reviews should reflect real customer experiences. Sellers cannot directly edit, remove, suppress, or manipulate reviews. Fake reviews, review bombing, coordinated review manipulation, spam, or misleading review activity may result in moderation, restriction, badge removal, or listing removal.",
+      "Reviews should reflect real customer experiences. Sellers cannot directly edit, remove, suppress, or manipulate reviews. Fake reviews, review bombing, coordinated review manipulation, spam, or misleading review activity may result in moderation, restriction, badge removal, or product removal.",
   },
   {
     title: "5. Payment methods and risk",
@@ -29,7 +29,7 @@ const sections = [
   {
     title: "6. Seller responsibility",
     text:
-      "Sellers are responsible for accurate listing information, pricing, payment terms, stock status, delivery, refunds, and support. Misleading claims, impersonation, fake verification attempts, or abusive behavior may lead to suspension or removal from Standard.",
+      "Sellers are responsible for accurate product information, pricing, payment terms, stock status, delivery, refunds, and support. Misleading claims, impersonation, fake verification attempts, or abusive behavior may lead to suspension or removal from Standard.",
   },
   {
     title: "7. Buyer responsibility",
@@ -39,7 +39,7 @@ const sections = [
   {
     title: "8. Moderation rights",
     text:
-      "Standard may review, restrict, hide, or remove listings, seller tags, reviews, payment methods, or accounts that appear misleading, risky, abusive, manipulated, or in violation of platform rules.",
+      "Standard may review, restrict, hide, or remove products, seller tags, reviews, payment methods, or accounts that appear misleading, risky, abusive, manipulated, or in violation of platform rules.",
   },
 ];
 

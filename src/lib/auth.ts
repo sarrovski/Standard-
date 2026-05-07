@@ -66,7 +66,7 @@ export const authLogicSteps = [
     label: "Seller, active subscription",
     condition: "role === SELLER && sellerSubscriptionStatus === ACTIVE",
     redirect: "/dashboard",
-    description: "Full seller dashboard with listings, offers, payments, analytics, verification, and billing.",
+    description: "Full seller dashboard with products, offers, payments, analytics, verification, and billing.",
   },
   {
     label: "Seller, no active subscription",

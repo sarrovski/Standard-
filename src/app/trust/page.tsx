@@ -59,7 +59,7 @@ export default function TrustPage() {
             <h2 className="mt-4 text-2xl font-black">Real customer feedback</h2>
             <p className="mt-3 text-sm leading-6 text-slate-400">
               Reviews are designed to come from real customers. Sellers cannot directly manipulate,
-              edit, or remove reviews from their listings.
+              edit, or remove reviews from their products.
             </p>
           </Card>
         </section>

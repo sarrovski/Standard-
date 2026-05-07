@@ -1,11 +1,14 @@
+import { requireRole } from "@/lib/roles";
 import { Nav, SectionHeader, Shell } from "@/components/ui";
 import { DashboardClient } from "@/components/dashboard-client";
 
-export default function DashboardPage({
+export default async function DashboardPage({
   searchParams,
 }: {
   searchParams?: { tab?: string };
 }) {
+  await requireRole(["seller", "admin"]);
+
   return (
     <Shell>
       <Nav />
