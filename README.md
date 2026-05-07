@@ -105,6 +105,49 @@ payment — never from client code.
    a real user — for end-to-end testing, complete a real checkout in test
    mode.
 
+## Supabase Storage setup (product media)
+
+Product images are uploaded to the `product-media` bucket and rendered
+publicly on marketplace cards and product pages.
+
+1. **Create the bucket.** Supabase dashboard → Storage → **New bucket** →
+   name `product-media`. Mark **Public bucket** ON. (Buckets can't be
+   created from SQL on managed Supabase projects, hence the manual step.)
+
+2. **Apply the policies.** Run `supabase/migrations/004_storage_product_media_policies.sql`
+   against the project (Supabase SQL editor or `supabase db push`). It
+   adds RLS policies on `storage.objects`:
+   - public read for anything in `product-media`
+   - sellers can insert / update / delete only under their own
+     `sellers/{seller_id}/...` path prefix
+   - admins can do anything in the bucket
+
+3. **Set the bucket size limit (recommended).** In the bucket settings,
+   set the per-file limit to 10 MB. The app also enforces this client-side
+   and server-side, so the bucket setting is defense-in-depth.
+
+4. **Allowed MIME types:** `image/png`, `image/jpeg`, `image/webp`. Set
+   the bucket's allowed MIME types to match if you want a third layer of
+   enforcement.
+
+5. **Upload paths** (set automatically by `lib/storage.ts`):
+   ```
+   sellers/{seller_id}/products/{product_id}/{timestamp}-{safe_filename}
+   ```
+   The `seller_id` segment is what the RLS policies key off of. Don't
+   change the path layout in `buildProductMediaPath()` without also
+   updating migration 004.
+
+6. **Public URLs.** With the bucket public, `supabase.storage.from(...)
+   .getPublicUrl()` returns a permanent CDN-cached URL. If you switch
+   the bucket to private later, replace the helper in `lib/storage.ts`
+   with `createSignedUrl()` and adjust callers (rendering becomes per-render
+   network cost).
+
+7. **Local testing.** Same setup. Supabase CLI's local dev project also
+   exposes a Storage emulator; the bucket+policies must be applied there
+   too.
+
 ## Vercel deploy
 
 Add the following variables in Vercel Project Settings → Environment Variables:

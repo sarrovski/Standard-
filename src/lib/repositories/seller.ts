@@ -13,12 +13,17 @@ import type { Database } from "@/lib/supabase/types";
 
 type SellerRow = Database["public"]["Tables"]["sellers"]["Row"];
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
+type ProductMediaRow = Database["public"]["Tables"]["product_media"]["Row"];
 type PaymentMethodRow = Database["public"]["Tables"]["payment_methods"]["Row"];
 type PaymentVerificationRow =
   Database["public"]["Tables"]["payment_verification_requests"]["Row"];
 type ProviderTagRequestRow =
   Database["public"]["Tables"]["provider_tag_requests"]["Row"];
 type SubscriptionRow = Database["public"]["Tables"]["subscriptions"]["Row"];
+
+export type ProductRowWithMedia = ProductRow & {
+  product_media: ProductMediaRow[] | null;
+};
 
 /** Returns null when the profile has no sellers row yet (pre-subscription). */
 export async function getSellerByProfileId(profileId: string) {
@@ -34,7 +39,7 @@ export async function getSellerProducts(sellerId: string) {
   const supabase = createClient();
   return supabase
     .from("products")
-    .select("*")
+    .select("*, product_media(*)")
     .eq("seller_id", sellerId)
     .order("created_at", { ascending: false });
 }
@@ -96,7 +101,7 @@ export async function getSellerSubscription(sellerId: string) {
  */
 export type SellerDashboardData = {
   seller: SellerRow;
-  products: ProductRow[];
+  products: ProductRowWithMedia[];
   paymentRequests: PaymentVerificationRow[];
   providerTagRequest: ProviderTagRequestRow | null;
   paymentMethods: PaymentMethodRow[];
@@ -125,7 +130,7 @@ export async function getSellerDashboardData(
 
   return {
     seller,
-    products: productsRes.data ?? [],
+    products: (productsRes.data ?? []) as unknown as ProductRowWithMedia[],
     paymentRequests: (paymentsRes.data ?? []) as PaymentVerificationRow[],
     providerTagRequest: tagRes.data ?? null,
     paymentMethods: methodsRes.data ?? [],

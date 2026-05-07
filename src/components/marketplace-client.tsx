@@ -112,7 +112,22 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
           const isFeatured = featuredProducts.includes(product);
           return (
             <Card key={product.slug} className="overflow-hidden">
-              <div className={`h-36 bg-gradient-to-br ${product.accent} p-5`}>
+              <div
+                className={`relative h-36 overflow-hidden ${
+                  "coverImageUrl" in product && product.coverImageUrl
+                    ? "bg-slate-950"
+                    : `bg-gradient-to-br ${product.accent}`
+                }`}
+              >
+                {"coverImageUrl" in product && product.coverImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={product.coverImageUrl}
+                    alt={product.name}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                ) : null}
+                <div className="relative p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="rounded-2xl border border-white/20 bg-black/20 px-3 py-2 text-sm font-black text-white">
                     #{index + 1}
@@ -125,6 +140,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                 <div className="mt-8">
                   <div className="text-xs uppercase tracking-[0.24em] text-white/70">{product.game}</div>
                   <h3 className="mt-2 text-2xl font-black text-white">{product.name}</h3>
+                </div>
                 </div>
               </div>
 

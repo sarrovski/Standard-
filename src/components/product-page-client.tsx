@@ -32,7 +32,7 @@ type RenderableProduct = {
   verifiedPayments: PaymentMethod[];
   paymentProfiles: PaymentProfile[];
   trustSignals?: string[];
-  gallery?: { title: string; accent: string }[];
+  gallery?: { title: string; accent: string; imageUrl?: string | null }[];
   faq?: { q: string; a: string }[];
 };
 
@@ -124,9 +124,27 @@ export function ProductPageClient({ slug, initialProduct }: ProductPageClientPro
             <Panel title="Media gallery" subtitle="Seller-managed visuals from the product builder.">
               <div className="grid gap-4 md:grid-cols-2">
                 {gallery.map((item) => (
-                  <div key={item.title} className={`h-44 rounded-3xl border border-white/10 bg-gradient-to-br ${item.accent} p-5`}>
-                    <div className="text-xs uppercase tracking-[0.22em] text-white/65">Media block</div>
-                    <div className="mt-20 text-lg font-bold text-white">{item.title}</div>
+                  <div
+                    key={item.title}
+                    className={`relative h-44 overflow-hidden rounded-3xl border border-white/10 ${
+                      item.imageUrl ? "bg-slate-950" : `bg-gradient-to-br ${item.accent}`
+                    }`}
+                  >
+                    {item.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.imageUrl}
+                        alt={item.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="p-5">
+                        <div className="text-xs uppercase tracking-[0.22em] text-white/65">
+                          Media block
+                        </div>
+                        <div className="mt-20 text-lg font-bold text-white">{item.title}</div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

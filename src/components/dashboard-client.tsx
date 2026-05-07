@@ -33,6 +33,7 @@ import type {
 } from "@/lib/product-types";
 import type { PaymentMethod } from "@/lib/data";
 import type {
+  UIProductMedia,
   UISellerPaymentMethodOption,
   UISellerPaymentRequest,
   UISellerProductCard,
@@ -122,6 +123,168 @@ export function DashboardClient({
 }
 
 // =========================================================================
+// Per-product media upload + thumbnails (Supabase mode only)
+// =========================================================================
+
+function ProductMediaPanel({
+  productId,
+  initialMedia,
+}: {
+  productId: string;
+  initialMedia: UIProductMedia[];
+}) {
+  const [media, setMedia] = useState<UIProductMedia[]>(initialMedia);
+  const [altText, setAltText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
+
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset the input so the same file can be re-selected later if needed.
+    event.target.value = "";
+    if (!file) return;
+    setError(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    if (altText.trim()) formData.append("alt_text", altText.trim());
+
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/seller/products/${productId}/media`, {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json()) as {
+        media?: {
+          id: string;
+          storage_path: string;
+          public_url: string | null;
+          alt_text: string | null;
+          sort_order: number;
+        };
+        error?: string;
+      };
+      const uploaded = payload.media;
+      if (!response.ok || !uploaded) {
+        setError(payload.error ?? "Upload failed.");
+        return;
+      }
+      setMedia((prev) => [
+        ...prev,
+        {
+          id: uploaded.id,
+          storagePath: uploaded.storage_path,
+          publicUrl: uploaded.public_url,
+          altText: uploaded.alt_text,
+          sortOrder: uploaded.sort_order,
+        },
+      ]);
+      setAltText("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (mediaId: string) => {
+    setBusyDeleteId(mediaId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/seller/products/${productId}/media`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ media_id: mediaId }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (response.status >= 400 && response.status !== 207) {
+        setError(payload.error ?? "Delete failed.");
+        return;
+      }
+      setMedia((prev) => prev.filter((m) => m.id !== mediaId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusyDeleteId(null);
+    }
+  };
+
+  return (
+    <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+      <div className="text-xs text-slate-500">Media</div>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        {media.map((m) => (
+          <div
+            key={m.id}
+            className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/40 aspect-square"
+          >
+            {m.publicUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={m.publicUrl}
+                alt={m.altText ?? ""}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                No URL
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => handleDelete(m.id)}
+              disabled={busyDeleteId === m.id}
+              className="absolute right-1 top-1 rounded-md border border-red-400/30 bg-red-500/30 px-2 py-1 text-[10px] font-bold text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-60"
+            >
+              {busyDeleteId === m.id ? "…" : "Delete"}
+            </button>
+          </div>
+        ))}
+        {media.length === 0 && (
+          <div className="col-span-full text-xs text-slate-500">
+            No media yet.
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+        <label className="block">
+          <span className="text-[11px] text-slate-500">Alt text (optional)</span>
+          <input
+            value={altText}
+            onChange={(event) => setAltText(event.target.value)}
+            placeholder="Describe the image"
+            className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
+          />
+        </label>
+        <label
+          className={`inline-flex cursor-pointer items-center justify-center rounded-lg border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-200 ${
+            busy ? "opacity-60" : ""
+          }`}
+        >
+          {busy ? "Uploading…" : "Upload image"}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={handleUpload}
+            disabled={busy}
+            className="hidden"
+          />
+        </label>
+      </div>
+
+      {error && (
+        <div className="mt-3 rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-xs text-red-200">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =========================================================================
 // Produits tab
 // =========================================================================
 
@@ -164,6 +327,7 @@ function Products({
       mediaAssets: product.gallery.length,
       website: product.websiteUrl.replace("https://", ""),
       nextAction: "Submit for review and verify payment methods",
+      media: [],
     }));
     return [
       ...localCards,
@@ -172,6 +336,7 @@ function Products({
         id: "phantomx-tracker",
         slug: "phantomx-tracker",
         rawStatus: "published" as const,
+        media: [],
       })),
     ];
   }, [supabaseSourced, initialProducts, demoProductsList]);
@@ -356,6 +521,12 @@ function Products({
                   </div>
                 </div>
               </div>
+              {supabaseSourced && (
+                <ProductMediaPanel
+                  productId={product.id}
+                  initialMedia={product.media ?? []}
+                />
+              )}
             </div>
           ))}
         </div>

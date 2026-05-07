@@ -145,6 +145,9 @@ export type UIProductCard = {
   websiteUrl?: string;
   websiteLabel?: string;
   paymentProfiles: PaymentProfile[];
+  // First product media image when available, used as the marketplace card
+  // background. Falls back to the gradient accent when null.
+  coverImageUrl: string | null;
 };
 
 function tagFromProviderStatus(
@@ -159,6 +162,10 @@ export function adaptProductCard(
   verifiedMethodNames: string[] = [],
 ): UIProductCard {
   const seller = row.sellers;
+  const sortedMedia = (row.product_media ?? [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const coverImageUrl = sortedMedia[0]?.public_url ?? null;
   return {
     slug: row.slug,
     name: row.name,
@@ -180,6 +187,7 @@ export function adaptProductCard(
     websiteUrl: row.website_url ?? undefined,
     websiteLabel: row.website_url ? "Visit official website" : undefined,
     paymentProfiles: [],
+    coverImageUrl,
   };
 }
 
@@ -192,7 +200,7 @@ export type UIProductDetail = UIProductCard & {
   discord: string;
   telegram: string;
   trustSignals: string[];
-  gallery: { title: string; accent: string }[];
+  gallery: { title: string; accent: string; imageUrl: string | null }[];
   faq: { q: string; a: string }[];
 };
 
@@ -231,10 +239,14 @@ export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
     if (ts.is_public && ts.label) trustSignals.push(ts.label);
   }
 
-  const gallery = (row.product_media ?? []).map((m, idx) => ({
-    title: m.alt_text ?? `Media ${idx + 1}`,
-    accent: ACCENTS[idx % ACCENTS.length] ?? ACCENTS[0]!,
-  }));
+  const gallery = (row.product_media ?? [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((m, idx) => ({
+      title: m.alt_text ?? `Media ${idx + 1}`,
+      accent: ACCENTS[idx % ACCENTS.length] ?? ACCENTS[0]!,
+      imageUrl: m.public_url,
+    }));
 
   const card = adaptProductCard(row, verifiedPayments);
 
@@ -317,6 +329,17 @@ export function adaptAdminProviderTagRequest(
  * Shape used by the seller "Produits" tab card. Mirrors the demo
  * sellerProducts[] from data.ts so the existing JSX renders unchanged.
  */
+/**
+ * Single piece of product media surfaced in the UI.
+ */
+export type UIProductMedia = {
+  id: string;
+  storagePath: string;
+  publicUrl: string | null;
+  altText: string | null;
+  sortOrder: number;
+};
+
 export type UISellerProductCard = {
   id: string;
   slug: string;
@@ -336,10 +359,12 @@ export type UISellerProductCard = {
   // Raw DB status — the UI uses `status` for the human label, this for the
   // publish/archive button logic.
   rawStatus: "draft" | "published" | "archived";
+  // Sorted list of attached media (Supabase mode). Empty array in demo mode.
+  media: UIProductMedia[];
 };
 
 export function adaptSellerProductCard(
-  row: ProductRow,
+  row: ProductRow & { product_media?: ProductMediaRow[] | null },
 ): UISellerProductCard {
   const websiteHost = row.website_url
     ? row.website_url.replace(/^https?:\/\//, "")
@@ -350,6 +375,16 @@ export function adaptSellerProductCard(
       : row.status === "draft"
         ? "Pending Review"
         : "Archived";
+  const media: UIProductMedia[] = (row.product_media ?? [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((m) => ({
+      id: m.id,
+      storagePath: m.storage_path,
+      publicUrl: m.public_url,
+      altText: m.alt_text,
+      sortOrder: m.sort_order,
+    }));
   return {
     id: row.id,
     slug: row.slug,
@@ -364,7 +399,7 @@ export function adaptSellerProductCard(
     outboundCtr: "0%",
     integrity: row.trust_score != null ? String(row.trust_score) : "Pending",
     pageTemplate: "Hero Spotlight",
-    mediaAssets: 0,
+    mediaAssets: media.length,
     website: websiteHost,
     nextAction:
       row.status === "draft"
@@ -372,6 +407,7 @@ export function adaptSellerProductCard(
         : row.status === "published"
           ? "Drive traffic from your website"
           : "Reactivate from the Builder",
+    media,
   };
 }
 
