@@ -6,7 +6,10 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-screen overflow-hidden bg-[#070812] text-white">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_80%_0%,rgba(139,92,246,0.16),transparent_30%),radial-gradient(circle_at_0%_42%,rgba(34,211,238,0.08),transparent_28%)]" />
-      <div className="relative">{children}</div>
+      <div className="relative">
+        {children}
+        <Footer />
+      </div>
     </main>
   );
 }
@@ -26,7 +29,7 @@ export function Nav() {
         <Link href="/account?view=sell" className="transition hover:text-white">Sell on Standard</Link>
         <Link href="/#how-it-works" className="transition hover:text-white">How it works</Link>
         <Link href="/trust" className="transition hover:text-white">Trust</Link>
-        <Link href="/terms" className="transition hover:text-white">Terms</Link>
+        <Link href="/plans" className="transition hover:text-white">Plans</Link>
       </div>
 
       <div className="flex items-center gap-3">
@@ -156,5 +159,45 @@ export function Tabs({
         </Link>
       ))}
     </div>
+  );
+}
+
+
+export function Footer() {
+  return (
+    <footer className="mx-auto mt-16 max-w-7xl border-t border-white/10 px-6 py-10">
+      <div className="grid gap-8 md:grid-cols-[1.2fr_0.8fr_0.8fr]">
+        <div>
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-300 via-violet-500 to-purple-700 text-lg font-black text-white">
+              S
+            </span>
+            <span className="text-2xl font-black tracking-tight">Standard</span>
+          </div>
+          <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">
+            Standard helps buyers compare sellers, verified payment methods, product pages, and trust signals before they leave for a seller website.
+          </p>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-bold text-white">Product</h3>
+          <div className="mt-4 grid gap-3 text-sm text-slate-400">
+            <Link href="/marketplace" className="hover:text-white">Marketplace</Link>
+            <Link href="/plans" className="hover:text-white">Plans</Link>
+            <Link href="/trust" className="hover:text-white">Trust</Link>
+            <Link href="/account?view=sell" className="hover:text-white">Sell on Standard</Link>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-bold text-white">Legal</h3>
+          <div className="mt-4 grid gap-3 text-sm text-slate-400">
+            <Link href="/terms" className="hover:text-white">Terms</Link>
+            <Link href="/trust" className="hover:text-white">Verification policy</Link>
+            <span className="text-slate-600">© Standard</span>
+          </div>
+        </div>
+      </div>
+    </footer>
   );
 }

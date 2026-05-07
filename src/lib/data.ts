@@ -659,3 +659,106 @@ export const mediaUploadGuide = [
   { label: "Feature card image", size: "1200 × 800", note: "Optional visuals for feature blocks" },
   { label: "Thumbnail", size: "800 × 800", note: "Compact visual for gallery and social previews" },
 ];
+
+
+export const featuredSlots = [
+  {
+    category: "Valorant",
+    status: "Occupied",
+    product: "PhantomX Tracker",
+    seller: "PhantomX Labs",
+    startsAt: "2026-05-01",
+    endsAt: "2026-05-08",
+    price: "$149 / 7 days",
+  },
+  {
+    category: "CS2",
+    status: "Available",
+    product: null,
+    seller: null,
+    startsAt: null,
+    endsAt: null,
+    price: "$129 / 7 days",
+  },
+  {
+    category: "Fortnite",
+    status: "Available",
+    product: null,
+    seller: null,
+    startsAt: null,
+    endsAt: null,
+    price: "$119 / 7 days",
+  },
+  {
+    category: "Apex Legends",
+    status: "Occupied",
+    product: "Apex Scan Pro",
+    seller: "PulseWorks",
+    startsAt: "2026-05-03",
+    endsAt: "2026-05-10",
+    price: "$109 / 7 days",
+  },
+  {
+    category: "League of Legends",
+    status: "Available",
+    product: null,
+    seller: null,
+    startsAt: null,
+    endsAt: null,
+    price: "$89 / 7 days",
+  },
+];
+
+export const sellerPlans = [
+  {
+    name: "Starter Seller",
+    price: "$29",
+    period: "/ month",
+    description: "For small sellers who want a clean product presence.",
+    features: [
+      "5 product announcements",
+      "Basic product builder",
+      "Payment verification requests",
+      "Seller profile",
+    ],
+  },
+  {
+    name: "Pro Seller",
+    price: "$79",
+    period: "/ month",
+    description: "For active sellers who want better visibility and analytics.",
+    features: [
+      "10 product announcements",
+      "Advanced product builder",
+      "Outbound click analytics",
+      "Provider tag request",
+      "Priority review queue",
+    ],
+    highlighted: true,
+  },
+  {
+    name: "Big Seller",
+    price: "$199",
+    period: "/ month",
+    description: "For larger catalogs and sellers with multiple offers.",
+    features: [
+      "30 product announcements",
+      "100 seller offers",
+      "Advanced analytics",
+      "Priority support",
+      "Bulk listing management",
+    ],
+  },
+  {
+    name: "Featured Category Slot",
+    price: "From $89",
+    period: "/ 7 days",
+    description: "Paid placement at the top of one game category, available only if no one else is currently featured there.",
+    features: [
+      "Top placement in selected category",
+      "Featured badge on marketplace",
+      "CTA tracking",
+      "One active featured seller per category",
+    ],
+  },
+];

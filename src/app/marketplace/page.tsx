@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Badge, Card, Nav, SectionHeader, Shell } from "@/components/ui";
-import { listings, games, paymentMethods, sellerTags, listingStatuses } from "@/lib/data";
+import { featuredSlots, listings, games, paymentMethods, sellerTags, listingStatuses } from "@/lib/data";
 import { PaymentPill, NoVerifiedPayments } from "@/components/payment-pill";
 
 export default function MarketplacePage({
@@ -20,6 +20,13 @@ export default function MarketplacePage({
     const matchesStatus = selectedStatus === "All" || listing.listingStatus === selectedStatus;
     return matchesGame && matchesPayment && matchesTag && matchesStatus;
   });
+
+  const activeFeaturedSlots = featuredSlots.filter((slot) => slot.status === "Occupied");
+  const featuredListings = filtered.filter((listing) =>
+    activeFeaturedSlots.some((slot) => slot.category === listing.game && slot.product === listing.name),
+  );
+  const regularListings = filtered.filter((listing) => !featuredListings.includes(listing));
+  const orderedListings = [...featuredListings, ...regularListings];
 
   const makeHref = (next: { game?: string; payment?: string; sellerTag?: string; status?: string }) => {
     const params = new URLSearchParams();
@@ -73,7 +80,7 @@ export default function MarketplacePage({
         <div className="mt-8 flex items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-black">Results</h2>
-            <p className="mt-1 text-sm text-slate-500">{filtered.length} listings found</p>
+            <p className="mt-1 text-sm text-slate-500">{orderedListings.length} listings found</p>
           </div>
           <div className="hidden gap-2 md:flex">
             <Badge tone="green">Verified</Badge>
@@ -83,7 +90,7 @@ export default function MarketplacePage({
         </div>
 
         <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((listing, index) => (
+          {orderedListings.map((listing, index) => { const isFeatured = featuredListings.includes(listing); return (
             <Card key={listing.slug} className="overflow-hidden">
               <div className={`h-36 bg-gradient-to-br ${listing.accent} p-5`}>
                 <div className="flex items-start justify-between gap-3">
@@ -91,6 +98,7 @@ export default function MarketplacePage({
                     #{index + 1}
                   </div>
                   <Badge tone={listing.listingStatus === "Verified" ? "green" : "amber"}>{listing.listingStatus}</Badge>
+                  {isFeatured && <Badge tone="purple">Featured</Badge>}
                 </div>
                 <div className="mt-8">
                   <div className="text-xs uppercase tracking-[0.24em] text-white/70">{listing.game}</div>
@@ -144,7 +152,7 @@ export default function MarketplacePage({
                 </div>
               </div>
             </Card>
-          ))}
+          );})}
         </div>
       </section>
     </Shell>
