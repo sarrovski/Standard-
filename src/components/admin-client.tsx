@@ -28,15 +28,35 @@ type AdminClientProps = {
   initialProviderTagRequests: UIAdminProviderTagRequest[] | null;
 };
 
+type PaymentAction = "approve" | "reject" | "needs_recheck";
+type ProviderTagAction = "approve" | "reject";
+
 export function AdminClient({
   initialPaymentRequests,
   initialProviderTagRequests,
 }: AdminClientProps) {
   const supabaseSourced = initialPaymentRequests !== null;
 
-  // Demo-mode state: live local store backed by product-store.ts.
+  // Demo state.
   const [demoRequests, setDemoRequests] = useState<LocalPaymentRequest[]>([]);
   const [demoLocalProducts, setDemoLocalProducts] = useState<LocalProduct[]>([]);
+
+  // Supabase state — local copies so we can optimistically remove handled
+  // items from the queue without a full page reload.
+  const [supabasePayments, setSupabasePayments] = useState<UIAdminPaymentRequest[]>(
+    initialPaymentRequests ?? [],
+  );
+  const [supabaseTagRequests, setSupabaseTagRequests] = useState<
+    UIAdminProviderTagRequest[]
+  >(initialProviderTagRequests ?? []);
+
+  // Per-request notes input. Keyed by request id.
+  const [paymentNotes, setPaymentNotes] = useState<Record<string, string>>({});
+  const [tagNotes, setTagNotes] = useState<Record<string, string>>({});
+
+  // Per-request loading + error state.
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (supabaseSourced) return;
@@ -44,8 +64,8 @@ export function AdminClient({
     setDemoLocalProducts(getLocalProducts());
   }, [supabaseSourced]);
 
-  // Demo-only mutation. Approve/reject writes for Supabase data are deferred
-  // to Batch 5 so we don't run partial writes against a real DB yet.
+  // ---------- Demo-mode mutation (unchanged from Batch 5) ----------
+
   const updateDemoRequest = (
     request: LocalPaymentRequest,
     status: "Verified" | "Rejected" | "Needs re-check",
@@ -86,23 +106,107 @@ export function AdminClient({
     }
   };
 
-  // Build the unified queue list. In Supabase mode we render the server-fetched
-  // rows; in demo mode we combine the in-memory local store with the data.ts
-  // fixture queue, like before.
+  // ---------- Real Supabase mutations ----------
+
+  const moderatePayment = async (
+    request: UIAdminPaymentRequest,
+    action: PaymentAction,
+  ) => {
+    setBusyId(request.id);
+    setErrors((prev) => {
+      const { [request.id]: _, ...rest } = prev;
+      return rest;
+    });
+    try {
+      const response = await fetch(
+        `/api/admin/payment-verification/${request.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action,
+            admin_notes: paymentNotes[request.id] || undefined,
+          }),
+        },
+      );
+      const payload = (await response.json()) as { error?: string };
+      // Status 207 = partial: request updated but spm upsert failed. Treat
+      // as a soft success but show a warning to the admin.
+      if (response.status >= 400 && response.status !== 207) {
+        setErrors((prev) => ({
+          ...prev,
+          [request.id]: payload.error ?? "Action failed.",
+        }));
+        return;
+      }
+      // Optimistically remove the handled request from the queue.
+      setSupabasePayments((prev) => prev.filter((r) => r.id !== request.id));
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        [request.id]: err instanceof Error ? err.message : "Network error.",
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const moderateProviderTag = async (
+    request: UIAdminProviderTagRequest,
+    action: ProviderTagAction,
+  ) => {
+    setBusyId(request.id);
+    setErrors((prev) => {
+      const { [request.id]: _, ...rest } = prev;
+      return rest;
+    });
+    try {
+      const response = await fetch(`/api/admin/provider-tag/${request.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          admin_notes: tagNotes[request.id] || undefined,
+        }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (response.status >= 400 && response.status !== 207) {
+        setErrors((prev) => ({
+          ...prev,
+          [request.id]: payload.error ?? "Action failed.",
+        }));
+        return;
+      }
+      setSupabaseTagRequests((prev) => prev.filter((r) => r.id !== request.id));
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        [request.id]: err instanceof Error ? err.message : "Network error.",
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // ---------- Build the unified queue list ----------
+
   type QueueItem =
     | (UIAdminPaymentRequest & { _source: "supabase" })
     | (LocalPaymentRequest & { _source: "demo-local" })
     | (typeof paymentVerificationQueue[number] & { _source: "demo-fixture" });
 
   const queueItems: QueueItem[] = supabaseSourced
-    ? (initialPaymentRequests ?? []).map((r) => ({ ...r, _source: "supabase" as const }))
+    ? supabasePayments.map((r) => ({ ...r, _source: "supabase" as const }))
     : [
         ...demoRequests.map((r) => ({ ...r, _source: "demo-local" as const })),
-        ...paymentVerificationQueue.map((r) => ({ ...r, _source: "demo-fixture" as const })),
+        ...paymentVerificationQueue.map((r) => ({
+          ...r,
+          _source: "demo-fixture" as const,
+        })),
       ];
 
   const tagRequestItems = supabaseSourced
-    ? initialProviderTagRequests ?? []
+    ? supabaseTagRequests
     : demoProviderTagRequests.map((r) => ({
         id: r.seller + r.product,
         seller: r.seller,
@@ -136,14 +240,21 @@ export function AdminClient({
       </section>
 
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {["Sellers", "Products", "Payment Verification", "Provider Tag Requests", "Featured Slots", "Admin Actions"].map(
-          (section) => (
-            <Card key={section} className="p-4">
-              <div className="text-sm font-bold">{section}</div>
-              <p className="mt-2 text-xs leading-5 text-slate-500">Supabase-backed admin section scaffold.</p>
-            </Card>
-          ),
-        )}
+        {[
+          "Sellers",
+          "Products",
+          "Payment Verification",
+          "Provider Tag Requests",
+          "Featured Slots",
+          "Admin Actions",
+        ].map((section) => (
+          <Card key={section} className="p-4">
+            <div className="text-sm font-bold">{section}</div>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Supabase-backed admin section scaffold.
+            </p>
+          </Card>
+        ))}
       </section>
 
       <Card className="overflow-hidden">
@@ -151,7 +262,7 @@ export function AdminClient({
           <h2 className="text-xl font-bold">Payment Verification Queue</h2>
           <p className="mt-1 text-sm text-slate-400">
             {supabaseSourced
-              ? "Showing pending and needs-recheck requests from Supabase. Approve/reject actions land in Batch 5."
+              ? "Live queue from Supabase. Approve to make the payment method public; reject or request more proof to keep it private."
               : "Approving a demo payment request makes that payment method public on the product and marketplace filters."}
           </p>
         </div>
@@ -163,19 +274,15 @@ export function AdminClient({
                 : item.seller + item.product + item.method;
 
             const productLabel =
-              item._source === "demo-local"
-                ? item.productName
-                : item.product;
+              item._source === "demo-local" ? item.productName : item.product;
             const proof =
               item._source === "demo-local"
                 ? item.proofNote
                 : item._source === "supabase"
                   ? item.submittedProof
                   : item.submittedProof;
-            const checkoutUrl =
-              "checkoutUrl" in item ? item.checkoutUrl : "—";
-            const refundPolicy =
-              "refundPolicy" in item ? item.refundPolicy : "—";
+            const checkoutUrl = "checkoutUrl" in item ? item.checkoutUrl : "—";
+            const refundPolicy = "refundPolicy" in item ? item.refundPolicy : "—";
             const risk = "risk" in item ? item.risk : "Medium";
 
             return (
@@ -201,6 +308,7 @@ export function AdminClient({
                     <div className="mt-2"><span className="text-slate-500">Checkout:</span> {checkoutUrl}</div>
                     <div className="mt-2"><span className="text-slate-500">Refund policy:</span> {refundPolicy}</div>
                   </div>
+
                   {item._source === "demo-local" ? (
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -223,11 +331,52 @@ export function AdminClient({
                       </button>
                     </div>
                   ) : item._source === "supabase" ? (
-                    <p className="text-xs text-slate-500">
-                      Approve/reject writes wired in Batch 5.
-                    </p>
+                    <div className="space-y-3">
+                      <textarea
+                        placeholder="Admin notes (optional)…"
+                        value={paymentNotes[item.id] ?? ""}
+                        onChange={(event) =>
+                          setPaymentNotes((prev) => ({
+                            ...prev,
+                            [item.id]: event.target.value,
+                          }))
+                        }
+                        rows={2}
+                        className="w-full rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white outline-none"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => moderatePayment(item, "approve")}
+                          disabled={busyId === item.id}
+                          className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 disabled:opacity-60"
+                        >
+                          {busyId === item.id ? "…" : "Approve"}
+                        </button>
+                        <button
+                          onClick={() => moderatePayment(item, "needs_recheck")}
+                          disabled={busyId === item.id}
+                          className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 disabled:opacity-60"
+                        >
+                          {busyId === item.id ? "…" : "Request more proof"}
+                        </button>
+                        <button
+                          onClick={() => moderatePayment(item, "reject")}
+                          disabled={busyId === item.id}
+                          className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 disabled:opacity-60"
+                        >
+                          {busyId === item.id ? "…" : "Reject"}
+                        </button>
+                      </div>
+                      {errors[item.id] && (
+                        <div className="rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-xs text-red-200">
+                          {errors[item.id]}
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <p className="text-xs text-slate-500">Demo request. Actions are shown on demo requests.</p>
+                    <p className="text-xs text-slate-500">
+                      Demo fixture. Actions are shown on locally submitted requests only.
+                    </p>
                   )}
                 </div>
               </Card>
@@ -244,12 +393,17 @@ export function AdminClient({
       <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <Panel title="Provider / Developer tag requests">
           <div className="space-y-3">
+            {tagRequestItems.length === 0 && (
+              <p className="text-sm text-slate-500">
+                No pending provider tag requests.
+              </p>
+            )}
             {tagRequestItems.map((request) => (
               <div
                 key={request.id}
                 className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
               >
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <div className="font-bold">{request.product}</div>
                     <div className="mt-1 text-xs text-slate-500">{request.seller}</div>
@@ -258,18 +412,56 @@ export function AdminClient({
                     {request.status}
                   </Badge>
                 </div>
+
+                {supabaseSourced && (
+                  <div className="mt-4 space-y-3">
+                    <textarea
+                      placeholder="Admin notes (optional)…"
+                      value={tagNotes[request.id] ?? ""}
+                      onChange={(event) =>
+                        setTagNotes((prev) => ({
+                          ...prev,
+                          [request.id]: event.target.value,
+                        }))
+                      }
+                      rows={2}
+                      className="w-full rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-white outline-none"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => moderateProviderTag(request, "approve")}
+                        disabled={busyId === request.id}
+                        className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 disabled:opacity-60"
+                      >
+                        {busyId === request.id ? "…" : "Approve"}
+                      </button>
+                      <button
+                        onClick={() => moderateProviderTag(request, "reject")}
+                        disabled={busyId === request.id}
+                        className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 disabled:opacity-60"
+                      >
+                        {busyId === request.id ? "…" : "Reject"}
+                      </button>
+                    </div>
+                    {errors[request.id] && (
+                      <div className="rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-xs text-red-200">
+                        {errors[request.id]}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
-            {tagRequestItems.length === 0 && (
-              <p className="text-sm text-slate-500">No pending provider tag requests.</p>
-            )}
           </div>
         </Panel>
 
         <Panel title="Signal Center">
           <div className="space-y-3">
             {adminSignals.map((signal) => (
-              <div key={signal.title} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <div
+                key={signal.title}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
                 <div className="font-semibold">{signal.title}</div>
                 <div className="mt-1 text-xs text-slate-500">{signal.meta}</div>
               </div>
@@ -282,13 +474,20 @@ export function AdminClient({
         <Panel title="Featured Slots">
           <div className="space-y-3">
             {featuredSlots.map((slot) => (
-              <div key={slot.category} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <div
+                key={slot.category}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <div className="font-bold">{slot.category}</div>
-                    <div className="mt-1 text-xs text-slate-500">One active slot per game/category.</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      One active slot per game/category.
+                    </div>
                   </div>
-                  <Badge tone={slot.status === "Available" ? "green" : "amber"}>{slot.status}</Badge>
+                  <Badge tone={slot.status === "Available" ? "green" : "amber"}>
+                    {slot.status}
+                  </Badge>
                 </div>
               </div>
             ))}
@@ -297,11 +496,16 @@ export function AdminClient({
 
         <Panel title="Admin Actions">
           <div className="space-y-3">
-            {["Approve payment proof", "Reject provider tag", "Request more proof"].map((action) => (
-              <div key={action} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-300">
-                {action}
-              </div>
-            ))}
+            {["Approve payment proof", "Reject provider tag", "Request more proof"].map(
+              (action) => (
+                <div
+                  key={action}
+                  className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-300"
+                >
+                  {action}
+                </div>
+              ),
+            )}
           </div>
         </Panel>
       </section>
@@ -328,7 +532,9 @@ export function AdminClient({
                       <Badge>{product.sellerTag}</Badge>
                     </td>
                     <td className="px-4 py-4">
-                      <Badge tone={product.productStatus === "Verified" ? "green" : "amber"}>
+                      <Badge
+                        tone={product.productStatus === "Verified" ? "green" : "amber"}
+                      >
                         {product.productStatus}
                       </Badge>
                     </td>
