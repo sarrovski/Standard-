@@ -4,10 +4,24 @@ import { LoginClient } from "@/components/login-client";
 import { isSupabaseConfigured } from "@/lib/roles";
 import { getSiteUrl } from "@/lib/site-url";
 
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  "missing-code":
+    "The magic link didn't include a verification code. Try requesting a new one.",
+  "exchange-failed":
+    "Couldn't verify the magic link — it may have expired or already been used. Request a new one.",
+};
 
-export default function LoginPage() {
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { auth?: string };
+}) {
   const supabaseConfigured = isSupabaseConfigured();
   const siteUrl = getSiteUrl();
+  const authError = searchParams?.auth;
+  const authErrorMessage = authError
+    ? (AUTH_ERROR_MESSAGES[authError] ?? `Sign-in failed: ${authError}`)
+    : null;
 
   return (
     <Shell>
@@ -22,6 +36,12 @@ export default function LoginPage() {
             Sign in once. Standard automatically routes you to the right place based on your account:
             buyer account, seller dashboard, seller onboarding, or admin control.
           </p>
+
+          {authErrorMessage && (
+            <div className="mt-6 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
+              {authErrorMessage}
+            </div>
+          )}
 
           <div className="mt-8 grid gap-3 text-sm text-slate-400">
             <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">

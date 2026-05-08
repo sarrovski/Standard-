@@ -29,6 +29,23 @@ export async function GET(request: NextRequest) {
   const nextParam = url.searchParams.get("next");
   const siteUrl = getSiteUrl();
 
+  // Verbose callback logs so the auth flow is debuggable from Vercel logs
+  // without rebuilding. Doesn't log the code itself (treat as a secret).
+  const log = (step: string, extra?: Record<string, unknown>) => {
+    console.log(
+      "[auth/callback]",
+      step,
+      JSON.stringify({
+        siteUrl,
+        hasCode: Boolean(code),
+        nextParam,
+        ...(extra ?? {}),
+      }),
+    );
+  };
+
+  log("entered");
+
   // Only honour relative `next` paths so an attacker can't redirect off-site.
   const safeNext =
     nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//")
@@ -36,10 +53,12 @@ export async function GET(request: NextRequest) {
       : null;
 
   if (!isSupabaseConfigured()) {
+    log("supabase-not-configured");
     return NextResponse.redirect(`${siteUrl}${safeNext ?? "/account"}`);
   }
 
   if (!code) {
+    log("missing-code");
     return NextResponse.redirect(`${siteUrl}/login?auth=missing-code`);
   }
 
@@ -47,12 +66,17 @@ export async function GET(request: NextRequest) {
 
   const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
   if (exchangeError) {
-    console.error("[auth/callback] exchangeCodeForSession failed:", exchangeError.message);
+    console.error(
+      "[auth/callback] exchangeCodeForSession failed:",
+      exchangeError.message,
+    );
     return NextResponse.redirect(`${siteUrl}/login?auth=exchange-failed`);
   }
+  log("exchange-ok");
 
   // If the caller asked for a specific destination and it's safe, honour it.
   if (safeNext) {
+    log("redirect-safe-next", { safeNext });
     return NextResponse.redirect(`${siteUrl}${safeNext}`);
   }
 
@@ -61,8 +85,10 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    log("no-user-after-exchange");
     return NextResponse.redirect(`${siteUrl}/account`);
   }
+  log("user-resolved", { userId: user.id });
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -72,12 +98,18 @@ export async function GET(request: NextRequest) {
 
   if (profileError || !profile) {
     if (profileError) {
-      console.error("[auth/callback] profile lookup failed:", profileError.message);
+      console.error(
+        "[auth/callback] profile lookup failed:",
+        profileError.message,
+      );
     }
+    log("no-profile-row", { userId: user.id });
     // The profiles row should exist via the trigger; if it doesn't, /account
     // is the safest landing — the user is logged in, just unrouted.
     return NextResponse.redirect(`${siteUrl}/account`);
   }
+
+  log("redirect-by-role", { role: profile.role });
 
   switch (profile.role) {
     case "admin":
