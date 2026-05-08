@@ -448,7 +448,7 @@ function Products({
     if (supabaseSourced) return;
     const firstProduct = demoProductsList[0];
     if (!firstProduct) {
-      alert("Create a product first before reserving a featured slot.");
+      setActionError("Create a product first before reserving a featured slot.");
       return;
     }
     if (slot.status !== "Available") return;
@@ -1426,6 +1426,27 @@ function Verification({
 // =========================================================================
 
 function Billing() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const openPortal = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const response = await fetch("/api/stripe/billing-portal", { method: "POST" });
+      const payload = (await response.json()) as { url?: string; error?: string };
+      if (response.ok && payload.url) {
+        window.location.href = payload.url;
+        return;
+      }
+      setError(payload.error ?? "Billing portal unavailable.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Card className="p-6">
       <Badge tone="purple">Billing</Badge>
@@ -1435,23 +1456,17 @@ function Billing() {
         provided by Stripe.
       </p>
       <button
-        onClick={async () => {
-          try {
-            const response = await fetch("/api/stripe/billing-portal", { method: "POST" });
-            const payload = (await response.json()) as { url?: string; error?: string };
-            if (response.ok && payload.url) {
-              window.location.href = payload.url;
-            } else {
-              alert(payload.error ?? "Billing portal unavailable.");
-            }
-          } catch (err) {
-            alert(err instanceof Error ? err.message : "Network error.");
-          }
-        }}
-        className="mt-5 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold"
+        onClick={openPortal}
+        disabled={busy}
+        className="mt-5 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
       >
-        Open billing portal
+        {busy ? "Opening…" : "Open billing portal"}
       </button>
+      {error && (
+        <div className="mt-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
       <div className="mt-8 grid gap-3 md:grid-cols-2">
         {plans.map((plan) => (
           <div

@@ -25,7 +25,14 @@ async function loadProducts(): Promise<{
   // The select string returns joined rows; cast to our adapter input type.
   const rows = data as unknown as ProductWithJoins[];
   return {
-    products: rows.map((row) => adaptProductCard(row)),
+    products: rows.map((row) => {
+      // seller_payment_methods is already filtered to verified by the repo;
+      // pluck the names so badges + the marketplace payment filter work.
+      const verifiedNames = (row.seller_payment_methods ?? [])
+        .map((spm) => spm.payment_methods?.name)
+        .filter((name): name is string => typeof name === "string");
+      return adaptProductCard(row, verifiedNames);
+    }),
     source: "supabase",
   };
 }

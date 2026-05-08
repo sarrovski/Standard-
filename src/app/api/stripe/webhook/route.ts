@@ -369,10 +369,13 @@ async function handleSubscriptionEvent(subscription: Stripe.Subscription) {
         profile?.display_name || profile?.email?.split("@")[0] || "New seller";
       const { data: newSeller } = await supabase
         .from("sellers")
-        .insert({
-          profile_id: customerRow.profile_id,
-          seller_name: sellerName,
-        } as never)
+        .upsert(
+          {
+            profile_id: customerRow.profile_id,
+            seller_name: sellerName,
+          } as never,
+          { onConflict: "profile_id" },
+        )
         .select("id")
         .single<{ id: string }>();
       resolvedSellerId = newSeller?.id;

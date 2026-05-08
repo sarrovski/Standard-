@@ -39,6 +39,11 @@ type TrustSignalRow = Row<"trust_signals">;
 export type ProductWithJoins = ProductRow & {
   sellers: SellerRow | null;
   product_media: ProductMediaRow[] | null;
+  // Optional — present only on queries that join verified seller_payment_methods
+  // (e.g. marketplace listing). Empty array when no matches.
+  seller_payment_methods?:
+    | (SellerPaymentMethodRow & { payment_methods: PaymentMethodRow | null })[]
+    | null;
 };
 
 export type ProductFullJoins = ProductRow & {
