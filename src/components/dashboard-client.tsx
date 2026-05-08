@@ -324,10 +324,17 @@ function ProductMediaPanel({
           sort_order: number;
         };
         error?: string;
+        step?: string;
+        code?: string;
+        details?: string;
       };
       const uploaded = payload.media;
       if (!response.ok || !uploaded) {
-        setError(payload.error ?? "Upload failed.");
+        const stepLabel = payload.step ? `[${payload.step}] ` : "";
+        const detailSuffix = payload.details ? ` (${payload.details})` : "";
+        setError(
+          `${stepLabel}${payload.error ?? "Upload failed."}${detailSuffix}`,
+        );
         return;
       }
       setMedia((prev) => [
@@ -357,9 +364,14 @@ function ProductMediaPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ media_id: mediaId }),
       });
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        error?: string;
+        step?: string;
+        code?: string;
+      };
       if (response.status >= 400 && response.status !== 207) {
-        setError(payload.error ?? "Delete failed.");
+        const stepLabel = payload.step ? `[${payload.step}] ` : "";
+        setError(`${stepLabel}${payload.error ?? "Delete failed."}`);
         return;
       }
       setMedia((prev) => prev.filter((m) => m.id !== mediaId));

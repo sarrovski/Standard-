@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/types";
 
 export const PRODUCT_MEDIA_BUCKET = "product-media";
 
@@ -41,8 +42,11 @@ function safeFileNameFragment(name: string): string {
  * Build a deterministic storage path that encodes ownership:
  *   sellers/{seller_id}/products/{product_id}/{timestamp}-{safe_filename}
  *
- * RLS on storage.objects (in migration 004) checks the seller_id segment to
- * enforce that sellers only write/delete under their own prefix.
+ * Storage RLS (migration 004) inspects the seller_id segment via split_part
+ * so sellers can only write/delete under their own prefix when called via
+ * a user-scoped client. When the caller is the service-role admin client
+ * the policy is bypassed — but the path layout is preserved so public URLs
+ * still match what the public marketplace expects.
  */
 export function buildProductMediaPath(args: {
   sellerId: string;
@@ -54,20 +58,22 @@ export function buildProductMediaPath(args: {
 }
 
 /**
- * Server-side upload. Validates mime + size, then writes to the bucket.
- * Returns either the upload result or a typed error so route handlers can
- * pick a clean status code.
+ * Server-side upload. Validates mime + size, then writes to the bucket via
+ * the supplied Supabase client. Returns either the upload result or a typed
+ * error so route handlers can pick a clean status code.
  *
- * Note: this is a SERVER helper. The file is read from a route handler
- * (formData.get('file') as File). We never expose the bucket directly to
- * the browser.
+ * The caller decides which client to use. As of Batch 12 the seller media
+ * route passes its admin client because storage RLS was rejecting otherwise-
+ * valid uploads from authenticated cookies-based sessions in production.
+ * Ownership is verified at the API layer before this is called.
  */
 export async function uploadProductMedia(args: {
+  client: SupabaseClient<Database>;
   sellerId: string;
   productId: string;
   file: File;
 }): Promise<UploadResult | StorageError> {
-  const { file, sellerId, productId } = args;
+  const { client, file, sellerId, productId } = args;
 
   if (!ALLOWED_MIME_TYPES.includes(file.type as AllowedMimeType)) {
     return {
@@ -82,14 +88,13 @@ export async function uploadProductMedia(args: {
     };
   }
 
-  const supabase = createClient();
   const storagePath = buildProductMediaPath({
     sellerId,
     productId,
     fileName: file.name,
   });
 
-  const { error } = await supabase.storage
+  const { error } = await client.storage
     .from(PRODUCT_MEDIA_BUCKET)
     .upload(storagePath, file, {
       cacheControl: "3600",
@@ -100,33 +105,36 @@ export async function uploadProductMedia(args: {
     return { code: "upload_failed", message: error.message };
   }
 
-  const publicUrl = supabase.storage
+  const publicUrl = client.storage
     .from(PRODUCT_MEDIA_BUCKET)
     .getPublicUrl(storagePath).data.publicUrl;
   return { storagePath, publicUrl };
 }
 
 /**
- * Public URL for a stored object. The bucket must be public (recommended
- * for product images — see README). For private buckets switch to
- * createSignedUrl().
+ * Resolve a public URL using the supplied client. Public URLs don't depend
+ * on the JWT (the bucket is marked public), but we keep the helper for
+ * symmetry and future-proofing if the bucket switches to private + signed.
  */
-export function getProductMediaPublicUrl(storagePath: string): string {
-  const supabase = createClient();
-  return supabase.storage
+export function getProductMediaPublicUrl(
+  client: SupabaseClient<Database>,
+  storagePath: string,
+): string {
+  return client.storage
     .from(PRODUCT_MEDIA_BUCKET)
     .getPublicUrl(storagePath).data.publicUrl;
 }
 
 /**
- * Delete an object from the bucket. Returns null on success, typed error on
- * failure. Caller is responsible for deleting the matching product_media row.
+ * Delete an object from the bucket via the supplied client. Returns null on
+ * success, typed error on failure. Caller is responsible for deleting the
+ * matching product_media row.
  */
 export async function deleteProductMedia(
+  client: SupabaseClient<Database>,
   storagePath: string,
 ): Promise<null | StorageError> {
-  const supabase = createClient();
-  const { error } = await supabase.storage
+  const { error } = await client.storage
     .from(PRODUCT_MEDIA_BUCKET)
     .remove([storagePath]);
   if (error) {

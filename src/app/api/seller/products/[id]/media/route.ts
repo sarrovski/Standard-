@@ -18,27 +18,32 @@ import type { Database } from "@/lib/supabase/types";
  * DELETE /api/seller/products/[id]/media
  *   body: { media_id?: string, storage_path?: string }
  *
- * Auth + ownership flow:
- *   1. Authenticate user via cookies-scoped client (RLS applies).
- *   2. Detect admins via profiles.role.
- *   3. Verify product ownership through the user-scoped client (sellers
- *      see their own; admins see everything).
- *   4. Once ownership is confirmed at the API layer, switch to the
- *      service-role admin client for the product_media DB write/delete.
+ * Two named clients, one job each:
  *
- * Why service-role for product_media writes: production-tested in Batch
- * 10/11, an authenticated user-scoped INSERT on product_media kept hitting
- * "new row violates row-level security policy" even after migration 005
- * rewrote the policies as per-operation. Rather than fight RLS for a
- * path that already does explicit ownership verification at the API
- * layer, the privileged DB op runs as service-role. Migration 005 stays
- * in place — it's the right backstop for direct PostgREST clients, just
- * not the primary gate for this server-side route any more.
+ *   userSupabase  - cookies-based, user-scoped. RLS applies. Used ONLY for:
+ *     * auth.getUser()
+ *     * profiles.role lookup
+ *     * sellers + products ownership lookup
  *
- * Storage object policies (migration 004) still apply to bucket writes;
- * they piggyback on the path layout (sellers/{seller_id}/...) and use
- * auth.uid(), which works fine for storage. Storage uploads continue
- * to go through the user-scoped helper in lib/storage.ts.
+ *   adminSupabase - service-role. RLS bypassed. Used ONLY after ownership
+ *     is confirmed at the API layer, for every privileged mutation:
+ *     * storage.upload()
+ *     * storage.remove()
+ *     * product_media.insert()
+ *     * product_media.delete()
+ *
+ * Why both storage AND DB use admin client (this is the Batch 12 change):
+ * In production, even after migration 005 fixed product_media RLS, the
+ * upload kept failing with the same RLS error message. Diagnosis showed
+ * the storage helpers in lib/storage.ts were instantiating their own
+ * cookies-scoped clients via createClient() — which meant storage.objects
+ * RLS was checked even though the route was supposed to be running
+ * privileged. The helpers now require a SupabaseClient parameter, and
+ * this route passes adminSupabase. Ownership stays verified at the API
+ * layer before any privileged op.
+ *
+ * Service role never crosses the browser boundary. The admin client is
+ * instantiated inside the request lifecycle, never returned, never logged.
  */
 
 type ProductMediaInsert =
@@ -49,23 +54,68 @@ type DeleteBody = {
   storage_path?: unknown;
 };
 
+type AuthError = { error: string; status: number; step?: string };
+
+type AuthSuccess = {
+  user: NonNullable<
+    Awaited<
+      ReturnType<ReturnType<typeof createClient>["auth"]["getUser"]>
+    >["data"]["user"]
+  >;
+  isAdmin: boolean;
+  seller: { id: string } | null;
+  effectiveSellerId: string;
+  userSupabase: ReturnType<typeof createClient>;
+  adminSupabase: ReturnType<typeof createAdminClient>;
+  product: { id: string; seller_id: string };
+};
+
+type AuthResult = AuthSuccess | AuthError;
+
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-async function authSeller(_request: NextRequest, productId: string) {
+function isAuthError(result: AuthResult): result is AuthError {
+  return "error" in result && !("user" in result);
+}
+
+/**
+ * Resolve user, role, seller, and target product. Returns the two clients
+ * the route needs, or a structured error response shape.
+ *
+ * The admin client is created up-front so we fail fast with a clear error
+ * if SUPABASE_SERVICE_ROLE_KEY is missing in the environment — instead of
+ * silently falling through to a partial flow.
+ */
+async function authSeller(productId: string): Promise<AuthResult> {
   if (!isSupabaseConfigured()) {
-    return { error: "Supabase not configured.", status: 503 } as const;
+    return { error: "Supabase not configured.", status: 503, step: "auth" };
   }
+
+  let adminSupabase: ReturnType<typeof createAdminClient>;
+  try {
+    adminSupabase = createAdminClient();
+  } catch (err) {
+    console.error(
+      "[api/seller/products/[id]/media] admin client init failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return {
+      error: "Missing Supabase service role configuration",
+      status: 500,
+      step: "admin_client",
+    };
+  }
+
   const userSupabase = createClient();
   const {
     data: { user },
   } = await userSupabase.auth.getUser();
   if (!user) {
-    return { error: "Unauthorized", status: 401 } as const;
+    return { error: "Unauthorized", status: 401, step: "auth" };
   }
 
-  // Detect admins so they can manage media for any product.
   const { data: profile } = await userSupabase
     .from("profiles")
     .select("role")
@@ -77,16 +127,14 @@ async function authSeller(_request: NextRequest, productId: string) {
   if (sellerError) {
     return {
       error: "Seller lookup failed.",
-      step: "seller_lookup" as const,
       status: 500,
-    } as const;
+      step: "ownership",
+    };
   }
-
   if (!seller && !isAdmin) {
-    return { error: "No seller account.", status: 403 } as const;
+    return { error: "No seller account.", status: 403, step: "ownership" };
   }
 
-  // Load the product. Admins can target any product; sellers must own it.
   let productQuery = userSupabase
     .from("products")
     .select("id, seller_id")
@@ -99,9 +147,9 @@ async function authSeller(_request: NextRequest, productId: string) {
   if (productError) {
     return {
       error: "Product lookup failed.",
-      step: "product_lookup" as const,
       status: 500,
-    } as const;
+      step: "ownership",
+    };
   }
   if (!product) {
     return {
@@ -109,26 +157,33 @@ async function authSeller(_request: NextRequest, productId: string) {
         ? "Product not found."
         : "Product not found or you don't own it.",
       status: 404,
-    } as const;
+      step: "ownership",
+    };
   }
-
-  // Encode the product's owning seller in the storage path so when an
-  // admin uploads on behalf of a seller, the path still matches what
-  // migration 004's storage RLS expects.
-  const effectiveSellerId = product.seller_id;
-
-  // Service-role client for the privileged product_media DB ops.
-  const adminSupabase = createAdminClient();
 
   return {
     user,
     isAdmin,
-    seller,
-    effectiveSellerId,
+    seller: seller ? { id: seller.id } : null,
+    effectiveSellerId: product.seller_id,
     userSupabase,
     adminSupabase,
     product,
-  } as const;
+  };
+}
+
+function authErrorResponse(auth: {
+  error: string;
+  status: number;
+  step?: string;
+}) {
+  return NextResponse.json(
+    {
+      error: auth.error,
+      ...(auth.step ? { step: auth.step } : {}),
+    },
+    { status: auth.status },
+  );
 }
 
 export async function POST(
@@ -137,18 +192,15 @@ export async function POST(
 ) {
   const productId = params.id;
   if (!productId) {
-    return NextResponse.json({ error: "Missing product id." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing product id.", step: "ownership" },
+      { status: 400 },
+    );
   }
 
-  const auth = await authSeller(request, productId);
-  if ("error" in auth) {
-    return NextResponse.json(
-      {
-        error: auth.error,
-        ...("step" in auth ? { step: auth.step } : {}),
-      },
-      { status: auth.status },
-    );
+  const auth = await authSeller(productId);
+  if (isAuthError(auth)) {
+    return authErrorResponse(auth);
   }
 
   let formData: FormData;
@@ -156,7 +208,7 @@ export async function POST(
     formData = await request.formData();
   } catch {
     return NextResponse.json(
-      { error: "Expected multipart/form-data body.", step: "parse_form" },
+      { error: "Expected multipart/form-data body.", step: "storage_upload" },
       { status: 400 },
     );
   }
@@ -164,14 +216,14 @@ export async function POST(
   const fileEntry = formData.get("file");
   if (!(fileEntry instanceof File)) {
     return NextResponse.json(
-      { error: "No file provided in 'file' field.", step: "parse_form" },
+      { error: "No file provided in 'file' field.", step: "storage_upload" },
       { status: 400 },
     );
   }
   const altTextRaw = formData.get("alt_text");
   const altText = readString(typeof altTextRaw === "string" ? altTextRaw : null);
 
-  // sort_order via admin client (no RLS surprises here either).
+  // sort_order via admin client (bypass RLS).
   const { data: lastMedia } = await auth.adminSupabase
     .from("product_media")
     .select("sort_order")
@@ -181,8 +233,11 @@ export async function POST(
     .maybeSingle<{ sort_order: number }>();
   const nextSortOrder = (lastMedia?.sort_order ?? -1) + 1;
 
-  // Storage upload still uses the user-scoped helper.
+  // Storage upload via admin client. This is the Batch 12 fix — previously
+  // lib/storage.ts created its own cookies-scoped client, so storage.objects
+  // RLS was applied even from this server route.
   const upload = await uploadProductMedia({
+    client: auth.adminSupabase,
     sellerId: auth.effectiveSellerId,
     productId,
     file: fileEntry,
@@ -210,8 +265,7 @@ export async function POST(
     sort_order: nextSortOrder,
   };
 
-  // Privileged write — service role bypasses RLS. Ownership was verified
-  // above at the API layer.
+  // Privileged DB write — admin client.
   const { data, error: insertError } = await auth.adminSupabase
     .from("product_media")
     .insert(insertRow as never)
@@ -226,7 +280,11 @@ export async function POST(
     }>();
 
   if (insertError || !data) {
-    const cleanup = await deleteProductMedia(upload.storagePath);
+    // Best-effort cleanup: drop the orphan storage object via admin client.
+    const cleanup = await deleteProductMedia(
+      auth.adminSupabase,
+      upload.storagePath,
+    );
     if (cleanup) {
       console.error(
         "[api/seller/products/[id]/media POST] orphan storage object — cleanup also failed:",
@@ -261,18 +319,15 @@ export async function DELETE(
 ) {
   const productId = params.id;
   if (!productId) {
-    return NextResponse.json({ error: "Missing product id." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing product id.", step: "ownership" },
+      { status: 400 },
+    );
   }
 
-  const auth = await authSeller(request, productId);
-  if ("error" in auth) {
-    return NextResponse.json(
-      {
-        error: auth.error,
-        ...("step" in auth ? { step: auth.step } : {}),
-      },
-      { status: auth.status },
-    );
+  const auth = await authSeller(productId);
+  if (isAuthError(auth)) {
+    return authErrorResponse(auth);
   }
 
   let raw: DeleteBody;
@@ -280,7 +335,7 @@ export async function DELETE(
     raw = (await request.json()) as DeleteBody;
   } catch {
     return NextResponse.json(
-      { error: "Invalid JSON body.", step: "parse_body" },
+      { error: "Invalid JSON body.", step: "product_media_delete" },
       { status: 400 },
     );
   }
@@ -289,11 +344,16 @@ export async function DELETE(
   const storagePath = readString(raw.storage_path);
   if (!mediaId && !storagePath) {
     return NextResponse.json(
-      { error: "media_id or storage_path required.", step: "parse_body" },
+      {
+        error: "media_id or storage_path required.",
+        step: "product_media_delete",
+      },
       { status: 400 },
     );
   }
 
+  // Resolve the media row via admin client. We re-check product_id as
+  // defense-in-depth — even though authSeller already verified ownership.
   let row:
     | { id: string; product_id: string; storage_path: string }
     | null = null;
@@ -317,12 +377,19 @@ export async function DELETE(
 
   if (!row) {
     return NextResponse.json(
-      { error: "Media not found for this product.", step: "media_lookup" },
+      {
+        error: "Media not found for this product.",
+        step: "product_media_delete",
+      },
       { status: 404 },
     );
   }
 
-  const storageErr = await deleteProductMedia(row.storage_path);
+  // Storage delete via admin client.
+  const storageErr = await deleteProductMedia(
+    auth.adminSupabase,
+    row.storage_path,
+  );
   if (storageErr) {
     console.error(
       "[api/seller/products/[id]/media DELETE] storage delete failed:",
@@ -332,11 +399,13 @@ export async function DELETE(
       {
         error: `storage_delete failed: ${storageErr.message}`,
         step: "storage_delete",
+        code: storageErr.code,
       },
       { status: 500 },
     );
   }
 
+  // DB delete via admin client.
   const { error: dbError } = await auth.adminSupabase
     .from("product_media")
     .delete()
@@ -355,6 +424,7 @@ export async function DELETE(
         error: `product_media_delete failed: ${dbError.message}`,
         step: "product_media_delete",
         ...(dbError.code ? { code: dbError.code } : {}),
+        ...(dbError.details ? { details: dbError.details } : {}),
       },
       { status: 207 },
     );
