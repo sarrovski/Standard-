@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/roles";
 import { getSellerByProfileId } from "@/lib/repositories/seller";
 import {
@@ -16,14 +17,28 @@ import type { Database } from "@/lib/supabase/types";
  *
  * DELETE /api/seller/products/[id]/media
  *   body: { media_id?: string, storage_path?: string }
- *   one of media_id / storage_path is required
  *
- * Auth:
- *   - User authenticated, with a sellers row (profile.role === 'seller'
- *     after Stripe webhook promotes the user).
- *   - Ownership: the product referenced in the URL must belong to this
- *     seller. RLS on products + storage.objects (migration 004) enforces
- *     this at the DB level too.
+ * Auth + ownership flow:
+ *   1. Authenticate user via cookies-scoped client (RLS applies).
+ *   2. Detect admins via profiles.role.
+ *   3. Verify product ownership through the user-scoped client (sellers
+ *      see their own; admins see everything).
+ *   4. Once ownership is confirmed at the API layer, switch to the
+ *      service-role admin client for the product_media DB write/delete.
+ *
+ * Why service-role for product_media writes: production-tested in Batch
+ * 10/11, an authenticated user-scoped INSERT on product_media kept hitting
+ * "new row violates row-level security policy" even after migration 005
+ * rewrote the policies as per-operation. Rather than fight RLS for a
+ * path that already does explicit ownership verification at the API
+ * layer, the privileged DB op runs as service-role. Migration 005 stays
+ * in place — it's the right backstop for direct PostgREST clients, just
+ * not the primary gate for this server-side route any more.
+ *
+ * Storage object policies (migration 004) still apply to bucket writes;
+ * they piggyback on the path layout (sellers/{seller_id}/...) and use
+ * auth.uid(), which works fine for storage. Storage uploads continue
+ * to go through the user-scoped helper in lib/storage.ts.
  */
 
 type ProductMediaInsert =
@@ -38,40 +53,82 @@ function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-async function authSeller(request: NextRequest, productId: string) {
+async function authSeller(_request: NextRequest, productId: string) {
   if (!isSupabaseConfigured()) {
     return { error: "Supabase not configured.", status: 503 } as const;
   }
-  const supabase = createClient();
+  const userSupabase = createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await userSupabase.auth.getUser();
   if (!user) {
     return { error: "Unauthorized", status: 401 } as const;
   }
+
+  // Detect admins so they can manage media for any product.
+  const { data: profile } = await userSupabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle<{ role: "user" | "seller" | "admin" }>();
+  const isAdmin = profile?.role === "admin";
+
   const { data: seller, error: sellerError } = await getSellerByProfileId(user.id);
   if (sellerError) {
-    return { error: "Seller lookup failed.", status: 500 } as const;
+    return {
+      error: "Seller lookup failed.",
+      step: "seller_lookup" as const,
+      status: 500,
+    } as const;
   }
-  if (!seller) {
+
+  if (!seller && !isAdmin) {
     return { error: "No seller account.", status: 403 } as const;
   }
 
-  // Confirm product ownership.
-  const { data: product, error: productError } = await supabase
+  // Load the product. Admins can target any product; sellers must own it.
+  let productQuery = userSupabase
     .from("products")
-    .select("id")
-    .eq("id", productId)
-    .eq("seller_id", seller.id)
-    .maybeSingle<{ id: string }>();
+    .select("id, seller_id")
+    .eq("id", productId);
+  if (!isAdmin && seller) {
+    productQuery = productQuery.eq("seller_id", seller.id);
+  }
+  const { data: product, error: productError } = await productQuery
+    .maybeSingle<{ id: string; seller_id: string }>();
   if (productError) {
-    return { error: "Product lookup failed.", status: 500 } as const;
+    return {
+      error: "Product lookup failed.",
+      step: "product_lookup" as const,
+      status: 500,
+    } as const;
   }
   if (!product) {
-    return { error: "Product not found or you don't own it.", status: 404 } as const;
+    return {
+      error: isAdmin
+        ? "Product not found."
+        : "Product not found or you don't own it.",
+      status: 404,
+    } as const;
   }
 
-  return { user, seller, supabase, product } as const;
+  // Encode the product's owning seller in the storage path so when an
+  // admin uploads on behalf of a seller, the path still matches what
+  // migration 004's storage RLS expects.
+  const effectiveSellerId = product.seller_id;
+
+  // Service-role client for the privileged product_media DB ops.
+  const adminSupabase = createAdminClient();
+
+  return {
+    user,
+    isAdmin,
+    seller,
+    effectiveSellerId,
+    userSupabase,
+    adminSupabase,
+    product,
+  } as const;
 }
 
 export async function POST(
@@ -85,7 +142,13 @@ export async function POST(
 
   const auth = await authSeller(request, productId);
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    return NextResponse.json(
+      {
+        error: auth.error,
+        ...("step" in auth ? { step: auth.step } : {}),
+      },
+      { status: auth.status },
+    );
   }
 
   let formData: FormData;
@@ -93,7 +156,7 @@ export async function POST(
     formData = await request.formData();
   } catch {
     return NextResponse.json(
-      { error: "Expected multipart/form-data body." },
+      { error: "Expected multipart/form-data body.", step: "parse_form" },
       { status: 400 },
     );
   }
@@ -101,15 +164,15 @@ export async function POST(
   const fileEntry = formData.get("file");
   if (!(fileEntry instanceof File)) {
     return NextResponse.json(
-      { error: "No file provided in 'file' field." },
+      { error: "No file provided in 'file' field.", step: "parse_form" },
       { status: 400 },
     );
   }
   const altTextRaw = formData.get("alt_text");
   const altText = readString(typeof altTextRaw === "string" ? altTextRaw : null);
 
-  // Compute the next sort_order so newly uploaded media goes after existing.
-  const { data: lastMedia } = await auth.supabase
+  // sort_order via admin client (no RLS surprises here either).
+  const { data: lastMedia } = await auth.adminSupabase
     .from("product_media")
     .select("sort_order")
     .eq("product_id", productId)
@@ -118,8 +181,9 @@ export async function POST(
     .maybeSingle<{ sort_order: number }>();
   const nextSortOrder = (lastMedia?.sort_order ?? -1) + 1;
 
+  // Storage upload still uses the user-scoped helper.
   const upload = await uploadProductMedia({
-    sellerId: auth.seller.id,
+    sellerId: auth.effectiveSellerId,
     productId,
     file: fileEntry,
   });
@@ -146,7 +210,9 @@ export async function POST(
     sort_order: nextSortOrder,
   };
 
-  const { data, error: insertError } = await auth.supabase
+  // Privileged write — service role bypasses RLS. Ownership was verified
+  // above at the API layer.
+  const { data, error: insertError } = await auth.adminSupabase
     .from("product_media")
     .insert(insertRow as never)
     .select("id, product_id, storage_path, public_url, alt_text, sort_order")
@@ -160,8 +226,6 @@ export async function POST(
     }>();
 
   if (insertError || !data) {
-    // Best-effort cleanup: if the row insert failed, drop the storage object
-    // so we don't leave orphaned files. Logged on second failure.
     const cleanup = await deleteProductMedia(upload.storagePath);
     if (cleanup) {
       console.error(
@@ -173,16 +237,16 @@ export async function POST(
     console.error(
       "[api/seller/products/[id]/media POST] insert failed:",
       insertError?.message,
+      insertError?.code,
+      insertError?.details,
     );
-    // Surface the underlying error message so RLS / schema mismatches are
-    // diagnosable from the dashboard. Postgres errors don't include
-    // secrets; the message is e.g. "new row violates row-level security
-    // policy for table \"product_media\"".
     const detail = insertError?.message ?? "Unknown insert error.";
     return NextResponse.json(
       {
-        error: `Could not record uploaded media: ${detail}`,
+        error: `product_media_insert failed: ${detail}`,
         step: "product_media_insert",
+        ...(insertError?.code ? { code: insertError.code } : {}),
+        ...(insertError?.details ? { details: insertError.details } : {}),
       },
       { status: 500 },
     );
@@ -202,31 +266,39 @@ export async function DELETE(
 
   const auth = await authSeller(request, productId);
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    return NextResponse.json(
+      {
+        error: auth.error,
+        ...("step" in auth ? { step: auth.step } : {}),
+      },
+      { status: auth.status },
+    );
   }
 
   let raw: DeleteBody;
   try {
     raw = (await request.json()) as DeleteBody;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid JSON body.", step: "parse_body" },
+      { status: 400 },
+    );
   }
 
   const mediaId = readString(raw.media_id);
   const storagePath = readString(raw.storage_path);
   if (!mediaId && !storagePath) {
     return NextResponse.json(
-      { error: "media_id or storage_path required." },
+      { error: "media_id or storage_path required.", step: "parse_body" },
       { status: 400 },
     );
   }
 
-  // Resolve the row so we know the storage_path to delete.
   let row:
     | { id: string; product_id: string; storage_path: string }
     | null = null;
   if (mediaId) {
-    const { data } = await auth.supabase
+    const { data } = await auth.adminSupabase
       .from("product_media")
       .select("id, product_id, storage_path")
       .eq("id", mediaId)
@@ -234,7 +306,7 @@ export async function DELETE(
       .maybeSingle<{ id: string; product_id: string; storage_path: string }>();
     row = data ?? null;
   } else if (storagePath) {
-    const { data } = await auth.supabase
+    const { data } = await auth.adminSupabase
       .from("product_media")
       .select("id, product_id, storage_path")
       .eq("storage_path", storagePath)
@@ -245,14 +317,11 @@ export async function DELETE(
 
   if (!row) {
     return NextResponse.json(
-      { error: "Media not found for this product." },
+      { error: "Media not found for this product.", step: "media_lookup" },
       { status: 404 },
     );
   }
 
-  // Delete storage object first; if the row delete fails afterward we'd
-  // rather have an orphaned DB row than an orphaned storage object that
-  // racks up bytes silently.
   const storageErr = await deleteProductMedia(row.storage_path);
   if (storageErr) {
     console.error(
@@ -260,12 +329,15 @@ export async function DELETE(
       storageErr.message,
     );
     return NextResponse.json(
-      { error: storageErr.message },
+      {
+        error: `storage_delete failed: ${storageErr.message}`,
+        step: "storage_delete",
+      },
       { status: 500 },
     );
   }
 
-  const { error: dbError } = await auth.supabase
+  const { error: dbError } = await auth.adminSupabase
     .from("product_media")
     .delete()
     .eq("id", row.id);
@@ -273,12 +345,16 @@ export async function DELETE(
     console.error(
       "[api/seller/products/[id]/media DELETE] row delete failed:",
       dbError.message,
+      dbError.code,
+      dbError.details,
     );
     return NextResponse.json(
       {
         warning:
           "Storage object deleted but DB row could not be removed. Please retry.",
-        error: dbError.message,
+        error: `product_media_delete failed: ${dbError.message}`,
+        step: "product_media_delete",
+        ...(dbError.code ? { code: dbError.code } : {}),
       },
       { status: 207 },
     );
