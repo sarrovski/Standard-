@@ -123,6 +123,74 @@ export function DashboardClient({
 }
 
 // =========================================================================
+// Featured slot button (Supabase mode, published products only)
+// =========================================================================
+
+function FeaturedSlotButton({
+  productId,
+  game,
+  category,
+}: {
+  productId: string;
+  game: string;
+  category: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const start = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const response = await fetch(
+        "/api/stripe/create-featured-checkout-session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            product_id: productId,
+            game,
+            category,
+          }),
+        },
+      );
+      const payload = (await response.json()) as { url?: string; error?: string };
+
+      if (response.status === 409) {
+        setError("Featured slot unavailable for this game/category. Try when it expires.");
+        return;
+      }
+      if (response.ok && payload.url) {
+        window.location.href = payload.url;
+        return;
+      }
+      setError(payload.error ?? "Could not start featured checkout.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <button
+        onClick={start}
+        disabled={busy}
+        className="w-full rounded-xl border border-purple-400/30 bg-purple-500/10 px-4 py-3 text-center text-sm font-semibold text-purple-200 disabled:opacity-60"
+      >
+        {busy ? "Starting checkout…" : "Reserve featured slot"}
+      </button>
+      {error && (
+        <div className="mt-2 rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-xs text-red-200">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =========================================================================
 // Per-product media upload + thumbnails (Supabase mode only)
 // =========================================================================
 
@@ -318,6 +386,7 @@ function Products({
       rawStatus: "draft" as const,
       toolStatus: "Draft / database-ready",
       game: product.game,
+      category: product.category,
       features: product.features,
       views: product.activity.views,
       outboundClicks: 0,
@@ -335,6 +404,7 @@ function Products({
         ...item,
         id: "phantomx-tracker",
         slug: "phantomx-tracker",
+        category: "Analytics / Overlay",
         rawStatus: "published" as const,
         media: [],
       })),
@@ -508,6 +578,13 @@ function Products({
                       >
                         {busyProductId === product.id ? "Archiving…" : "Archive"}
                       </button>
+                    )}
+                    {supabaseSourced && product.rawStatus === "published" && (
+                      <FeaturedSlotButton
+                        productId={product.id}
+                        game={product.game}
+                        category={product.category}
+                      />
                     )}
                     {supabaseSourced && product.rawStatus === "archived" && (
                       <button

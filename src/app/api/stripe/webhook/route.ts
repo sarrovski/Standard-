@@ -346,7 +346,57 @@ async function handleSubscriptionEvent(subscription: Stripe.Subscription) {
       );
   }
 
-  // Per the rules: never demote profile.role on canceled/past_due. Status on
-  // the subscriptions row is the authoritative signal for "can this seller
-  // currently sell". UI / dashboards should look at subscriptions.status.
+  // Promotion path: if the subscription becomes active or trialing and we
+  // know who this customer is, make sure profile.role is 'seller'. This
+  // covers the case where the subscription transitions to active outside
+  // of a fresh checkout (e.g. after a trial, after a recovered payment).
+  // The checkout completion handler does the same for the first checkout;
+  // this is the catch-all for everything else.
+  //
+  // We never demote on canceled/past_due (per business rule). Authoritative
+  // "currently active" signal is subscriptions.status, not profiles.role.
+  if (status === "active" || status === "trialing") {
+    // Ensure a sellers row exists. If the checkout handler already created
+    // one, this is a no-op.
+    let resolvedSellerId = sellerRow?.id;
+    if (!resolvedSellerId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name, email")
+        .eq("id", customerRow.profile_id)
+        .maybeSingle<{ display_name: string | null; email: string | null }>();
+      const sellerName =
+        profile?.display_name || profile?.email?.split("@")[0] || "New seller";
+      const { data: newSeller } = await supabase
+        .from("sellers")
+        .insert({
+          profile_id: customerRow.profile_id,
+          seller_name: sellerName,
+        } as never)
+        .select("id")
+        .single<{ id: string }>();
+      resolvedSellerId = newSeller?.id;
+
+      // Now that the seller exists, finally write the subscriptions row that
+      // we couldn't write earlier (we returned without one above).
+      if (resolvedSellerId) {
+        await supabase
+          .from("subscriptions")
+          .upsert(
+            {
+              seller_id: resolvedSellerId,
+              stripe_subscription_id: subscription.id,
+              status,
+              current_period_end: currentPeriodEnd,
+            } as never,
+            { onConflict: "stripe_subscription_id" },
+          );
+      }
+    }
+
+    await supabase
+      .from("profiles")
+      .update({ role: "seller" } as never)
+      .eq("id", customerRow.profile_id);
+  }
 }

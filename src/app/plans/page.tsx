@@ -1,5 +1,6 @@
-import { Badge, ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
+import { Badge, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import { featuredSlots, sellerPlans } from "@/lib/data";
+import { PlanCheckoutButton } from "@/components/plan-checkout-button";
 
 export default function PlansPage() {
   return (
@@ -35,9 +36,10 @@ export default function PlansPage() {
                 ))}
               </div>
               <div className="mt-6">
-                <ButtonLink href="/account?view=sell" variant={plan.highlighted ? "primary" : "secondary"}>
-                  Start with {plan.name}
-                </ButtonLink>
+                <PlanCheckoutButton
+                  label={`Start with ${plan.name}`}
+                  variant={plan.highlighted ? "primary" : "secondary"}
+                />
               </div>
             </Card>
           ))}

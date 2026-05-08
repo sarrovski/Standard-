@@ -347,6 +347,7 @@ export type UISellerProductCard = {
   status: string;
   toolStatus: string;
   game: string;
+  category: string;
   features: string[];
   views: number;
   outboundClicks: number;
@@ -393,6 +394,7 @@ export function adaptSellerProductCard(
     rawStatus: row.status,
     toolStatus: "Saved to database",
     game: row.game,
+    category: row.category,
     features: row.features ?? [],
     views: 0,
     outboundClicks: 0,
