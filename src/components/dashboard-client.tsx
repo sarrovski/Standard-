@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Badge, Card, MiniStat, Tabs } from "@/components/ui";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Badge, Card, MiniStat } from "@/components/ui";
 import {
   analytics,
   builderSections,
@@ -52,6 +53,76 @@ const tabs = [
   { key: "billing", label: "Billing" },
 ];
 
+const VALID_TAB_KEYS = new Set(tabs.map((t) => t.key));
+const DEFAULT_TAB = "products";
+
+/**
+ * Aliases let people land on /dashboard?tab=payment-verification or
+ * /dashboard?tab=provider-tag (the human-readable slugs from the tab
+ * labels) and end up on the right panel. The internal tab keys stay as
+ * 'payments' / 'verification' so we don't have to migrate every existing
+ * <Link href="/dashboard?tab=builder"> in the codebase.
+ */
+const TAB_ALIASES: Record<string, string> = {
+  "payment-verification": "payments",
+  "provider-tag": "verification",
+  produits: "products",
+};
+
+function normalizeTab(candidate: string | null | undefined): string {
+  if (!candidate) return DEFAULT_TAB;
+  const aliased = TAB_ALIASES[candidate] ?? candidate;
+  if (VALID_TAB_KEYS.has(aliased)) return aliased;
+  return DEFAULT_TAB;
+}
+
+/**
+ * Button-based tabs for the seller dashboard.
+ *
+ * The shared <Tabs> in components/ui renders <Link> elements, which works
+ * for static dashboards but caused this batch's bug: clicking a Link
+ * navigated /dashboard?tab=X, but the parent client component had its
+ * tab state seeded only at mount, so navigation didn't update the visible
+ * panel until a full reload.
+ *
+ * This local component takes a click handler instead, so the parent owns
+ * both the state and the URL update. Same visual styling as the shared
+ * Tabs to keep design consistent.
+ */
+function DashboardTabs({
+  items,
+  active,
+  onSelect,
+}: {
+  items: Array<{ key: string; label: string }>;
+  active: string;
+  onSelect: (key: string) => void;
+}) {
+  return (
+    <div className="flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.035] p-2">
+      {items.map((item) => {
+        const isActive = active === item.key;
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onSelect(item.key)}
+            className={
+              "whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition " +
+              (isActive
+                ? "bg-purple-500/20 text-purple-100"
+                : "text-slate-400 hover:bg-white/[0.04] hover:text-white")
+            }
+            aria-pressed={isActive}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * `initialData`:
  *   - non-null => Supabase-sourced (server fetched). Demo product-store is
@@ -73,23 +144,43 @@ type DashboardClientProps = {
 };
 
 export function DashboardClient({
-  initialTab = "products",
+  initialTab = DEFAULT_TAB,
   initialData,
 }: DashboardClientProps) {
-  const [tab, setTab] = useState(initialTab);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Keep a local active-tab state. We seed it from the prop (which the
+  // server component derives from searchParams) for SSR/hydration parity,
+  // then keep it synced with searchParams on subsequent client-side
+  // navigations. This is the bug fix: previously the state was only set
+  // once at mount, so clicking a tab updated the URL but not the visible
+  // panel — only a full reload would re-mount the component with the new
+  // initialTab.
+  const [tab, setTab] = useState<string>(() => normalizeTab(initialTab));
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const current = url.searchParams.get("tab") || "products";
-    setTab(current);
-  }, []);
+    const next = normalizeTab(searchParams.get("tab"));
+    setTab((prev) => (prev === next ? prev : next));
+  }, [searchParams]);
+
+  const handleTabClick = (key: string) => {
+    // Optimistically update the visible panel before the URL change
+    // round-trips through the router. router.replace updates the URL
+    // without adding a history entry per click — clicks within the
+    // dashboard read more like in-page nav than route navigation.
+    setTab(key);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", key);
+    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+  };
 
   const supabaseSourced = initialData !== null;
 
   return (
     <>
       <div className="mt-8">
-        <Tabs items={tabs} active={tab} basePath="/dashboard" />
+        <DashboardTabs items={tabs} active={tab} onSelect={handleTabClick} />
       </div>
 
       <div className="mt-8">
