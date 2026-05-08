@@ -297,6 +297,20 @@ function ProductMediaPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
+  // Tracks the most recent successful upload so we can mark it as "Saved"
+  // briefly. Auto-clears after a few seconds so the badge doesn't stick on
+  // older items forever.
+  const [lastSavedId, setLastSavedId] = useState<string | null>(null);
+  const [savedNotice, setSavedNotice] = useState(false);
+
+  useEffect(() => {
+    if (!savedNotice) return;
+    const timeout = window.setTimeout(() => {
+      setSavedNotice(false);
+      setLastSavedId(null);
+    }, 4000);
+    return () => window.clearTimeout(timeout);
+  }, [savedNotice]);
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -304,6 +318,8 @@ function ProductMediaPanel({
     event.target.value = "";
     if (!file) return;
     setError(null);
+    setSavedNotice(false);
+    setLastSavedId(null);
 
     const formData = new FormData();
     formData.append("file", file);
@@ -348,6 +364,8 @@ function ProductMediaPanel({
         },
       ]);
       setAltText("");
+      setLastSavedId(uploaded.id);
+      setSavedNotice(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error.");
     } finally {
@@ -386,33 +404,41 @@ function ProductMediaPanel({
     <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
       <div className="text-xs text-slate-500">Media</div>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-        {media.map((m) => (
-          <div
-            key={m.id}
-            className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/40 aspect-square"
-          >
-            {m.publicUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={m.publicUrl}
-                alt={m.altText ?? ""}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-slate-500">
-                No URL
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => handleDelete(m.id)}
-              disabled={busyDeleteId === m.id}
-              className="absolute right-1 top-1 rounded-md border border-red-400/30 bg-red-500/30 px-2 py-1 text-[10px] font-bold text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-60"
+        {media.map((m) => {
+          const isJustSaved = m.id === lastSavedId;
+          return (
+            <div
+              key={m.id}
+              className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/40 aspect-square"
             >
-              {busyDeleteId === m.id ? "…" : "Delete"}
-            </button>
-          </div>
-        ))}
+              {m.publicUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={m.publicUrl}
+                  alt={m.altText ?? ""}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                  No URL
+                </div>
+              )}
+              {isJustSaved && (
+                <div className="absolute left-1 top-1 rounded-md border border-emerald-400/40 bg-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-50">
+                  Saved
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => handleDelete(m.id)}
+                disabled={busyDeleteId === m.id}
+                className="absolute right-1 top-1 rounded-md border border-red-400/30 bg-red-500/30 px-2 py-1 text-[10px] font-bold text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-60"
+              >
+                {busyDeleteId === m.id ? "…" : "Delete"}
+              </button>
+            </div>
+          );
+        })}
         {media.length === 0 && (
           <div className="col-span-full text-xs text-slate-500">
             No media yet.
@@ -445,6 +471,17 @@ function ProductMediaPanel({
           />
         </label>
       </div>
+
+      <p className="mt-2 text-[11px] text-slate-500">
+        Images are saved automatically as soon as they upload — no extra
+        step needed.
+      </p>
+
+      {savedNotice && (
+        <div className="mt-3 rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-2 text-xs text-emerald-100">
+          ✓ Image uploaded and saved.
+        </div>
+      )}
 
       {error && (
         <div className="mt-3 rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-xs text-red-200">
