@@ -7,7 +7,6 @@ import { Badge, Card, MiniStat } from "@/components/ui";
 import {
   analytics,
   builderSections,
-  featuredSlots as defaultSlots,
   mediaUploadGuide,
   pageTemplates,
   paymentMethods as paymentMethodsList,
@@ -21,14 +20,11 @@ import {
 import {
   addLocalProduct,
   addPaymentRequest,
-  getFeaturedSlots,
   getLocalProducts,
   getPaymentRequests,
-  saveFeaturedSlots,
   slugify,
 } from "@/lib/product-store";
 import type {
-  LocalFeaturedSlot,
   LocalPaymentRequest,
   LocalProduct,
 } from "@/lib/product-types";
@@ -210,74 +206,6 @@ export function DashboardClient({
         {tab === "billing" && <Billing />}
       </div>
     </>
-  );
-}
-
-// =========================================================================
-// Featured slot button (Supabase mode, published products only)
-// =========================================================================
-
-function FeaturedSlotButton({
-  productId,
-  game,
-  category,
-}: {
-  productId: string;
-  game: string;
-  category: string;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const start = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      const response = await fetch(
-        "/api/stripe/create-featured-checkout-session",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            product_id: productId,
-            game,
-            category,
-          }),
-        },
-      );
-      const payload = (await response.json()) as { url?: string; error?: string };
-
-      if (response.status === 409) {
-        setError("Featured slot unavailable for this game/category. Try when it expires.");
-        return;
-      }
-      if (response.ok && payload.url) {
-        window.location.href = payload.url;
-        return;
-      }
-      setError(payload.error ?? "Could not start featured checkout.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div>
-      <button
-        onClick={start}
-        disabled={busy}
-        className="w-full rounded-xl border border-purple-400/30 bg-purple-500/10 px-4 py-3 text-center text-sm font-semibold text-purple-200 disabled:opacity-60"
-      >
-        {busy ? "Starting checkout…" : "Reserve featured slot"}
-      </button>
-      {error && (
-        <div className="mt-2 rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-xs text-red-200">
-          {error}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -504,14 +432,12 @@ function Products({
   initialProducts: UISellerProductCard[] | null;
 }) {
   const [demoProductsList, setDemoProducts] = useState<LocalProduct[]>([]);
-  const [slots, setSlots] = useState<LocalFeaturedSlot[]>([]);
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (supabaseSourced) return;
     setDemoProducts(getLocalProducts());
-    setSlots(getFeaturedSlots());
   }, [supabaseSourced]);
 
   const displayProducts = useMemo(() => {
@@ -579,34 +505,6 @@ function Products({
     } finally {
       setBusyProductId(null);
     }
-  };
-
-  // Featured slot reservation is still demo-only. Real reservations go through
-  // the Stripe featured checkout (Batch 4) which the seller triggers from
-  // /api/stripe/create-featured-checkout-session. We don't bypass that here.
-  const reserveSlotDemo = (slot: LocalFeaturedSlot) => {
-    if (supabaseSourced) return;
-    const firstProduct = demoProductsList[0];
-    if (!firstProduct) {
-      setActionError("Create a product first before reserving a featured slot.");
-      return;
-    }
-    if (slot.status !== "Available") return;
-    const updated = slots.map((item) =>
-      item.category === slot.category
-        ? {
-            ...item,
-            status: "Occupied" as const,
-            product: firstProduct.name,
-            productSlug: firstProduct.slug,
-            seller: firstProduct.seller,
-            startsAt: new Date().toISOString().slice(0, 10),
-            endsAt: "2026-06-01",
-          }
-        : item,
-    );
-    saveFeaturedSlots(updated);
-    setSlots(updated);
   };
 
   return (
@@ -719,13 +617,6 @@ function Products({
                         {busyProductId === product.id ? "Archiving…" : "Archive"}
                       </button>
                     )}
-                    {supabaseSourced && product.rawStatus === "published" && (
-                      <FeaturedSlotButton
-                        productId={product.id}
-                        game={product.game}
-                        category={product.category}
-                      />
-                    )}
                     {supabaseSourced && product.rawStatus === "archived" && (
                       <button
                         onClick={() => updateProductStatus(product.id, "draft")}
@@ -749,46 +640,6 @@ function Products({
         </div>
       </Card>
 
-      {!supabaseSourced && (
-        <Card className="p-6">
-          <Badge tone="purple">Featured placement (demo)</Badge>
-          <h2 className="mt-4 text-2xl font-black">Boost a product to the top of a category</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-400">
-            In production, featured slots are reserved through Stripe checkout. This demo lets you
-            preview the UI without payment.
-          </p>
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {slots.map((slot) => (
-              <div
-                key={slot.category}
-                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-bold">{slot.category}</div>
-                  <Badge tone={slot.status === "Available" ? "green" : "amber"}>
-                    {slot.status}
-                  </Badge>
-                </div>
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  {slot.status === "Available"
-                    ? `Slot available now • ${slot.price}`
-                    : `${slot.product} is featured until ${slot.endsAt}`}
-                </p>
-                <button
-                  onClick={() => reserveSlotDemo(slot)}
-                  className={`mt-4 w-full rounded-xl px-4 py-3 text-sm font-semibold ${
-                    slot.status === "Available"
-                      ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 text-white"
-                      : "border border-white/10 bg-white/[0.04] text-slate-500"
-                  }`}
-                >
-                  {slot.status === "Available" ? "Reserve slot" : "Occupied"}
-                </button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
     </div>
   );
 }
@@ -936,18 +787,19 @@ function Builder({ supabaseSourced }: { supabaseSourced: boolean }) {
       </section>
 
       <Card className="p-6">
-        <Badge tone="green">Media upload</Badge>
-        <h2 className="mt-4 text-2xl font-black">Upload product visuals</h2>
+        <Badge tone="green">Media</Badge>
+        <h2 className="mt-4 text-2xl font-black">Upload images from the Produits tab</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
-          Storage upload is wired in a follow-up batch. For now placeholders only.
+          Images are attached to a saved product, so you upload them after the
+          product is created. Save this draft first, then open the Produits tab
+          and use the upload control on the product&apos;s card.
         </p>
-        <div className="mt-6 rounded-3xl border border-dashed border-purple-400/30 bg-purple-500/10 p-8 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl">
-            +
-          </div>
-          <h3 className="mt-4 text-lg font-bold">Drop images here</h3>
-          <p className="mt-2 text-sm text-slate-400">Hero image, screenshots, thumbnails, feature visuals</p>
-        </div>
+        <Link
+          href="/dashboard?tab=products"
+          className="mt-5 inline-flex rounded-xl border border-purple-400/30 bg-purple-500/10 px-4 py-3 text-sm font-semibold text-purple-200"
+        >
+          Go to Produits
+        </Link>
         <div className="mt-6 grid gap-3 md:grid-cols-2">
           {mediaUploadGuide.map((item) => (
             <div
@@ -1566,47 +1418,21 @@ function Verification({
 // =========================================================================
 
 function Billing() {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const openPortal = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      const response = await fetch("/api/stripe/billing-portal", { method: "POST" });
-      const payload = (await response.json()) as { url?: string; error?: string };
-      if (response.ok && payload.url) {
-        window.location.href = payload.url;
-        return;
-      }
-      setError(payload.error ?? "Billing portal unavailable.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <Card className="p-6">
       <Badge tone="purple">Billing</Badge>
-      <h2 className="mt-4 text-2xl font-black">Subscription plans</h2>
-      <p className="mt-2 text-sm text-slate-500">
-        Open the customer portal to manage your subscription and payment methods. The portal is
-        provided by Stripe.
+      <h2 className="mt-4 text-2xl font-black">Subscription, billing portal, and featured slots</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-400">
+        Everything money-related lives on a dedicated page so it stays organized.
+        From there you can review your subscription, open the Stripe customer
+        portal, and reserve a featured slot for one of your published products.
       </p>
-      <button
-        onClick={openPortal}
-        disabled={busy}
-        className="mt-5 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
+      <Link
+        href="/dashboard/billing"
+        className="mt-5 inline-flex rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white"
       >
-        {busy ? "Opening…" : "Open billing portal"}
-      </button>
-      {error && (
-        <div className="mt-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
-          {error}
-        </div>
-      )}
+        Open billing
+      </Link>
       <div className="mt-8 grid gap-3 md:grid-cols-2">
         {plans.map((plan) => (
           <div

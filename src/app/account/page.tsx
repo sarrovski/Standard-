@@ -45,9 +45,8 @@ export default async function AccountPage({
                   ))}
                 </div>
 
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <ButtonLink href="/plans">View plans</ButtonLink>
-                  <ButtonLink href="/dashboard?tab=builder" variant="secondary">Preview builder</ButtonLink>
+                <div className="mt-6">
+                  <ButtonLink href="/plans">View seller plan</ButtonLink>
                 </div>
               </Card>
 
@@ -58,10 +57,10 @@ export default async function AccountPage({
                   {[
                     "Product announcements",
                     "Advanced product page builder",
-                    "Image upload placeholders / media gallery",
+                    "Image upload and media gallery",
                     "Verified payment method workflow",
                     "Outbound click analytics",
-                    "Featured category placement",
+                    "Featured category placement (sold separately)",
                     "Provider / Developer tag request",
                   ].map((item) => (
                     <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm">
@@ -77,20 +76,18 @@ export default async function AccountPage({
                 <Badge tone="green">Featured slots</Badge>
                 <h2 className="mt-4 text-2xl font-black">Pay to appear higher</h2>
                 <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Sellers can reserve one featured placement per category when the slot is available.
-                  If another product already owns the slot, it becomes unavailable until the placement expires.
+                  Once you have an active subscription, featured placements are
+                  reserved from <code className="text-slate-300">/dashboard/billing</code>.
+                  One active slot per game/category, paid up-front per slot.
                 </p>
-                <div className="mt-6">
-                  <ButtonLink href="/plans#featured" variant="secondary">Check featured availability</ButtonLink>
-                </div>
               </Card>
 
               <Card className="p-6">
-                <Badge tone="amber">Important</Badge>
-                <h2 className="mt-4 text-2xl font-black">Verification still matters</h2>
+                <Badge tone="amber">Verification still matters</Badge>
+                <h2 className="mt-4 text-2xl font-black">Trust isn&apos;t bought</h2>
                 <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Featured placement boosts visibility, but it does not replace verification. Seller tags, payment methods,
-                  and trust signals are still reviewed separately by Standard.
+                  Featured boosts visibility, but it does not replace verification.
+                  Payments, provider tag, and trust signals are reviewed separately.
                 </p>
               </Card>
             </section>

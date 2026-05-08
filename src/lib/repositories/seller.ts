@@ -137,3 +137,18 @@ export async function getSellerDashboardData(
     subscription: subRes.data ?? null,
   };
 }
+
+/**
+ * Currently active featured slots owned by this seller. Used by the Billing
+ * page to show "Featured active" cards alongside the featured slot purchase
+ * UI, so the seller doesn't try to buy a slot they already own.
+ */
+export async function getActiveSellerFeaturedSlots(sellerId: string) {
+  const supabase = createClient();
+  return supabase
+    .from("featured_slots")
+    .select("*, products(name, slug, game, category)")
+    .eq("seller_id", sellerId)
+    .eq("status", "active")
+    .order("ends_at", { ascending: true });
+}
