@@ -36,6 +36,7 @@ Standard is a SaaS marketplace for comparing gaming sellers/tools with a trust l
 6. Configure Auth redirect URLs:
    - Local: `http://localhost:3000/auth/callback`
    - Production: `https://your-domain.com/auth/callback`
+7. Enable password auth: Supabase Dashboard → Authentication → Providers → Email. Keep Email enabled, allow password signups/logins, and decide whether email confirmation is required. If confirmation is required, users must confirm before password login works. Magic links remain available as a secondary login option.
 
 ## Stripe setup
 

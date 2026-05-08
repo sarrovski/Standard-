@@ -40,6 +40,17 @@ Settings → Authentication → URL Configuration:
 If these aren't set, magic links will redirect to localhost or fail
 silently with "Invalid redirect URL".
 
+### 1.3b Email/password auth
+Settings → Authentication → Providers → Email:
+- Email provider: enabled
+- Password signups/logins: enabled
+- Email confirmations: choose your launch policy
+
+If confirmations are enabled, users must confirm the email before password
+login succeeds. Magic links remain available on the login/signup screens as a
+secondary option. Password login does **not** bypass roles: `/dashboard` still
+requires `seller`/`admin`, and `/admin` still requires `admin`.
+
 ### 1.4 Storage bucket
 Storage → New bucket:
 - Name: `product-media`

@@ -12,25 +12,71 @@ type SignupClientProps = {
   siteUrl: string;
 };
 
+type ProfileRole = "user" | "seller" | "admin";
+
 type Status =
   | { kind: "idle" }
-  | { kind: "submitting" }
-  | { kind: "sent" }
+  | { kind: "submitting"; action: "password" | "magic" }
+  | { kind: "sent"; message: string }
   | { kind: "error"; message: string };
+
+function destinationForRole(role: ProfileRole | null | undefined): string {
+  if (role === "admin") return "/admin";
+  if (role === "seller") return "/dashboard";
+  return "/account";
+}
+
+function friendlyAuthError(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("already registered") || normalized.includes("user already registered")) {
+    return "An account already exists for this email. Log in instead.";
+  }
+  if (normalized.includes("password should be at least")) {
+    return "Password is too short. Use at least 8 characters.";
+  }
+  return message;
+}
 
 export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps) {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const redirectAfterImmediateSignup = async () => {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      window.location.href = "/account";
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle<{ role: ProfileRole }>();
+
+    window.location.href = destinationForRole(profile?.role);
+  };
+
+  const handlePasswordSignup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!email) return;
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      setStatus({ kind: "error", message: "Email is required." });
+      return;
+    }
 
     if (!supabaseConfigured) {
       // Demo path: fake a buyer session and route to /account.
       const session: LocalSession = {
-        email,
+        email: normalizedEmail,
         role: "user",
         sellerSubscriptionStatus: "none",
         sellerTag: "none",
@@ -40,11 +86,71 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
       return;
     }
 
-    setStatus({ kind: "submitting" });
+    if (password.length < 8) {
+      setStatus({ kind: "error", message: "Password must be at least 8 characters." });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setStatus({ kind: "error", message: "Passwords do not match." });
+      return;
+    }
+
+    setStatus({ kind: "submitting", action: "password" });
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          emailRedirectTo: `${siteUrl}/auth/callback`,
+          data: displayName ? { display_name: displayName } : undefined,
+        },
+      });
+
+      if (error) {
+        setStatus({ kind: "error", message: friendlyAuthError(error.message) });
+        return;
+      }
+
+      if (data.session) {
+        await redirectAfterImmediateSignup();
+        return;
+      }
+
+      setStatus({ kind: "sent", message: "Account created. Check your email to confirm your account before logging in." });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? friendlyAuthError(err.message) : "Unexpected error creating account.",
+      });
+    }
+  };
+
+  const handleMagicSignup = async () => {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setStatus({ kind: "error", message: "Email is required before requesting a magic link." });
+      return;
+    }
+
+    if (!supabaseConfigured) {
+      const session: LocalSession = {
+        email: normalizedEmail,
+        role: "user",
+        sellerSubscriptionStatus: "none",
+        sellerTag: "none",
+      };
+      saveSession(session);
+      window.location.href = "/account";
+      return;
+    }
+
+    setStatus({ kind: "submitting", action: "magic" });
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOtp({
-        email,
+        email: normalizedEmail,
         options: {
           emailRedirectTo: `${siteUrl}/auth/callback`,
           // Allow account creation for signup. Roles always default to 'user'
@@ -54,20 +160,21 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
         },
       });
       if (error) {
-        setStatus({ kind: "error", message: error.message });
+        setStatus({ kind: "error", message: friendlyAuthError(error.message) });
         return;
       }
-      setStatus({ kind: "sent" });
+      setStatus({ kind: "sent", message: "Check your email for the confirmation link. It will expire shortly — request a new one if needed." });
     } catch (err) {
       setStatus({
         kind: "error",
-        message: err instanceof Error ? err.message : "Unexpected error sending magic link.",
+        message: err instanceof Error ? friendlyAuthError(err.message) : "Unexpected error sending magic link.",
       });
     }
   };
 
-  const submitting = status.kind === "submitting";
-  const sent = status.kind === "sent";
+  const submittingAction = status.kind === "submitting" ? status.action : null;
+  const isBusy = status.kind === "submitting";
+  const sentMessage = status.kind === "sent" ? status.message : null;
   const errorMessage = status.kind === "error" ? status.message : null;
 
   return (
@@ -76,12 +183,12 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
         <h2 className="text-3xl font-black">Create your account</h2>
         <p className="mt-2 text-sm text-slate-400">
           {supabaseConfigured
-            ? "Enter your email and we'll send you a magic link to confirm and sign in."
+            ? "Create an account with a password. Magic link signup stays available as a backup."
             : "Demo mode: this just routes you to /account."}
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handlePasswordSignup} className="space-y-4">
         <label className="block">
           <span className="mb-2 block text-sm text-slate-400">Email</span>
           <input
@@ -90,7 +197,7 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
-            disabled={submitting || sent}
+            disabled={isBusy}
             className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
           />
         </label>
@@ -102,7 +209,31 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
             placeholder="How you want to appear on Standard"
-            disabled={submitting || sent}
+            disabled={isBusy}
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm text-slate-400">Password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="At least 8 characters"
+            disabled={isBusy}
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-2 block text-sm text-slate-400">Confirm password</span>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder="Repeat your password"
+            disabled={isBusy}
             className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
           />
         </label>
@@ -111,9 +242,9 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
           New accounts start as buyers. Seller access can be enabled afterward from your account onboarding.
         </p>
 
-        {sent ? (
+        {sentMessage ? (
           <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-            Check your email for the confirmation link. It will expire shortly — request a new one if needed.
+            {sentMessage}
           </div>
         ) : null}
 
@@ -125,16 +256,23 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
 
         <button
           type="submit"
-          disabled={submitting || sent}
+          disabled={isBusy}
           className="inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20 disabled:opacity-60"
         >
-          {submitting
-            ? "Sending magic link…"
-            : sent
-              ? "Magic link sent"
-              : supabaseConfigured
-                ? "Send magic link"
-                : "Create account (demo)"}
+          {submittingAction === "password"
+            ? "Creating account…"
+            : supabaseConfigured
+              ? "Create account"
+              : "Create account (demo)"}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleMagicSignup}
+          disabled={isBusy}
+          className="w-full rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white disabled:opacity-60"
+        >
+          {submittingAction === "magic" ? "Sending magic link…" : "Send magic link instead"}
         </button>
       </form>
 

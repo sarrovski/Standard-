@@ -10,16 +10,24 @@ import { createClient } from "@/lib/supabase/client";
 type LoginClientProps = {
   /**
    * Set by the server based on isSupabaseConfigured(). When true we use real
-   * Supabase magic-link auth. When false we fall back to the demo path
-   * (detectSession) so previews without env vars stay clickable.
+   * Supabase auth. When false we fall back to the demo path (detectSession) so
+   * previews without env vars stay clickable.
    */
   supabaseConfigured: boolean;
   siteUrl: string;
 };
 
+type ProfileRole = "user" | "seller" | "admin";
+
+type Status =
+  | { kind: "idle" }
+  | { kind: "submitting"; action: "password" | "magic" | "reset" }
+  | { kind: "sent"; message: string }
+  | { kind: "error"; message: string };
+
 // Demo-only role detection. Picks a role based on substrings in the email so
 // the prototype is navigable without a real auth backend. NEVER runs when
-// Supabase is configured — see signInWithMagicLink below.
+// Supabase is configured — see handlePasswordLogin / handleMagicLink.
 function detectSessionDemo(email: string): LocalSession {
   const normalized = email.toLowerCase().trim();
 
@@ -47,33 +55,110 @@ function destinationFor(session: LocalSession): string {
   return "/account";
 }
 
-type Status =
-  | { kind: "idle" }
-  | { kind: "submitting" }
-  | { kind: "sent" }
-  | { kind: "error"; message: string };
+function destinationForRole(role: ProfileRole | null | undefined): string {
+  if (role === "admin") return "/admin";
+  if (role === "seller") return "/dashboard";
+  return "/account";
+}
+
+function friendlyAuthError(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("invalid login credentials")) {
+    return "Invalid email or password.";
+  }
+  if (normalized.includes("email not confirmed")) {
+    return "Please confirm your email before logging in with a password.";
+  }
+  return message;
+}
 
 export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
   const [email, setEmail] = useState(supabaseConfigured ? "" : "seller@standard.gg");
+  const [password, setPassword] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const redirectAfterPasswordLogin = async () => {
+    const supabase = createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      throw new Error(userError?.message ?? "Could not resolve signed-in user.");
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle<{ role: ProfileRole }>();
+
+    window.location.href = destinationForRole(profile?.role);
+  };
+
+  const handlePasswordLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!email) return;
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail) {
+      setStatus({ kind: "error", message: "Email is required." });
+      return;
+    }
 
     if (!supabaseConfigured) {
-      // Demo path: skip the email round-trip, route based on heuristic.
-      const session = detectSessionDemo(email);
+      const session = detectSessionDemo(normalizedEmail);
       saveSession(session);
       window.location.href = destinationFor(session);
       return;
     }
 
-    setStatus({ kind: "submitting" });
+    if (!password) {
+      setStatus({ kind: "error", message: "Password is required." });
+      return;
+    }
+
+    setStatus({ kind: "submitting", action: "password" });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (error) {
+        setStatus({ kind: "error", message: friendlyAuthError(error.message) });
+        return;
+      }
+
+      await redirectAfterPasswordLogin();
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? friendlyAuthError(err.message) : "Unexpected error logging in.",
+      });
+    }
+  };
+
+  const handleMagicLink = async () => {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setStatus({ kind: "error", message: "Email is required before requesting a magic link." });
+      return;
+    }
+
+    if (!supabaseConfigured) {
+      const session = detectSessionDemo(normalizedEmail);
+      saveSession(session);
+      window.location.href = destinationFor(session);
+      return;
+    }
+
+    setStatus({ kind: "submitting", action: "magic" });
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOtp({
-        email,
+        email: normalizedEmail,
         options: {
           emailRedirectTo: `${siteUrl}/auth/callback`,
           // Don't auto-create accounts via login — direct people to /signup.
@@ -81,20 +166,52 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
         },
       });
       if (error) {
-        setStatus({ kind: "error", message: error.message });
+        setStatus({ kind: "error", message: friendlyAuthError(error.message) });
         return;
       }
-      setStatus({ kind: "sent" });
+      setStatus({ kind: "sent", message: "Check your email for the magic link. It will expire shortly — request a new one if needed." });
     } catch (err) {
       setStatus({
         kind: "error",
-        message: err instanceof Error ? err.message : "Unexpected error sending magic link.",
+        message: err instanceof Error ? friendlyAuthError(err.message) : "Unexpected error sending magic link.",
       });
     }
   };
 
-  const submitting = status.kind === "submitting";
-  const sent = status.kind === "sent";
+  const handleResetPassword = async () => {
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setStatus({ kind: "error", message: "Enter your email first, then request a password reset." });
+      return;
+    }
+
+    if (!supabaseConfigured) {
+      setStatus({ kind: "sent", message: "Demo mode: password reset emails are not sent." });
+      return;
+    }
+
+    setStatus({ kind: "submitting", action: "reset" });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: `${siteUrl}/account`,
+      });
+      if (error) {
+        setStatus({ kind: "error", message: friendlyAuthError(error.message) });
+        return;
+      }
+      setStatus({ kind: "sent", message: "Password reset email sent. Check your inbox for the reset link." });
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? friendlyAuthError(err.message) : "Unexpected error sending reset email.",
+      });
+    }
+  };
+
+  const submittingAction = status.kind === "submitting" ? status.action : null;
+  const isBusy = status.kind === "submitting";
+  const sentMessage = status.kind === "sent" ? status.message : null;
   const errorMessage = status.kind === "error" ? status.message : null;
 
   return (
@@ -104,12 +221,12 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
           <h2 className="text-3xl font-black">Sign in</h2>
           <p className="mt-2 text-sm text-slate-400">
             {supabaseConfigured
-              ? "Enter your email and we'll send you a magic link."
+              ? "Log in with your password, or request a magic link if you prefer."
               : "Demo mode: type any email to preview the routing."}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handlePasswordLogin} className="space-y-4">
           <label className="block">
             <span className="mb-2 block text-sm text-slate-400">Email</span>
             <input
@@ -118,14 +235,26 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
-              disabled={submitting || sent}
+              disabled={isBusy}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
             />
           </label>
 
-          {sent ? (
+          <label className="block">
+            <span className="mb-2 block text-sm text-slate-400">Password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={supabaseConfigured ? "Your password" : "Optional in demo mode"}
+              disabled={isBusy}
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+            />
+          </label>
+
+          {sentMessage ? (
             <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-              Check your email for the magic link. It will expire shortly — request a new one if needed.
+              {sentMessage}
             </div>
           ) : null}
 
@@ -137,17 +266,34 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
 
           <button
             type="submit"
-            disabled={submitting || sent}
+            disabled={isBusy}
             className="inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20 disabled:opacity-60"
           >
-            {submitting
-              ? "Sending magic link…"
-              : sent
-                ? "Magic link sent"
-                : supabaseConfigured
-                  ? "Send magic link"
-                  : "Sign in (demo)"}
+            {submittingAction === "password"
+              ? "Logging in…"
+              : supabaseConfigured
+                ? "Log in"
+                : "Sign in (demo)"}
           </button>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={handleMagicLink}
+              disabled={isBusy}
+              className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white disabled:opacity-60"
+            >
+              {submittingAction === "magic" ? "Sending…" : "Send magic link"}
+            </button>
+            <button
+              type="button"
+              onClick={handleResetPassword}
+              disabled={isBusy}
+              className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white disabled:opacity-60"
+            >
+              {submittingAction === "reset" ? "Sending…" : "Forgot password?"}
+            </button>
+          </div>
         </form>
 
         <div className="mt-6 border-t border-white/10 pt-6 text-center text-sm text-slate-400">
