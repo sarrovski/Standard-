@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
-import { featuredSlots as defaultSlots, games, productStatuses, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
+import { featuredSlots as defaultSlots, games, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
+
+// Combined status list so the filter works for both demo data ("Verified")
+// and Supabase data ("Published"). data.ts is left unchanged so existing
+// demo content keeps its labels; this local list is what the UI shows.
+const allProductStatuses = ["All", "Published", "Verified", "Pending Review"] as const;
+
 import { getFeaturedSlots, getLocalProducts } from "@/lib/product-store";
 import type { LocalFeaturedSlot, LocalProduct } from "@/lib/product-types";
 import type { UIProductCard } from "@/lib/adapters";
@@ -86,7 +92,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
             ))}
           </FilterBlock>
           <FilterBlock title="Status">
-            {productStatuses.map((status) => (
+            {allProductStatuses.map((status) => (
               <FilterButton key={status} active={selectedStatus === status} onClick={() => setSelectedStatus(status)}>
                 {status}
               </FilterButton>
@@ -133,7 +139,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                     #{index + 1}
                   </div>
                   <div className="flex flex-wrap justify-end gap-2">
-                    <Badge tone={product.productStatus === "Verified" ? "green" : "amber"}>{product.productStatus}</Badge>
+                    <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
                     {isFeatured && <Badge tone="purple">Featured</Badge>}
                   </div>
                 </div>

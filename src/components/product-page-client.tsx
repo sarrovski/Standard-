@@ -36,12 +36,21 @@ type RenderableProduct = {
   faq?: { q: string; a: string }[];
 };
 
+type ProductLoadState = "ok" | "not_found" | "error" | "demo";
+
 type ProductPageClientProps = {
   slug: string;
   initialProduct: UIProductDetail | null;
+  loadState?: ProductLoadState;
+  loadMessage?: string;
 };
 
-export function ProductPageClient({ slug, initialProduct }: ProductPageClientProps) {
+export function ProductPageClient({
+  slug,
+  initialProduct,
+  loadState = "ok",
+  loadMessage,
+}: ProductPageClientProps) {
   const supabaseSourced = initialProduct !== null;
 
   const [product, setProduct] = useState<RenderableProduct | null>(() => {
@@ -59,10 +68,27 @@ export function ProductPageClient({ slug, initialProduct }: ProductPageClientPro
   }, [slug, supabaseSourced]);
 
   if (!product) {
+    // Tailor the empty state to what actually happened. Previously this
+    // always said "not available in the demo fallback", which was misleading
+    // when a real Supabase product simply wasn't found or the query errored.
+    let title = "Product not found";
+    let body = "We couldn't find a product with that slug.";
+    if (loadState === "error") {
+      title = "Could not load this product";
+      body = loadMessage
+        ? `Supabase error: ${loadMessage}`
+        : "An unexpected database error occurred.";
+    } else if (loadState === "not_found") {
+      title = "Product not found";
+      body = `No published product matches "${slug}".`;
+    } else if (loadState === "demo") {
+      title = "Product not found";
+      body = "This product is not available in the demo fallback yet.";
+    }
     return (
       <Card className="mt-6 p-8">
-        <h1 className="text-3xl font-black">Product not found</h1>
-        <p className="mt-3 text-slate-400">This product is not available in the demo fallback yet.</p>
+        <h1 className="text-3xl font-black">{title}</h1>
+        <p className="mt-3 text-slate-400">{body}</p>
         <Link href="/marketplace" className="mt-6 inline-flex rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-950">
           Back to marketplace
         </Link>

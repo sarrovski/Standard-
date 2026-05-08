@@ -607,7 +607,7 @@ function Products({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-2xl font-black">{product.name}</h3>
-                    <Badge tone={product.status === "Verified" ? "green" : "amber"}>
+                    <Badge tone={product.status === "Published" ? "green" : "amber"}>
                       {product.status}
                     </Badge>
                     <Badge tone="cyan">{product.pageTemplate}</Badge>

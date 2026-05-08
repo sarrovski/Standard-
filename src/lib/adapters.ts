@@ -179,7 +179,7 @@ export function adaptProductCard(
     game: row.game,
     category: row.category,
     architecture: "External",
-    productStatus: row.status === "published" ? "Verified" : "Pending review",
+    productStatus: row.status === "published" ? "Published" : "Pending review",
     integrity: row.trust_score,
     confidence: row.trust_score && row.trust_score >= 70 ? "High" : "Medium",
     activity: { vouches: 0, views: 0, replies: 0, lastSeen: "Recently active" },
@@ -377,9 +377,9 @@ export function adaptSellerProductCard(
     : "—";
   const statusLabel =
     row.status === "published"
-      ? "Verified"
+      ? "Published"
       : row.status === "draft"
-        ? "Pending Review"
+        ? "Draft"
         : "Archived";
   const media: UIProductMedia[] = (row.product_media ?? [])
     .slice()

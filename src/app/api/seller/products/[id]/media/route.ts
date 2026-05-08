@@ -129,7 +129,11 @@ export async function POST(
         ? 400
         : 500;
     return NextResponse.json(
-      { error: upload.message, code: upload.code },
+      {
+        error: upload.message,
+        code: upload.code,
+        step: "storage_upload",
+      },
       { status: httpStatus },
     );
   }
@@ -170,8 +174,16 @@ export async function POST(
       "[api/seller/products/[id]/media POST] insert failed:",
       insertError?.message,
     );
+    // Surface the underlying error message so RLS / schema mismatches are
+    // diagnosable from the dashboard. Postgres errors don't include
+    // secrets; the message is e.g. "new row violates row-level security
+    // policy for table \"product_media\"".
+    const detail = insertError?.message ?? "Unknown insert error.";
     return NextResponse.json(
-      { error: "Could not record uploaded media." },
+      {
+        error: `Could not record uploaded media: ${detail}`,
+        step: "product_media_insert",
+      },
       { status: 500 },
     );
   }

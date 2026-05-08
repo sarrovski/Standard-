@@ -8,22 +8,34 @@ import {
   type ProductWithJoins,
 } from "@/lib/adapters";
 
-async function loadProducts(): Promise<{
-  products: UIProductCard[] | null;
-  source: "supabase" | "demo";
-}> {
+type LoadResult =
+  | { products: UIProductCard[]; source: "supabase"; state: "ok" | "empty" }
+  | { products: null; source: "supabase"; state: "error"; message: string }
+  | { products: null; source: "demo"; state: "demo" };
+
+async function loadProducts(): Promise<LoadResult> {
   if (!isSupabaseConfigured()) {
-    return { products: null, source: "demo" };
+    return { products: null, source: "demo", state: "demo" };
   }
   const { data, error } = await getPublishedProducts();
-  if (error || !data) {
-    // If a Supabase error occurs (RLS issue, schema mismatch), fall back to
-    // demo so the page still renders. Logged for observability.
-    console.error("[marketplace] supabase fetch failed:", error?.message);
-    return { products: null, source: "demo" };
+  if (error) {
+    // Don't fall back to demo on an actual Supabase error in Supabase mode —
+    // that hides the bug. Surface a real error state instead.
+    console.error("[marketplace] supabase fetch failed:", error.message);
+    return {
+      products: null,
+      source: "supabase",
+      state: "error",
+      message: error.message,
+    };
   }
-  // The select string returns joined rows; cast to our adapter input type.
-  const rows = data as unknown as ProductWithJoins[];
+  const rows = (data ?? []) as unknown as ProductWithJoins[];
+  if (rows.length === 0) {
+    console.warn(
+      "[marketplace] no published products yet (Supabase configured, query OK, 0 rows).",
+    );
+    return { products: [], source: "supabase", state: "empty" };
+  }
   return {
     products: rows.map((row) => {
       // seller_payment_methods is already filtered to verified by the repo;
@@ -34,11 +46,12 @@ async function loadProducts(): Promise<{
       return adaptProductCard(row, verifiedNames);
     }),
     source: "supabase",
+    state: "ok",
   };
 }
 
 export default async function MarketplacePage() {
-  const { products } = await loadProducts();
+  const result = await loadProducts();
 
   return (
     <Shell>
@@ -49,7 +62,18 @@ export default async function MarketplacePage() {
           title="Choose a game, then browse visually"
           text="A working marketplace: created seller products appear here, verified payments power filters, and featured slots appear first."
         />
-        <MarketplaceClient initialProducts={products} />
+        {result.state === "error" && (
+          <div className="mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
+            Couldn't load marketplace from Supabase: {result.message}
+          </div>
+        )}
+        {result.state === "empty" && (
+          <div className="mb-6 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+            No published products yet. Once a seller creates and publishes a
+            product, it'll appear here.
+          </div>
+        )}
+        <MarketplaceClient initialProducts={result.products} />
       </section>
     </Shell>
   );
