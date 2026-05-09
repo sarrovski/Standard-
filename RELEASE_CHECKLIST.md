@@ -45,11 +45,42 @@ Settings → Authentication → Providers → Email:
 - Email provider: enabled
 - Password signups/logins: enabled
 - Email confirmations: choose your launch policy
+- Custom SMTP: configure before production
 
 If confirmations are enabled, users must confirm the email before password
 login succeeds. Magic links remain available on the login/signup screens as a
 secondary option. Password login does **not** bypass roles: `/dashboard` still
 requires `seller`/`admin`, and `/admin` still requires `admin`.
+
+Supabase's default email provider is rate-limited. During dev/test, repeated
+confirmation, magic-link, or password-recovery emails can hit "email rate limit
+exceeded". For production, configure a custom SMTP provider. For dev/test, an
+admin can manually confirm users in Supabase instead of repeatedly requesting
+emails.
+
+New users start as `role = 'user'`. Seller dashboard access requires
+`role = 'seller'` or `role = 'admin'`; do not bypass that guard for testing.
+
+Dev/test SQL helpers:
+
+```sql
+-- Confirm a user's email manually.
+update auth.users
+set email_confirmed_at = coalesce(email_confirmed_at, now())
+where email = 'seller@example.com';
+
+-- Promote the profile to seller.
+update public.profiles
+set role = 'seller'
+where email = 'seller@example.com';
+
+-- Create the matching sellers row if it does not exist.
+insert into public.sellers (profile_id, seller_name)
+select id, coalesce(display_name, email)
+from public.profiles
+where email = 'seller@example.com'
+on conflict (profile_id) do nothing;
+```
 
 ### 1.4 Storage bucket
 Storage → New bucket:
