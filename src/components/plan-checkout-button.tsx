@@ -61,7 +61,7 @@ export function PlanCheckoutButton({
   return (
     <div>
       <button onClick={start} disabled={busy} className={className}>
-        {busy ? "Starting checkout…" : label}
+        {busy ? "Starting checkout..." : label}
       </button>
       {error && (
         <div className="mt-2 rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-xs text-red-200">

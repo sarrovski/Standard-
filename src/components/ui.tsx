@@ -26,7 +26,7 @@ export function Nav() {
 
       <div className="hidden items-center gap-7 text-sm font-medium text-slate-300 md:flex">
         <Link href="/marketplace" className="transition hover:text-white">Marketplace</Link>
-        <Link href="/account?view=sell" className="transition hover:text-white">Start Selling</Link>
+        <Link href="/start-selling" className="transition hover:text-white">Start Selling</Link>
         <Link href="/trust" className="transition hover:text-white">Trust</Link>
         <Link href="/plans" className="transition hover:text-white">Plans</Link>
       </div>
@@ -184,7 +184,7 @@ export function Footer() {
             <Link href="/marketplace" className="hover:text-white">Marketplace</Link>
             <Link href="/plans" className="hover:text-white">Plans</Link>
             <Link href="/trust" className="hover:text-white">Trust</Link>
-            <Link href="/account?view=sell" className="hover:text-white">Start Selling</Link>
+            <Link href="/start-selling" className="hover:text-white">Start Selling</Link>
           </div>
         </div>
 

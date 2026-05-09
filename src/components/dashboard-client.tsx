@@ -11,7 +11,6 @@ import {
   pageTemplates,
   paymentMethods as paymentMethodsList,
   paymentVerificationQueue,
-  plans,
   providerTagRequests as demoProviderTagRequests,
   sellerOffers,
   sellerProducts as demoSellerProducts,
@@ -389,7 +388,7 @@ function ProductMediaPanel({
             busy ? "opacity-60" : ""
           }`}
         >
-          {busy ? "Uploading…" : "Upload image"}
+          {busy ? "Uploading..." : "Upload image"}
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp"
@@ -407,7 +406,7 @@ function ProductMediaPanel({
 
       {savedNotice && (
         <div className="mt-3 rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-2 text-xs text-emerald-100">
-          ✓ Image uploaded and saved.
+          Image uploaded and saved.
         </div>
       )}
 
@@ -790,9 +789,8 @@ function Builder({ supabaseSourced }: { supabaseSourced: boolean }) {
         <Badge tone="green">Media</Badge>
         <h2 className="mt-4 text-2xl font-black">Upload images from the Produits tab</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
-          Images are attached to a saved product, so you upload them after the
-          product is created. Save this draft first, then open the Produits tab
-          and use the upload control on the product&apos;s card.
+          Create the product first, then upload images from the Produits tab.
+          Media saves immediately from the upload control on each product card.
         </p>
         <Link
           href="/dashboard?tab=products"
@@ -1433,21 +1431,10 @@ function Billing() {
       >
         Open billing
       </Link>
-      <div className="mt-8 grid gap-3 md:grid-cols-2">
-        {plans.map((plan) => (
-          <div
-            key={plan.name}
-            className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-          >
-            <div className="flex justify-between gap-3">
-              <div>
-                <div className="font-bold">{plan.name}</div>
-                <div className="mt-1 text-xs text-slate-500">{plan.limit}</div>
-              </div>
-              <div className="font-black">{plan.price}</div>
-            </div>
-          </div>
-        ))}
+      <div className="mt-8 rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm leading-6 text-slate-400">
+        Billing is the only place to open the Stripe customer portal or reserve
+        Featured visibility. Plans remains the only place to start a seller
+        subscription.
       </div>
     </Card>
   );
