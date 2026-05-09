@@ -212,11 +212,11 @@ export type UIProductDetail = UIProductCard & {
 export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
   const seller = row.sellers;
 
-  // Build PaymentProfile list from joined seller_payment_methods. Verified rows
-  // make it into verifiedPayments; everything else stays in paymentProfiles for
-  // the "under review" panel.
-  const profiles: PaymentProfile[] = (row.seller_payment_methods ?? []).map(
-    (spm) => ({
+  // Public product pages only expose verified payment methods. Pending,
+  // rejected, and needs_recheck rows are seller/admin-only trust workflow data.
+  const profiles: PaymentProfile[] = (row.seller_payment_methods ?? [])
+    .filter((spm) => spm.status === "verified")
+    .map((spm) => ({
       method: coercePaymentMethod(spm.payment_methods?.name),
       status: mapPaymentStatusToUI(spm.status),
       processor: spm.processor ?? "—",
@@ -226,8 +226,7 @@ export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
       refundPolicy: spm.refund_policy_url ?? undefined,
       verifiedAt: spm.verified_at ?? undefined,
       expiresAt: spm.expires_at ?? undefined,
-    }),
-  );
+    }));
 
   const verifiedPayments: PaymentMethod[] = profiles
     .filter((p) => p.status === "Verified")
