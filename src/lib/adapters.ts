@@ -213,10 +213,7 @@ export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
   const seller = row.sellers;
 
   // Public product pages only expose verified payment methods. Pending,
-  // rejected, and needs_recheck rows are seller/admin-only trust workflow
-  // data and must NEVER reach the public adapter. The repo already filters
-  // by status='verified' at query time, but we double-check here so the
-  // public surface is safe even if the repo ever regresses.
+  // rejected, and needs_recheck rows are seller/admin-only trust workflow data.
   const profiles: PaymentProfile[] = (row.seller_payment_methods ?? [])
     .filter((spm) => spm.status === "verified")
     .map((spm) => ({
@@ -229,10 +226,7 @@ export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
       refundPolicy: spm.refund_policy_url ?? undefined,
       verifiedAt: spm.verified_at ?? undefined,
       expiresAt: spm.expires_at ?? undefined,
-    }))
-    // Final guard: even if the input shape changes, only "Verified" UI
-    // status is allowed to escape this function.
-    .filter((profile) => profile.status === "Verified");
+    }));
 
   const verifiedPayments: PaymentMethod[] = profiles
     .filter((p) => p.status === "Verified")
