@@ -69,7 +69,7 @@ export default async function DashboardPage({
               ? `Dashboard${initialData.sellerName ? ` • ${initialData.sellerName}` : ""}`
               : "Dashboard"
           }
-          text="Manage products, builder, payment verification, analytics, provider tag, and billing."
+          text="Manage products, payment verification, analytics, provider tag, and billing."
         />
         <DashboardClient
           initialTab={searchParams?.tab}

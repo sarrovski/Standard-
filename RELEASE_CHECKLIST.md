@@ -204,11 +204,10 @@ takes about 10 minutes.
    ```
 
 ### 5.3 Create a product
-1. Visit `/dashboard?tab=builder`
-2. Fill the form, click "Save product draft"
-3. Should see "Product created" with a link
-4. Visit `/dashboard?tab=products` — your product should appear with
-   status "Pending Review"
+1. Visit `/dashboard/products/new`
+2. Fill the form, click "Create product"
+3. Should redirect to `/dashboard?tab=products`
+4. In Produits, your product should appear with status `draft`
 5. Upload an image via the per-card upload control — should see a thumbnail
 
 ### 5.4 Submit a payment method

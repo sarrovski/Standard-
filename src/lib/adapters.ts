@@ -412,7 +412,7 @@ export function adaptSellerProductCard(
         ? "Submit for review and verify payment methods"
         : row.status === "published"
           ? "Drive traffic from your website"
-          : "Reactivate from the Builder",
+          : "Restore from Produits",
     media,
   };
 }

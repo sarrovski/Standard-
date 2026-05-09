@@ -21,7 +21,7 @@ Standard is a SaaS marketplace for comparing gaming sellers/tools with a trust l
 - Start Selling flow includes “How it works” and links to Plans.
 - Roles are `user`, `seller`, and `admin`.
 - Provider / Developer is a seller tag request approved by admin, not a role.
-- Seller dashboard tabs: Produits, Builder, Offers, Payment Verification, Analytics, Provider Tag, Billing.
+- Seller dashboard tabs: Produits, Payment Verification, Analytics, Provider Tag, Billing.
 - Payment methods have verification states: pending verification, verified, rejected, needs re-check.
 - Only verified payment methods should appear publicly and in marketplace filters.
 - Featured placement is one active slot per game/category and does not replace verification or trust score.
@@ -30,8 +30,8 @@ Standard is a SaaS marketplace for comparing gaming sellers/tools with a trust l
 
 - Plans → seller subscription.
 - Start Selling → educational flow only, link to Plans.
-- Dashboard/Builder → create product.
-- Dashboard/Produits → product status + media.
+- Dashboard/Produits → product status, media, and create product link.
+- /dashboard/products/new → create product.
 - Dashboard/Payment Verification → payment proof.
 - Dashboard/Provider Tag → provider request.
 - Dashboard/Billing → billing portal + Featured slots.

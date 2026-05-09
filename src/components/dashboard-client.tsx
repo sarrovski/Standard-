@@ -6,22 +6,16 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Card, MiniStat } from "@/components/ui";
 import {
   analytics,
-  builderSections,
-  mediaUploadGuide,
-  pageTemplates,
   paymentMethods as paymentMethodsList,
   paymentVerificationQueue,
   providerTagRequests as demoProviderTagRequests,
-  sellerOffers,
   sellerProducts as demoSellerProducts,
   trafficSources,
 } from "@/lib/data";
 import {
-  addLocalProduct,
   addPaymentRequest,
   getLocalProducts,
   getPaymentRequests,
-  slugify,
 } from "@/lib/product-store";
 import type {
   LocalPaymentRequest,
@@ -38,29 +32,8 @@ import type {
 } from "@/lib/adapters";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
-type ProductApiError = {
-  error?: string;
-  step?: string;
-  code?: string;
-  details?: string;
-};
-
-function formatProductApiError(status: number | null, payload: ProductApiError) {
-  const pieces = [];
-  if (status) pieces.push(`HTTP ${status}`);
-  if (payload.step) pieces.push(payload.step);
-  if (payload.code) pieces.push(payload.code);
-
-  const prefix = pieces.length > 0 ? `${pieces.join(" / ")}: ` : "";
-  const message = payload.error ?? "Could not create product.";
-  const details = payload.details ? ` ${payload.details}` : "";
-  return `${prefix}${message}${details}`;
-}
-
 const tabs = [
   { key: "products", label: "Produits" },
-  { key: "builder", label: "Builder" },
-  { key: "offers", label: "Offers" },
   { key: "payments", label: "Payment Verification" },
   { key: "analytics", label: "Analytics" },
   { key: "verification", label: "Provider Tag" },
@@ -73,11 +46,12 @@ const DEFAULT_TAB = "products";
 /**
  * Aliases let people land on /dashboard?tab=payment-verification or
  * /dashboard?tab=provider-tag (the human-readable slugs from the tab
- * labels) and end up on the right panel. The internal tab keys stay as
- * 'payments' / 'verification' so we don't have to migrate every existing
- * <Link href="/dashboard?tab=builder"> in the codebase.
+ * labels) and end up on the right panel. Retired demo tabs intentionally
+ * fall back to Produits so old links keep landing somewhere useful.
  */
 const TAB_ALIASES: Record<string, string> = {
+  builder: "products",
+  offers: "products",
   "payment-verification": "payments",
   "provider-tag": "verification",
   produits: "products",
@@ -204,8 +178,6 @@ export function DashboardClient({
             initialProducts={initialData?.products ?? null}
           />
         )}
-        {tab === "builder" && <Builder supabaseSourced={supabaseSourced} />}
-        {tab === "offers" && <Offers />}
         {tab === "payments" && (
           <Payments
             supabaseSourced={supabaseSourced}
@@ -543,14 +515,14 @@ function Products({
           <div>
             <h2 className="text-xl font-bold">Produits en ligne</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Products created in the builder appear here and in the marketplace.
+              Draft, publish, archive, restore, and manage media for your products.
             </p>
           </div>
           <Link
             href="/dashboard/products/new"
             className="inline-flex justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold"
           >
-            Create new product
+            Create product
           </Link>
         </div>
 
@@ -563,7 +535,7 @@ function Products({
         <div className="divide-y divide-white/10">
           {displayProducts.length === 0 && (
             <p className="p-6 text-sm text-slate-500">
-              No products yet. Open the Builder tab to create your first one.
+              No products yet. Create a product to start building your catalog.
             </p>
           )}
           {displayProducts.map((product) => (
@@ -611,12 +583,6 @@ function Products({
                     >
                       View public page
                     </Link>
-                    <Link
-                      href="/dashboard?tab=builder"
-                      className="rounded-xl border border-purple-400/20 bg-purple-500/10 px-4 py-3 text-center text-sm font-semibold text-purple-200"
-                    >
-                      Edit in builder
-                    </Link>
                     {supabaseSourced && product.rawStatus === "draft" && (
                       <button
                         onClick={() => updateProductStatus(product.id, "published")}
@@ -659,281 +625,6 @@ function Products({
       </Card>
 
     </div>
-  );
-}
-
-// =========================================================================
-// Builder tab
-// =========================================================================
-
-function Builder({ supabaseSourced }: { supabaseSourced: boolean }) {
-  const [form, setForm] = useState({
-    name: "My New Product",
-    game: "Valorant",
-    category: "Analytics / Overlay",
-    architecture: "External",
-    price: "$49 monthly",
-    websiteUrl: "https://example.com",
-    cta: "Visit official website",
-    discord: "discord.gg/example",
-    telegram: "@example",
-    summary: "A polished product announcement built with Standard.",
-    features: "Fast setup, Clean dashboard, Payment clarity",
-  });
-  const [createdSlug, setCreatedSlug] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const update = (key: keyof typeof form, value: string) => {
-    setForm((current) => ({ ...current, [key]: value }));
-  };
-
-  const createProduct = async () => {
-    setError(null);
-
-    if (!supabaseSourced) {
-      // Demo path: write to in-memory product-store like before.
-      const slug = slugify(form.name || "new-product");
-      const product: LocalProduct = {
-        slug,
-        name: form.name,
-        seller: "Demo Seller",
-        sellerTag: "Seller",
-        game: form.game,
-        category: form.category,
-        architecture: form.architecture,
-        productStatus: "Pending Review",
-        integrity: null,
-        confidence: "Pending",
-        verifiedPayments: [],
-        paymentProfiles: [],
-        features: form.features.split(",").map((item) => item.trim()).filter(Boolean),
-        pricePoints: [form.price],
-        delivery: "Pending verification",
-        refundPolicy: "Pending verification",
-        accent: "from-violet-500/70 to-cyan-400/40",
-        summary: form.summary,
-        websiteUrl: form.websiteUrl,
-        websiteLabel: form.cta,
-        discord: form.discord,
-        telegram: form.telegram,
-        trustSignals: ["Seller-submitted product"],
-        gallery: [
-          { title: "Hero image placeholder", accent: "from-violet-500/60 to-fuchsia-500/40" },
-          { title: "Product screenshot placeholder", accent: "from-slate-700 to-cyan-500/30" },
-        ],
-        benefits: ["Created in the Standard builder", "Ready for media and payment verification"],
-        faq: [
-          {
-            q: "What happens next?",
-            a: "Submit the product for review, verify payment methods, then drive traffic to your website.",
-          },
-        ],
-        activity: { vouches: 0, views: 0, replies: 0, lastSeen: "Just created" },
-      };
-      addLocalProduct(product);
-      setCreatedSlug(slug);
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const response = await fetch("/api/seller/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          game: form.game,
-          category: form.category,
-          website_url: form.websiteUrl,
-          summary: form.summary,
-          features: form.features
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
-          price_points: [form.price],
-        }),
-      });
-      const payload = (await response.json()) as
-        | { product: { slug: string } }
-        | ProductApiError;
-      if (!response.ok) {
-        setError(formatProductApiError(response.status, payload as ProductApiError));
-        return;
-      }
-      if ("product" in payload) {
-        setCreatedSlug(payload.product.slug);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="p-6">
-          <Badge tone="purple">Product builder</Badge>
-          <h2 className="mt-4 text-2xl font-black">Create a product announcement</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-400">
-            {supabaseSourced
-              ? "Saved as a draft to your seller account. Submit for review when ready."
-              : "Demo mode: products are stored in memory only and won't survive a refresh."}
-          </p>
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <BuilderInput label="Product name" value={form.name} onChange={(v) => update("name", v)} />
-            <BuilderInput label="Game" value={form.game} onChange={(v) => update("game", v)} />
-            <BuilderInput label="Category" value={form.category} onChange={(v) => update("category", v)} />
-            <BuilderInput label="Architecture" value={form.architecture} onChange={(v) => update("architecture", v)} />
-            <BuilderInput label="Starting price" value={form.price} onChange={(v) => update("price", v)} />
-            <BuilderInput label="Features, comma-separated" value={form.features} onChange={(v) => update("features", v)} />
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <Badge tone="cyan">Conversion</Badge>
-          <h2 className="mt-4 text-2xl font-black">Website traffic goal</h2>
-          <div className="mt-6 grid gap-4">
-            <BuilderInput label="Official website / offer URL" value={form.websiteUrl} onChange={(v) => update("websiteUrl", v)} />
-            <BuilderInput label="Primary CTA label" value={form.cta} onChange={(v) => update("cta", v)} />
-            <BuilderInput label="Discord" value={form.discord} onChange={(v) => update("discord", v)} />
-            <BuilderInput label="Telegram" value={form.telegram} onChange={(v) => update("telegram", v)} />
-          </div>
-        </Card>
-      </section>
-
-      <Card className="p-6">
-        <Badge tone="green">Media</Badge>
-        <h2 className="mt-4 text-2xl font-black">Upload images from the Produits tab</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-400">
-          Create the product first, then upload images from the Produits tab.
-          Media saves immediately from the upload control on each product card.
-        </p>
-        <Link
-          href="/dashboard?tab=products"
-          className="mt-5 inline-flex rounded-xl border border-purple-400/30 bg-purple-500/10 px-4 py-3 text-sm font-semibold text-purple-200"
-        >
-          Go to Produits
-        </Link>
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
-          {mediaUploadGuide.map((item) => (
-            <div
-              key={item.label}
-              className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-            >
-              <div>
-                <div className="font-semibold">{item.label}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.note}</div>
-              </div>
-              <div className="text-xs text-slate-400">{item.size}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <Card className="p-6">
-          <Badge tone="cyan">Templates</Badge>
-          <h2 className="mt-4 text-2xl font-black">Pick a template</h2>
-          <div className="mt-5 grid gap-3">
-            {pageTemplates.map((template, index) => (
-              <div
-                key={template.name}
-                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="font-bold">{template.name}</div>
-                    <div className="mt-1 text-sm text-slate-400">{template.description}</div>
-                  </div>
-                  <Badge tone={index === 0 ? "green" : "default"}>
-                    {index === 0 ? "Selected" : "Available"}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <Badge tone="amber">Publishing</Badge>
-          <h2 className="mt-4 text-2xl font-black">Save product</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-400">
-            After saving, the product appears in Produits and Marketplace once published.
-          </p>
-          <button
-            onClick={createProduct}
-            disabled={submitting}
-            className="mt-6 w-full rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
-          >
-            {submitting ? "Saving…" : "Save product draft"}
-          </button>
-          {error && (
-            <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
-              {error}
-            </div>
-          )}
-          {createdSlug && !error && (
-            <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-              Product created.{" "}
-              <Link href={`/products/${createdSlug}`} className="font-bold underline">
-                Open product page
-              </Link>
-              {supabaseSourced && (
-                <span>
-                  {" "}
-                  — refresh the dashboard to see it under Produits.
-                </span>
-              )}
-            </div>
-          )}
-        </Card>
-      </section>
-    </div>
-  );
-}
-
-// =========================================================================
-// Offers tab — unchanged demo, no DB writes in this batch
-// =========================================================================
-
-function Offers() {
-  return (
-    <Card className="p-6">
-      <Badge tone="cyan">Seller offers</Badge>
-      <h2 className="mt-4 text-2xl font-black">Offer management</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-400">
-        Offer table read-only for now. Editable offers come in a follow-up batch.
-      </p>
-      <div className="mt-5 space-y-3">
-        {sellerOffers.map((offer) => (
-          <div
-            key={offer.tool + offer.seller}
-            className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-          >
-            <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-              <div>
-                <div className="font-bold">{offer.tool}</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {offer.seller} • {offer.status} • {offer.stock} • {offer.delivery}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {offer.payments.map((payment) => (
-                    <PaymentPill key={payment} method={payment} compact />
-                  ))}
-                </div>
-              </div>
-              <div className="text-right text-sm">
-                <div className="text-slate-400">{offer.price}</div>
-                <div className="mt-1 text-xs text-slate-500">{offer.disputes}</div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
   );
 }
 
@@ -1118,7 +809,7 @@ function Payments({
           <h2 className="text-2xl font-black">Add payment method</h2>
           {supabaseSourced && (initialProducts?.length ?? 0) === 0 && (
             <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-              You don't have any products yet. Create one in the Builder first.
+              You don't have any products yet. Create a product before submitting payment proof.
             </p>
           )}
           {supabaseSourced && paymentMethods.length === 0 && (
@@ -1187,10 +878,10 @@ function Payments({
               )}
             </label>
 
-            <BuilderInput label="Processor / account label" value={processor} onChange={setProcessor} />
-            <BuilderInput label="Checkout URL" value={checkoutUrl} onChange={setCheckoutUrl} />
-            <BuilderInput label="Proof URL (optional)" value={proofUrl} onChange={setProofUrl} />
-            <BuilderInput label="Seller notes" value={sellerNotes} onChange={setSellerNotes} />
+            <DashboardTextInput label="Processor / account label" value={processor} onChange={setProcessor} />
+            <DashboardTextInput label="Checkout URL" value={checkoutUrl} onChange={setCheckoutUrl} />
+            <DashboardTextInput label="Proof URL (optional)" value={proofUrl} onChange={setProofUrl} />
+            <DashboardTextInput label="Seller notes" value={sellerNotes} onChange={setSellerNotes} />
 
             <button
               type="submit"
@@ -1348,11 +1039,11 @@ function Verification({
           reviews requests manually.
         </p>
         <form onSubmit={handleSubmit} className="mt-6 grid gap-4">
-          <BuilderInput label="Website URL" value={websiteUrl} onChange={setWebsiteUrl} />
-          <BuilderInput label="Discord handle" value={discord} onChange={setDiscord} />
-          <BuilderInput label="Telegram handle" value={telegram} onChange={setTelegram} />
-          <BuilderInput label="Proof URL (optional)" value={proofUrl} onChange={setProofUrl} />
-          <BuilderInput label="Notes for admin" value={notes} onChange={setNotes} />
+          <DashboardTextInput label="Website URL" value={websiteUrl} onChange={setWebsiteUrl} />
+          <DashboardTextInput label="Discord handle" value={discord} onChange={setDiscord} />
+          <DashboardTextInput label="Telegram handle" value={telegram} onChange={setTelegram} />
+          <DashboardTextInput label="Proof URL (optional)" value={proofUrl} onChange={setProofUrl} />
+          <DashboardTextInput label="Notes for admin" value={notes} onChange={setNotes} />
           <button
             type="submit"
             disabled={submitting || currentStatus === "Pending"}
@@ -1463,7 +1154,7 @@ function Billing() {
 // Shared bits
 // =========================================================================
 
-function BuilderInput({
+function DashboardTextInput({
   label,
   value,
   onChange,
