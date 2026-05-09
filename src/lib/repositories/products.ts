@@ -1,10 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
+import { withTimeout } from "@/lib/repositories/query-timeout";
 
 /**
  * Read-only product repositories used by Marketplace and product detail pages.
  * These are called from server components when isSupabaseConfigured() is true.
  * Writes belong elsewhere (Batch 5).
+ *
+ * Every public-facing query is wrapped in withTimeout() so a stuck request
+ * surfaces as a typed error in 10s instead of hanging until Vercel's 300s
+ * edge timeout (Batch 15A).
  */
 
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
@@ -32,11 +37,14 @@ async function getVerifiedSellerPaymentMethodsBySellerIds(
   }
 
   const supabase = createClient();
-  return supabase
-    .from("seller_payment_methods")
-    .select("*, payment_methods(*)")
-    .in("seller_id", uniqueSellerIds)
-    .eq("status", "verified");
+  return withTimeout(
+    supabase
+      .from("seller_payment_methods")
+      .select("*, payment_methods(*)")
+      .in("seller_id", uniqueSellerIds)
+      .eq("status", "verified"),
+    { label: "getVerifiedSellerPaymentMethodsBySellerIds" },
+  );
 }
 
 function attachVerifiedPaymentMethods<
@@ -60,11 +68,14 @@ function attachVerifiedPaymentMethods<
 
 export async function getPublishedProducts() {
   const supabase = createClient();
-  const productsRes = await supabase
-    .from("products")
-    .select("*, sellers(*), product_media(*)")
-    .eq("status", "published")
-    .order("created_at", { ascending: false });
+  const productsRes = await withTimeout(
+    supabase
+      .from("products")
+      .select("*, sellers(*), product_media(*)")
+      .eq("status", "published")
+      .order("created_at", { ascending: false }),
+    { label: "getPublishedProducts" },
+  );
 
   if (productsRes.error || !productsRes.data) {
     return productsRes;
@@ -86,12 +97,15 @@ export async function getPublishedProducts() {
 
 export async function getPublishedProductBySlug(productSlug: string) {
   const supabase = createClient();
-  const productRes = await supabase
-    .from("products")
-    .select("*, sellers(*), product_media(*), trust_signals(*)")
-    .eq("slug", productSlug)
-    .eq("status", "published")
-    .maybeSingle();
+  const productRes = await withTimeout(
+    supabase
+      .from("products")
+      .select("*, sellers(*), product_media(*), trust_signals(*)")
+      .eq("slug", productSlug)
+      .eq("status", "published")
+      .maybeSingle(),
+    { label: "getPublishedProductBySlug" },
+  );
 
   if (productRes.error || !productRes.data) {
     return productRes;

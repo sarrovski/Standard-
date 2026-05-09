@@ -36,7 +36,7 @@ type RenderableProduct = {
   faq?: { q: string; a: string }[];
 };
 
-type ProductLoadState = "ok" | "not_found" | "error" | "demo";
+type ProductLoadState = "ok" | "not_found" | "error" | "timeout" | "demo";
 
 type ProductPageClientProps = {
   slug: string;
@@ -78,6 +78,10 @@ export function ProductPageClient({
       body = loadMessage
         ? `Supabase error: ${loadMessage}`
         : "An unexpected database error occurred.";
+    } else if (loadState === "timeout") {
+      title = "Product page timed out";
+      body =
+        "The database is slow or unreachable. Please retry in a moment.";
     } else if (loadState === "not_found") {
       title = "Product not found";
       body = `No published product matches "${slug}".`;

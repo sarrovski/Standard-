@@ -3,6 +3,7 @@ import { Nav, Shell } from "@/components/ui";
 import { ProductPageClient } from "@/components/product-page-client";
 import { isSupabaseConfigured } from "@/lib/roles";
 import { getPublishedProductBySlug } from "@/lib/repositories/products";
+import { isTimeoutError } from "@/lib/repositories/query-timeout";
 import {
   adaptProductDetail,
   type ProductFullJoins,
@@ -13,6 +14,7 @@ type LoadResult =
   | { product: UIProductDetail; source: "supabase"; state: "ok" }
   | { product: null; source: "supabase"; state: "not_found" }
   | { product: null; source: "supabase"; state: "error"; message: string }
+  | { product: null; source: "supabase"; state: "timeout" }
   | { product: null; source: "demo"; state: "demo" };
 
 async function loadProduct(slug: string): Promise<LoadResult> {
@@ -21,6 +23,10 @@ async function loadProduct(slug: string): Promise<LoadResult> {
   }
   const { data, error } = await getPublishedProductBySlug(slug);
   if (error) {
+    if (isTimeoutError(error)) {
+      console.error("[product] supabase query timed out for slug:", slug);
+      return { product: null, source: "supabase", state: "timeout" };
+    }
     console.error("[product] supabase fetch failed:", error.message);
     return {
       product: null,

@@ -4,9 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 export type AppRole = "user" | "seller" | "admin";
 
 export function isSupabaseConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
+  // Strict check: reject empty/whitespace values too, so a misconfigured
+  // env var (set to "") doesn't make the app think Supabase is available
+  // and then hang on a query against a non-URL.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  return Boolean(url && key);
 }
 
 /**

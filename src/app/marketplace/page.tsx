@@ -2,6 +2,7 @@ import { Nav, SectionHeader, Shell } from "@/components/ui";
 import { MarketplaceClient } from "@/components/marketplace-client";
 import { isSupabaseConfigured } from "@/lib/roles";
 import { getPublishedProducts } from "@/lib/repositories/products";
+import { isTimeoutError } from "@/lib/repositories/query-timeout";
 import {
   adaptProductCard,
   type UIProductCard,
@@ -11,6 +12,7 @@ import {
 type LoadResult =
   | { products: UIProductCard[]; source: "supabase"; state: "ok" | "empty" }
   | { products: null; source: "supabase"; state: "error"; message: string }
+  | { products: null; source: "supabase"; state: "timeout" }
   | { products: null; source: "demo"; state: "demo" };
 
 async function loadProducts(): Promise<LoadResult> {
@@ -19,6 +21,10 @@ async function loadProducts(): Promise<LoadResult> {
   }
   const { data, error } = await getPublishedProducts();
   if (error) {
+    if (isTimeoutError(error)) {
+      console.error("[marketplace] supabase query timed out");
+      return { products: null, source: "supabase", state: "timeout" };
+    }
     console.error("[marketplace] supabase fetch failed:", error.message);
     return {
       products: null,
@@ -61,6 +67,12 @@ export default async function MarketplacePage() {
         {result.state === "error" && (
           <div className="mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
             Couldn&apos;t load marketplace from Supabase: {result.message}
+          </div>
+        )}
+        {result.state === "timeout" && (
+          <div className="mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
+            Marketplace query timed out. The database is slow or unreachable —
+            please retry in a moment.
           </div>
         )}
         {result.state === "empty" && (
