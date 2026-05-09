@@ -14,8 +14,10 @@ import { useState } from "react";
  * that error inline so the page stays usable in demo mode (the buttons
  * themselves still render).
  *
- * Note: Batch 8 wires every plan tier to the same STRIPE_SELLER_SUBSCRIPTION_PRICE_ID.
- * Per-tier price IDs are a follow-up if/when the plans diverge.
+ * TODO: The current backend has one STRIPE_SELLER_SUBSCRIPTION_PRICE_ID, so
+ * every plan CTA starts the same checkout route for now. Add dedicated
+ * STRIPE_LAUNCH_PRICE_ID, STRIPE_GROWTH_PRICE_ID, and
+ * STRIPE_DOMINION_PRICE_ID before wiring plan-specific Stripe prices.
  */
 export function PlanCheckoutButton({
   label,
@@ -59,7 +61,7 @@ export function PlanCheckoutButton({
   return (
     <div>
       <button onClick={start} disabled={busy} className={className}>
-        {busy ? "Starting checkout…" : label}
+        {busy ? "Starting checkout..." : label}
       </button>
       {error && (
         <div className="mt-2 rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-xs text-red-200">

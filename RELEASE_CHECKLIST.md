@@ -241,14 +241,16 @@ takes about 10 minutes.
 3. Visit `/products/your-slug` — should see gallery + verified payment
 
 ### 5.8 Featured slot
-1. On the published card, click "Reserve featured slot"
-2. Complete the one-time payment in Stripe
-3. After redirect to `/dashboard/billing?featured=success`, verify:
+1. Open `/dashboard/billing`
+2. Select a published product in the Featured slots card
+3. Click "Reserve featured slot"
+4. Complete the one-time payment in Stripe
+5. After redirect to `/dashboard/billing?featured=success`, verify:
    ```sql
    select * from featured_slots where status = 'active';
    -- expect: 1 row, ends_at ~30 days out
    ```
-4. `/marketplace` — your product should appear at the top with
+6. `/marketplace` — your product should appear at the top with
    "Featured" badge
 
 ### 5.9 Cleanup
