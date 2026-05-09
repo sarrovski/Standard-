@@ -38,6 +38,25 @@ import type {
 } from "@/lib/adapters";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
+type ProductApiError = {
+  error?: string;
+  step?: string;
+  code?: string;
+  details?: string;
+};
+
+function formatProductApiError(status: number | null, payload: ProductApiError) {
+  const pieces = [];
+  if (status) pieces.push(`HTTP ${status}`);
+  if (payload.step) pieces.push(payload.step);
+  if (payload.code) pieces.push(payload.code);
+
+  const prefix = pieces.length > 0 ? `${pieces.join(" / ")}: ` : "";
+  const message = payload.error ?? "Could not create product.";
+  const details = payload.details ? ` ${payload.details}` : "";
+  return `${prefix}${message}${details}`;
+}
+
 const tabs = [
   { key: "products", label: "Produits" },
   { key: "builder", label: "Builder" },
@@ -528,7 +547,7 @@ function Products({
             </p>
           </div>
           <Link
-            href="/dashboard?tab=builder"
+            href="/dashboard/products/new"
             className="inline-flex justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold"
           >
             Create new product
@@ -737,9 +756,9 @@ function Builder({ supabaseSourced }: { supabaseSourced: boolean }) {
       });
       const payload = (await response.json()) as
         | { product: { slug: string } }
-        | { error: string };
+        | ProductApiError;
       if (!response.ok) {
-        setError("error" in payload ? payload.error : "Could not create product.");
+        setError(formatProductApiError(response.status, payload as ProductApiError));
         return;
       }
       if ("product" in payload) {
