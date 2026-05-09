@@ -34,6 +34,16 @@ function friendlyAuthError(message: string): string {
   if (normalized.includes("password should be at least")) {
     return "Password is too short. Use at least 8 characters.";
   }
+  if (normalized.includes("email not confirmed")) {
+    return "Account created, but email confirmation is still required before logging in.";
+  }
+  if (
+    normalized.includes("rate limit") ||
+    normalized.includes("too many requests") ||
+    normalized.includes("security purposes")
+  ) {
+    return "Email rate limit exceeded. Wait a few minutes before requesting another email, or configure SMTP for higher limits.";
+  }
   return message;
 }
 
@@ -118,7 +128,7 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
         return;
       }
 
-      setStatus({ kind: "sent", message: "Account created. Check your email to confirm your account before logging in." });
+      setStatus({ kind: "sent", message: "Account created. Check your email to confirm before logging in." });
     } catch (err) {
       setStatus({
         kind: "error",
@@ -186,6 +196,12 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
             ? "Create an account with a password. Magic link signup stays available as a backup."
             : "Demo mode: this just routes you to /account."}
         </p>
+        {supabaseConfigured ? (
+          <p className="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 p-3 text-xs leading-5 text-slate-500">
+            Supabase default email has rate limits. Configure SMTP before
+            production.
+          </p>
+        ) : null}
       </div>
 
       <form onSubmit={handlePasswordSignup} className="space-y-4">

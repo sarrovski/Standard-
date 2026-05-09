@@ -69,6 +69,13 @@ function friendlyAuthError(message: string): string {
   if (normalized.includes("email not confirmed")) {
     return "Please confirm your email before logging in with a password.";
   }
+  if (
+    normalized.includes("rate limit") ||
+    normalized.includes("too many requests") ||
+    normalized.includes("security purposes")
+  ) {
+    return "Email rate limit exceeded. Wait a few minutes before requesting another email, or configure SMTP for higher limits.";
+  }
   return message;
 }
 
@@ -224,6 +231,12 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
               ? "Log in with your password, or request a magic link if you prefer."
               : "Demo mode: type any email to preview the routing."}
           </p>
+          {supabaseConfigured ? (
+            <p className="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 p-3 text-xs leading-5 text-slate-500">
+              If your account was created with magic link only, use password
+              recovery or create a password from Supabase Auth.
+            </p>
+          ) : null}
         </div>
 
         <form onSubmit={handlePasswordLogin} className="space-y-4">

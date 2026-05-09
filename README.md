@@ -37,6 +37,31 @@ Standard is a SaaS marketplace for comparing gaming sellers/tools with a trust l
    - Local: `http://localhost:3000/auth/callback`
    - Production: `https://your-domain.com/auth/callback`
 7. Enable password auth: Supabase Dashboard → Authentication → Providers → Email. Keep Email enabled, allow password signups/logins, and decide whether email confirmation is required. If confirmation is required, users must confirm before password login works. Magic links remain available as a secondary login option.
+8. Configure custom SMTP before production. Supabase's default email provider is rate-limited and can block repeated confirmation, magic-link, and password-recovery emails during testing.
+9. New users start with `role = 'user'`. The seller dashboard remains limited to `seller`/`admin`, and the admin area remains limited to `admin`.
+
+### Auth dev helpers
+
+For local/dev testing only, an admin can manually confirm a user and seed seller access from Supabase SQL. Do not add a public admin UI for these shortcuts.
+
+```sql
+-- Confirm a user's email manually.
+update auth.users
+set email_confirmed_at = coalesce(email_confirmed_at, now())
+where email = 'seller@example.com';
+
+-- Promote the profile to seller.
+update public.profiles
+set role = 'seller'
+where email = 'seller@example.com';
+
+-- Create the matching sellers row if it does not exist.
+insert into public.sellers (profile_id, seller_name)
+select id, coalesce(display_name, email)
+from public.profiles
+where email = 'seller@example.com'
+on conflict (profile_id) do nothing;
+```
 
 ## Stripe setup
 
