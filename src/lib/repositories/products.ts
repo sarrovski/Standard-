@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/supabase/types";
 
 /**
  * Read-only product repositories used by Marketplace and product detail pages.
@@ -6,59 +7,126 @@ import { createClient } from "@/lib/supabase/server";
  * Writes belong elsewhere (Batch 5).
  */
 
+type ProductRow = Database["public"]["Tables"]["products"]["Row"];
+type SellerPaymentMethodRow =
+  Database["public"]["Tables"]["seller_payment_methods"]["Row"];
+type PaymentMethodRow = Database["public"]["Tables"]["payment_methods"]["Row"];
+
+type VerifiedSellerPaymentMethod = SellerPaymentMethodRow & {
+  payment_methods: PaymentMethodRow | null;
+};
+type PublishedProductRow = ProductRow & {
+  sellers: Database["public"]["Tables"]["sellers"]["Row"] | null;
+  product_media: Database["public"]["Tables"]["product_media"]["Row"][] | null;
+};
+type PublishedProductDetailRow = PublishedProductRow & {
+  trust_signals: Database["public"]["Tables"]["trust_signals"]["Row"][] | null;
+};
+
+async function getVerifiedSellerPaymentMethodsBySellerIds(
+  sellerIds: string[],
+) {
+  const uniqueSellerIds = Array.from(new Set(sellerIds));
+  if (uniqueSellerIds.length === 0) {
+    return { data: [] as VerifiedSellerPaymentMethod[], error: null };
+  }
+
+  const supabase = createClient();
+  return supabase
+    .from("seller_payment_methods")
+    .select("*, payment_methods(*)")
+    .in("seller_id", uniqueSellerIds)
+    .eq("status", "verified");
+}
+
+function attachVerifiedPaymentMethods<
+  TProduct extends Pick<ProductRow, "seller_id">,
+>(
+  products: TProduct[],
+  paymentMethods: VerifiedSellerPaymentMethod[],
+) {
+  const bySellerId = new Map<string, VerifiedSellerPaymentMethod[]>();
+  for (const method of paymentMethods) {
+    const existing = bySellerId.get(method.seller_id) ?? [];
+    existing.push(method);
+    bySellerId.set(method.seller_id, existing);
+  }
+
+  return products.map((product) => ({
+    ...product,
+    seller_payment_methods: bySellerId.get(product.seller_id) ?? [],
+  }));
+}
+
 export async function getPublishedProducts() {
-          const supabase = createClient();
-          // Include verified seller_payment_methods so marketplace cards can render
-    // the right payment badges and the payment filter actually matches. Other
-    // statuses are private to seller/admin and excluded here.
-    return supabase
-              .from("products")
-              .select(
-                                "*, sellers(*), product_media(*), seller_payment_methods(*, payment_methods(*))",
-                            )
-              .eq("status", "published")
-              .eq("seller_payment_methods.status", "verified")
-              .order("created_at", { ascending: false });
+  const supabase = createClient();
+  const productsRes = await supabase
+    .from("products")
+    .select("*, sellers(*), product_media(*)")
+    .eq("status", "published")
+    .order("created_at", { ascending: false });
+
+  if (productsRes.error || !productsRes.data) {
+    return productsRes;
+  }
+
+  const products = (productsRes.data ?? []) as unknown as PublishedProductRow[];
+  const paymentRes = await getVerifiedSellerPaymentMethodsBySellerIds(
+    products.map((product) => product.seller_id),
+  );
+  if (paymentRes.error) {
+    return { data: null, error: paymentRes.error };
+  }
+
+  return {
+    data: attachVerifiedPaymentMethods(products, paymentRes.data ?? []),
+    error: null,
+  };
 }
 
 export async function getPublishedProductBySlug(productSlug: string) {
-          const supabase = createClient();
-          // PostgREST: when filtering on a non-inner joined table with .in(), rows
-    // with no match still come through as an empty array. Verified rows
-    // surface as the "Verified payments" badges; pending + needs_recheck
-    // surface in the "Under review" panel. Rejected rows are private —
-    // filtered here so they never reach the public payload.
-    return supabase
-              .from("products")
-              .select(
-                                "*, sellers(*), product_media(*), trust_signals(*), seller_payment_methods(*, payment_methods(*))",
-                            )
-              .eq("slug", productSlug)
-              .eq("status", "published")
-              .in("seller_payment_methods.status", [
-                                "verified",
-                                "pending_verification",
-                                "needs_recheck",
-                            ])
-              .maybeSingle();
+  const supabase = createClient();
+  const productRes = await supabase
+    .from("products")
+    .select("*, sellers(*), product_media(*), trust_signals(*)")
+    .eq("slug", productSlug)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (productRes.error || !productRes.data) {
+    return productRes;
+  }
+
+  const product = productRes.data as unknown as PublishedProductDetailRow;
+  const paymentRes = await getVerifiedSellerPaymentMethodsBySellerIds([
+    product.seller_id,
+  ]);
+  if (paymentRes.error) {
+    return { data: null, error: paymentRes.error };
+  }
+
+  return {
+    data: attachVerifiedPaymentMethods([product], paymentRes.data ?? [])[0] ?? null,
+    error: null,
+  };
 }
 
 export async function getVerifiedSellerPaymentMethods(sellerId: string) {
-          const supabase = createClient();
-          return supabase
-              .from("seller_payment_methods")
-              .select("*, payment_methods(*)")
-              .eq("seller_id", sellerId)
-              .eq("status", "verified");
+  const supabase = createClient();
+  return supabase
+    .from("seller_payment_methods")
+    .select("*, payment_methods(*)")
+    .eq("seller_id", sellerId)
+    .eq("status", "verified");
 }
 
 export async function getAvailableFeaturedSlot(game: string, category: string) {
-          const supabase = createClient();
-          return supabase
-              .from("featured_slots")
-              .select("*")
-              .eq("game", game)
-              .eq("category", category)
-              .neq("status", "active")
-              .maybeSingle();
+  const supabase = createClient();
+  return supabase
+    .from("featured_slots")
+    .select("*")
+    .eq("game", game)
+    .eq("category", category)
+    .neq("status", "active")
+    .maybeSingle();
 }
