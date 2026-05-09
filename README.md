@@ -18,13 +18,23 @@ Standard is a SaaS marketplace for comparing gaming sellers/tools with a trust l
 
 - Navbar: Marketplace, Start Selling, Trust, Plans, Login.
 - Footer includes Terms.
-- Start Selling flow includes “How it works”.
+- Start Selling flow includes “How it works” and links to Plans.
 - Roles are `user`, `seller`, and `admin`.
 - Provider / Developer is a seller tag request approved by admin, not a role.
 - Seller dashboard tabs: Produits, Builder, Offers, Payment Verification, Analytics, Provider Tag, Billing.
 - Payment methods have verification states: pending verification, verified, rejected, needs re-check.
 - Only verified payment methods should appear publicly and in marketplace filters.
 - Featured placement is one active slot per game/category and does not replace verification or trust score.
+
+## Primary action locations
+
+- Plans → seller subscription.
+- Dashboard/Billing → billing portal + featured.
+- Dashboard/Builder → create product.
+- Dashboard/Produits → product status + media.
+- Dashboard/Payment Verification → payment proof.
+- Dashboard/Provider Tag → provider request.
+- Admin → moderation.
 
 ## Supabase setup
 
