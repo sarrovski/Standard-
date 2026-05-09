@@ -23,6 +23,19 @@ import type { Database } from "@/lib/supabase/types";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
+type ProductCreateStep =
+  | "auth"
+  | "ownership"
+  | "seller_lookup"
+  | "validation"
+  | "product_insert";
+type ProductApiError = {
+  error: string;
+  step: ProductCreateStep;
+  code?: string;
+  details?: string;
+};
+type SellerProductClient = ReturnType<typeof createClient>;
 
 type CreateProductBody = {
   name?: unknown;
@@ -57,24 +70,88 @@ function slugify(name: string): string {
     .slice(0, 60) || `product-${Date.now()}`;
 }
 
+function jsonError(
+  status: number,
+  error: string,
+  step: ProductCreateStep,
+  extra: Omit<ProductApiError, "error" | "step"> = {},
+) {
+  return NextResponse.json({ error, step, ...extra }, { status });
+}
+
+async function makeUniqueSlug(
+  supabase: SellerProductClient,
+  baseSlug: string,
+): Promise<{ slug: string } | { error: ProductApiError }> {
+  const base = slugify(baseSlug);
+  for (let index = 0; index < 20; index += 1) {
+    const candidate = index === 0 ? base : `${base}-${index + 1}`;
+    const { data, error } = await supabase
+      .from("products")
+      .select("id")
+      .eq("slug", candidate)
+      .maybeSingle<{ id: string }>();
+
+    if (error) {
+      return {
+        error: {
+          error: "Could not check product slug availability.",
+          step: "validation",
+          code: error.code ?? "slug_lookup_failed",
+          details: error.message,
+        },
+      };
+    }
+    if (!data) return { slug: candidate };
+  }
+
+  return {
+    error: {
+      error: "A product with that slug already exists. Try a different name.",
+      step: "validation",
+      code: "duplicate_slug",
+    },
+  };
+}
+
 async function requireSeller() {
   if (!isSupabaseConfigured()) {
-    return { error: "Supabase not configured", status: 503 } as const;
+    return {
+      error: "Supabase not configured",
+      status: 503,
+      step: "auth",
+      code: "supabase_not_configured",
+    } as const;
   }
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized", status: 401 } as const;
+  if (!user) {
+    return {
+      error: "Unauthorized",
+      status: 401,
+      step: "auth",
+      code: "unauthorized",
+    } as const;
+  }
 
   const { data: seller, error: sellerError } = await getSellerByProfileId(user.id);
   if (sellerError) {
-    return { error: "Failed to look up seller record.", status: 500 } as const;
+    return {
+      error: "Failed to look up seller record.",
+      status: 500,
+      step: "seller_lookup",
+      code: sellerError.code ?? "seller_lookup_failed",
+      details: sellerError.message,
+    } as const;
   }
   if (!seller) {
     return {
-      error: "No seller account yet. Subscribe to a seller plan first.",
+      error: "Seller profile not found. Complete seller onboarding or contact admin.",
       status: 403,
+      step: "seller_lookup",
+      code: "seller_not_found",
     } as const;
   }
   return { user, seller, supabase } as const;
@@ -83,29 +160,50 @@ async function requireSeller() {
 export async function POST(request: NextRequest) {
   const auth = await requireSeller();
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    const status = typeof auth.status === "number" ? auth.status : 500;
+    const error = typeof auth.error === "string" ? auth.error : "Unauthorized";
+    const step = typeof auth.step === "string" ? auth.step : "auth";
+    return jsonError(status, error, step as ProductCreateStep, {
+      code: auth.code,
+      details: auth.details,
+    });
   }
 
   let raw: CreateProductBody;
   try {
     raw = (await request.json()) as CreateProductBody;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return jsonError(400, "Invalid JSON body.", "validation", {
+      code: "invalid_json",
+    });
   }
 
   const name = readString(raw.name);
   const game = readString(raw.game);
   const category = readString(raw.category);
   if (!name || !game || !category) {
-    return NextResponse.json(
-      { error: "name, game, and category are required." },
-      { status: 400 },
+    return jsonError(400, "name, game, and category are required.", "validation", {
+      code: "missing_required_fields",
+    });
+  }
+
+  const requestedSlug = readString(raw.slug) ?? name;
+  const slugResult = await makeUniqueSlug(auth.supabase, requestedSlug);
+  if ("error" in slugResult) {
+    return jsonError(
+      slugResult.error.code === "duplicate_slug" ? 409 : 500,
+      slugResult.error.error,
+      slugResult.error.step,
+      {
+        code: slugResult.error.code,
+        details: slugResult.error.details,
+      },
     );
   }
 
   const insertRow: ProductInsert = {
     seller_id: auth.seller.id,
-    slug: readString(raw.slug) ?? slugify(name),
+    slug: slugResult.slug,
     name,
     game,
     category,
@@ -125,17 +223,27 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error("[api/seller/products POST] insert failed:", error.message);
-    // Slug uniqueness is the most likely failure here — surface a friendly msg.
-    if (error.message.toLowerCase().includes("duplicate")) {
-      return NextResponse.json(
-        { error: "A product with that slug already exists. Try a different name." },
-        { status: 409 },
+    const lowerMessage = error.message.toLowerCase();
+    if (error.code === "23505" || lowerMessage.includes("duplicate")) {
+      return jsonError(
+        409,
+        "A product with that slug already exists. Try a different name.",
+        "validation",
+        { code: "duplicate_slug", details: error.message },
       );
     }
-    return NextResponse.json(
-      { error: "Could not create product." },
-      { status: 500 },
-    );
+    if (error.code === "42501" || lowerMessage.includes("row-level security")) {
+      return jsonError(
+        403,
+        "Could not create product because ownership could not be verified.",
+        "ownership",
+        { code: error.code ?? "rls_denied", details: error.message },
+      );
+    }
+    return jsonError(500, "Could not create product.", "product_insert", {
+      code: error.code ?? "insert_failed",
+      details: error.message,
+    });
   }
 
   return NextResponse.json({ product: data });
@@ -149,19 +257,29 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireSeller();
   if ("error" in auth) {
-    return NextResponse.json({ error: auth.error }, { status: auth.status });
+    const status = typeof auth.status === "number" ? auth.status : 500;
+    const error = typeof auth.error === "string" ? auth.error : "Unauthorized";
+    const step = typeof auth.step === "string" ? auth.step : "auth";
+    return jsonError(status, error, step as ProductCreateStep, {
+      code: auth.code,
+      details: auth.details,
+    });
   }
 
   let raw: UpdateProductBody;
   try {
     raw = (await request.json()) as UpdateProductBody;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return jsonError(400, "Invalid JSON body.", "validation", {
+      code: "invalid_json",
+    });
   }
 
   const id = readString(raw.id);
   if (!id) {
-    return NextResponse.json({ error: "id is required." }, { status: 400 });
+    return jsonError(400, "id is required.", "validation", {
+      code: "missing_product_id",
+    });
   }
 
   const update: ProductUpdate = {};
@@ -183,9 +301,11 @@ export async function PATCH(request: NextRequest) {
   if (status === "draft" || status === "published" || status === "archived") {
     update.status = status;
   } else if (status) {
-    return NextResponse.json(
-      { error: "Invalid status. Allowed: draft | published | archived." },
-      { status: 400 },
+    return jsonError(
+      400,
+      "Invalid status. Allowed: draft | published | archived.",
+      "validation",
+      { code: "invalid_status" },
     );
   }
 
@@ -199,16 +319,15 @@ export async function PATCH(request: NextRequest) {
 
   if (error) {
     console.error("[api/seller/products PATCH] update failed:", error.message);
-    return NextResponse.json(
-      { error: "Could not update product." },
-      { status: 500 },
-    );
+    return jsonError(500, "Could not update product.", "product_insert", {
+      code: error.code ?? "update_failed",
+      details: error.message,
+    });
   }
   if (!data) {
-    return NextResponse.json(
-      { error: "Product not found or you don't own it." },
-      { status: 404 },
-    );
+    return jsonError(404, "Product not found or you don't own it.", "ownership", {
+      code: "product_not_found",
+    });
   }
 
   return NextResponse.json({ product: data });
