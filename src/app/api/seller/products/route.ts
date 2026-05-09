@@ -33,6 +33,8 @@ type CreateProductBody = {
   summary?: unknown;
   features?: unknown;
   price_points?: unknown;
+  meta_title?: unknown;
+  meta_description?: unknown;
 };
 
 type UpdateProductBody = CreateProductBody & {
@@ -115,6 +117,8 @@ export async function POST(request: NextRequest) {
     features: readStringArray(raw.features),
     price_points: readStringArray(raw.price_points),
     trust_score: null,
+    meta_title: readString(raw.meta_title),
+    meta_description: readString(raw.meta_description),
   };
 
   const { data, error } = await auth.supabase
@@ -178,6 +182,10 @@ export async function PATCH(request: NextRequest) {
   if (raw.features !== undefined) update.features = readStringArray(raw.features);
   if (raw.price_points !== undefined) {
     update.price_points = readStringArray(raw.price_points);
+  }
+  if (raw.meta_title !== undefined) update.meta_title = readString(raw.meta_title);
+  if (raw.meta_description !== undefined) {
+    update.meta_description = readString(raw.meta_description);
   }
   const status = readString(raw.status);
   if (status === "draft" || status === "published" || status === "archived") {

@@ -44,6 +44,25 @@ export async function getSellerProducts(sellerId: string) {
     .order("created_at", { ascending: false });
 }
 
+/**
+ * Single product owned by a given seller, used by /dashboard/products/[id]/edit.
+ * Returns null when the row doesn't exist OR isn't owned by the seller — same
+ * shape, no need for the caller to distinguish (the seller can't see the
+ * difference anyway, and that's the safer default).
+ */
+export async function getSellerProductById(
+  sellerId: string,
+  productId: string,
+) {
+  const supabase = createClient();
+  return supabase
+    .from("products")
+    .select("*, product_media(*)")
+    .eq("id", productId)
+    .eq("seller_id", sellerId)
+    .maybeSingle();
+}
+
 export async function getSellerPaymentVerificationRequests(sellerId: string) {
   const supabase = createClient();
   return supabase
