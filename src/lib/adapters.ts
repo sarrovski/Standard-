@@ -20,6 +20,7 @@ import type {
   PaymentVerificationStatus,
 } from "@/lib/data";
 import type { Database } from "@/lib/supabase/types";
+import { youtubeEmbedUrl } from "@/lib/youtube";
 
 // ---------- DB row aliases ---------------------------------------------------
 
@@ -162,15 +163,75 @@ function tagFromProviderStatus(
   return "Seller";
 }
 
+/**
+ * Single piece of product media surfaced in public and seller UIs.
+ */
+export type UIProductMedia = {
+  id: string;
+  type: "image" | "youtube";
+  storagePath: string | null;
+  publicUrl: string | null;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+  embedUrl: string | null;
+  externalUrl: string | null;
+  altText: string | null;
+  title: string | null;
+  sortOrder: number;
+};
+
+function adaptProductMedia(row: ProductMediaRow): UIProductMedia | null {
+  const type = row.media_type === "youtube" ? "youtube" : "image";
+  if (type === "youtube") {
+    if (!row.video_id) return null;
+    return {
+      id: row.id,
+      type,
+      storagePath: row.storage_path,
+      publicUrl: row.public_url,
+      imageUrl: null,
+      thumbnailUrl: row.thumbnail_url ?? null,
+      embedUrl: youtubeEmbedUrl(row.video_id),
+      externalUrl: row.external_url,
+      altText: row.alt_text,
+      title: row.title ?? row.alt_text ?? "Product video",
+      sortOrder: row.sort_order,
+    };
+  }
+
+  if (!row.public_url) return null;
+  return {
+    id: row.id,
+    type: "image",
+    storagePath: row.storage_path,
+    publicUrl: row.public_url,
+    imageUrl: row.public_url,
+    thumbnailUrl: row.public_url,
+    embedUrl: null,
+    externalUrl: null,
+    altText: row.alt_text,
+    title: row.title ?? row.alt_text ?? "Product image",
+    sortOrder: row.sort_order,
+  };
+}
+
+function sortedProductMedia(rows: ProductMediaRow[] | null | undefined): UIProductMedia[] {
+  return (rows ?? [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(adaptProductMedia)
+    .filter((item): item is UIProductMedia => Boolean(item));
+}
+
 export function adaptProductCard(
   row: ProductWithJoins,
   verifiedMethodNames: string[] = [],
 ): UIProductCard {
   const seller = row.sellers;
-  const sortedMedia = (row.product_media ?? [])
-    .slice()
-    .sort((a, b) => a.sort_order - b.sort_order);
-  const coverImageUrl = sortedMedia[0]?.public_url ?? null;
+  const sortedMedia = sortedProductMedia(row.product_media);
+  const firstImage = sortedMedia.find((item) => item.type === "image");
+  const firstVideo = sortedMedia.find((item) => item.type === "youtube");
+  const coverImageUrl = firstImage?.imageUrl ?? firstVideo?.thumbnailUrl ?? null;
   return {
     slug: row.slug,
     name: row.name,
@@ -205,7 +266,7 @@ export type UIProductDetail = UIProductCard & {
   discord: string;
   telegram: string;
   trustSignals: string[];
-  gallery: { title: string; accent: string; imageUrl: string | null }[];
+  gallery: UIProductMedia[];
   faq: { q: string; a: string }[];
 };
 
@@ -243,14 +304,7 @@ export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
     if (ts.is_public && ts.label) trustSignals.push(ts.label);
   }
 
-  const gallery = (row.product_media ?? [])
-    .slice()
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((m, idx) => ({
-      title: m.alt_text ?? `Media ${idx + 1}`,
-      accent: ACCENTS[idx % ACCENTS.length] ?? ACCENTS[0]!,
-      imageUrl: m.public_url,
-    }));
+  const gallery = sortedProductMedia(row.product_media);
 
   const card = adaptProductCard(row, verifiedPayments);
 
@@ -333,17 +387,6 @@ export function adaptAdminProviderTagRequest(
  * Shape used by the seller "Produits" tab card. Mirrors the demo
  * sellerProducts[] from data.ts so the existing JSX renders unchanged.
  */
-/**
- * Single piece of product media surfaced in the UI.
- */
-export type UIProductMedia = {
-  id: string;
-  storagePath: string;
-  publicUrl: string | null;
-  altText: string | null;
-  sortOrder: number;
-};
-
 export type UISellerProductCard = {
   id: string;
   slug: string;
@@ -380,16 +423,7 @@ export function adaptSellerProductCard(
       : row.status === "draft"
         ? "Draft"
         : "Archived";
-  const media: UIProductMedia[] = (row.product_media ?? [])
-    .slice()
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((m) => ({
-      id: m.id,
-      storagePath: m.storage_path,
-      publicUrl: m.public_url,
-      altText: m.alt_text,
-      sortOrder: m.sort_order,
-    }));
+  const media = sortedProductMedia(row.product_media);
   return {
     id: row.id,
     slug: row.slug,
