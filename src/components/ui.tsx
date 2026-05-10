@@ -182,6 +182,7 @@ export function Footer() {
           <h3 className="text-sm font-bold text-white">Product</h3>
           <div className="mt-4 grid gap-3 text-sm text-slate-400">
             <Link href="/marketplace" className="hover:text-white">Marketplace</Link>
+            <Link href="/creators" className="hover:text-white">Creators</Link>
             <Link href="/plans" className="hover:text-white">Plans</Link>
             <Link href="/trust" className="hover:text-white">Trust</Link>
             <Link href="/start-selling" className="hover:text-white">Start Selling</Link>
