@@ -7,7 +7,6 @@ type Creator = {
   platforms: string[];
   startingRate: string;
   availability: string;
-  portfolioUrl: string;
   accent: string;
 };
 
@@ -19,7 +18,6 @@ const CREATORS: Creator[] = [
     platforms: ["TikTok", "YouTube Shorts", "YouTube"],
     startingRate: "$120",
     availability: "Open this week",
-    portfolioUrl: "https://example.com/novacut",
     accent: "from-cyan-400/60 via-purple-500/30 to-slate-950",
   },
   {
@@ -29,7 +27,6 @@ const CREATORS: Creator[] = [
     platforms: ["TikTok", "Instagram Reels", "X"],
     startingRate: "$75",
     availability: "2 slots left",
-    portfolioUrl: "https://example.com/clipforge",
     accent: "from-emerald-400/50 via-cyan-500/30 to-slate-950",
   },
   {
@@ -39,7 +36,6 @@ const CREATORS: Creator[] = [
     platforms: ["YouTube", "Discord", "Web"],
     startingRate: "$45",
     availability: "Available next week",
-    portfolioUrl: "https://example.com/vanta",
     accent: "from-amber-300/50 via-fuchsia-500/30 to-slate-950",
   },
   {
@@ -49,7 +45,6 @@ const CREATORS: Creator[] = [
     platforms: ["YouTube", "TikTok", "Twitch"],
     startingRate: "$180",
     availability: "Invite only",
-    portfolioUrl: "https://example.com/pulse",
     accent: "from-indigo-400/60 via-cyan-400/25 to-slate-950",
   },
 ];
@@ -124,12 +119,17 @@ export default function CreatorsPage() {
 
         <div className="mt-10 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-black">Creator directory mock</h2>
+            <h2 className="text-2xl font-black">Creator concept preview</h2>
             <p className="mt-2 text-sm text-slate-500">
               Static cards for D1 validation. Filters are visual only.
             </p>
           </div>
           <Badge tone="amber">External contact MVP</Badge>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">
+          These creator cards are sample profiles for validation; live creator
+          listings are not active yet.
         </div>
 
         <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -181,7 +181,7 @@ function CreatorCard({ creator }: { creator: Creator }) {
             <h3 className="text-xl font-black">{creator.name}</h3>
             <p className="mt-1 text-sm text-slate-500">{creator.availability}</p>
           </div>
-          <Badge tone="cyan">Reviewed soon</Badge>
+          <Badge tone="cyan">Concept profile</Badge>
         </div>
 
         <CreatorMeta label="Games" values={creator.games} />
@@ -193,14 +193,13 @@ function CreatorCard({ creator }: { creator: Creator }) {
             <div className="text-xs text-slate-500">Starting at</div>
             <div className="text-lg font-black">{creator.startingRate}</div>
           </div>
-          <a
-            href={creator.portfolioUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-white transition hover:border-purple-400/40"
+          <button
+            type="button"
+            disabled
+            className="cursor-not-allowed rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-500"
           >
-            Portfolio
-          </a>
+            Portfolio preview
+          </button>
         </div>
       </div>
     </Card>
