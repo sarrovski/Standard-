@@ -606,7 +606,7 @@ function Products({
                         disabled={busyProductId === product.id}
                         className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-center text-sm font-semibold text-red-200 disabled:opacity-60"
                       >
-                        {busyProductId === product.id ? "Archiving…" : "Delete product"}
+                        {busyProductId === product.id ? "Archiving…" : "Archive"}
                       </button>
                     )}
                     {supabaseSourced && product.rawStatus === "archived" && (
