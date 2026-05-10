@@ -497,6 +497,14 @@ function Products({
     }
   };
 
+  const archiveProduct = async (productId: string, productName: string) => {
+    const confirmed = window.confirm(
+      `Archive "${productName}"? It will be removed from the public marketplace, but its product record and media will remain saved.`,
+    );
+    if (!confirmed) return;
+    await updateProductStatus(productId, "archived");
+  };
+
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-4">
@@ -592,13 +600,13 @@ function Products({
                         {busyProductId === product.id ? "Publishing…" : "Publish"}
                       </button>
                     )}
-                    {supabaseSourced && product.rawStatus === "published" && (
+                    {supabaseSourced && product.rawStatus !== "archived" && (
                       <button
-                        onClick={() => updateProductStatus(product.id, "archived")}
+                        onClick={() => archiveProduct(product.id, product.name)}
                         disabled={busyProductId === product.id}
-                        className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-center text-sm font-semibold text-amber-200 disabled:opacity-60"
+                        className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-center text-sm font-semibold text-red-200 disabled:opacity-60"
                       >
-                        {busyProductId === product.id ? "Archiving…" : "Archive"}
+                        {busyProductId === product.id ? "Archiving…" : "Delete product"}
                       </button>
                     )}
                     {supabaseSourced && product.rawStatus === "archived" && (
