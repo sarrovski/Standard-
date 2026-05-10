@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Badge, ButtonLink, Card } from "@/components/ui";
 import { products as demoProducts } from "@/lib/data";
 import { getLocalProducts } from "@/lib/product-store";
-import type { UIProductDetail } from "@/lib/adapters";
+import type { UIProductDetail, UIProductMedia } from "@/lib/adapters";
 import type { PaymentMethod, PaymentProfile } from "@/lib/data";
 import { NoVerifiedPayments, PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
@@ -32,7 +32,7 @@ type RenderableProduct = {
   verifiedPayments: PaymentMethod[];
   paymentProfiles: PaymentProfile[];
   trustSignals?: string[];
-  gallery?: { title: string; accent: string; imageUrl?: string | null }[];
+  gallery?: Array<UIProductMedia | { title: string; accent: string; imageUrl?: string | null }>;
   faq?: { q: string; a: string }[];
 };
 
@@ -44,6 +44,32 @@ type ProductPageClientProps = {
   loadState?: ProductLoadState;
   loadMessage?: string;
 };
+
+type DisplayMedia = UIProductMedia & { accent?: string };
+
+function normalizeGallery(
+  gallery: NonNullable<RenderableProduct["gallery"]>,
+): DisplayMedia[] {
+  return gallery
+    .map((item, index): DisplayMedia | null => {
+      if ("type" in item) return item;
+      return {
+        id: `demo-${index}-${item.title}`,
+        type: "image",
+        storagePath: null,
+        publicUrl: item.imageUrl ?? null,
+        imageUrl: item.imageUrl ?? null,
+        thumbnailUrl: item.imageUrl ?? null,
+        embedUrl: null,
+        externalUrl: null,
+        altText: item.title,
+        title: item.title,
+        sortOrder: index,
+        accent: item.accent,
+      };
+    })
+    .filter((item): item is DisplayMedia => Boolean(item));
+}
 
 export function ProductPageClient({
   slug,
@@ -59,6 +85,7 @@ export function ProductPageClient({
     const demo = demoProducts.find((item) => item.slug === slug);
     return demo ? (demo as unknown as RenderableProduct) : null;
   });
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
 
   useEffect(() => {
     // Only fall back to the local builder products in demo mode.
@@ -66,6 +93,10 @@ export function ProductPageClient({
     const local = getLocalProducts().find((item) => item.slug === slug);
     if (local) setProduct(local as unknown as RenderableProduct);
   }, [slug, supabaseSourced]);
+
+  useEffect(() => {
+    setActiveMediaIndex(0);
+  }, [product?.slug]);
 
   if (!product) {
     // Tailor the empty state to what actually happened. Previously this
@@ -101,6 +132,8 @@ export function ProductPageClient({
   }
 
   const gallery = product.gallery ?? [];
+  const mediaItems = normalizeGallery(gallery);
+  const activeMedia = mediaItems[activeMediaIndex] ?? mediaItems[0] ?? null;
   const faq = product.faq ?? [];
   const trustSignals = product.trustSignals ?? [];
   const websiteUrl = product.websiteUrl ?? "";
@@ -150,36 +183,13 @@ export function ProductPageClient({
 
       <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_320px]">
         <div className="space-y-6">
-          {gallery.length > 0 && (
-            <Panel title="Media gallery" subtitle="Seller-managed visuals from the product builder.">
-              <div className="grid gap-4 md:grid-cols-2">
-                {gallery.map((item) => (
-                  <div
-                    key={item.title}
-                    className={`relative h-44 overflow-hidden rounded-3xl border border-white/10 ${
-                      item.imageUrl ? "bg-slate-950" : `bg-gradient-to-br ${item.accent}`
-                    }`}
-                  >
-                    {item.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.imageUrl}
-                        alt={item.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="p-5">
-                        <div className="text-xs uppercase tracking-[0.22em] text-white/65">
-                          Media block
-                        </div>
-                        <div className="mt-20 text-lg font-bold text-white">{item.title}</div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Panel>
-          )}
+          <MediaCarousel
+            accent={product.accent}
+            activeMedia={activeMedia}
+            activeIndex={activeMediaIndex}
+            mediaItems={mediaItems}
+            onSelect={setActiveMediaIndex}
+          />
 
           <Panel title="Features">
             <div className="grid gap-3 md:grid-cols-2">
@@ -270,6 +280,102 @@ function Panel({ title, subtitle, children }: { title: string; subtitle?: string
       {subtitle && <p className="mt-2 text-sm leading-6 text-slate-400">{subtitle}</p>}
       <div className="mt-5">{children}</div>
     </Card>
+  );
+}
+
+function MediaCarousel({
+  accent,
+  activeMedia,
+  activeIndex,
+  mediaItems,
+  onSelect,
+}: {
+  accent: string;
+  activeMedia: DisplayMedia | null;
+  activeIndex: number;
+  mediaItems: DisplayMedia[];
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <Panel title="Media gallery" subtitle="Seller-managed images and embedded videos.">
+      {activeMedia ? (
+        <div className="space-y-4">
+          <div className="relative aspect-video overflow-hidden rounded-3xl border border-white/10 bg-slate-950">
+            {activeMedia.type === "youtube" && activeMedia.embedUrl ? (
+              <iframe
+                src={activeMedia.embedUrl}
+                title={activeMedia.title ?? "Product video"}
+                className="h-full w-full"
+                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            ) : activeMedia.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={activeMedia.imageUrl}
+                alt={activeMedia.altText ?? activeMedia.title ?? ""}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <div className={`flex h-full items-end bg-gradient-to-br ${activeMedia.accent ?? accent} p-6`}>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.22em] text-white/65">
+                    Media block
+                  </div>
+                  <div className="mt-2 text-xl font-bold text-white">{activeMedia.title}</div>
+                </div>
+              </div>
+            )}
+            <div className="absolute left-3 top-3 rounded-full border border-white/20 bg-black/55 px-3 py-1 text-xs font-bold text-white">
+              {activeMedia.type === "youtube" ? "YouTube" : "Image"}
+            </div>
+          </div>
+
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {mediaItems.map((item, index) => {
+              const thumb = item.type === "youtube" ? item.thumbnailUrl : item.thumbnailUrl ?? item.imageUrl;
+              const active = index === activeIndex;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onSelect(index)}
+                  className={`relative h-20 w-28 flex-none overflow-hidden rounded-2xl border text-left transition ${
+                    active ? "border-purple-300" : "border-white/10 hover:border-white/30"
+                  }`}
+                  aria-pressed={active}
+                >
+                  {thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={thumb}
+                      alt={item.altText ?? item.title ?? ""}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className={`h-full w-full bg-gradient-to-br ${item.accent ?? accent}`} />
+                  )}
+                  {item.type === "youtube" ? (
+                    <span className="absolute bottom-1 left-1 rounded-md bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
+                      Video
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className={`rounded-3xl border border-dashed border-white/15 bg-gradient-to-br ${accent} p-8`}>
+          <div className="text-xs uppercase tracking-[0.22em] text-white/65">Media</div>
+          <p className="mt-16 max-w-md text-lg font-bold text-white">
+            This seller has not added product images or videos yet.
+          </p>
+        </div>
+      )}
+    </Panel>
   );
 }
 
