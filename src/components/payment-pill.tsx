@@ -1,16 +1,64 @@
 import { cn } from "@/lib/helpers";
 import type { PaymentMethod, PaymentVerificationStatus } from "@/lib/data";
 
-const paymentStyles: Record<PaymentMethod, { icon: string; label: string; className: string }> = {
-  Crypto: { icon: "₿", label: "Crypto", className: "border-amber-400/20 bg-amber-500/10 text-amber-100" },
-  "PayPal G&S": { icon: "P", label: "PayPal G&S", className: "border-sky-400/20 bg-sky-500/10 text-sky-100" },
-  "PayPal F&F": { icon: "P", label: "PayPal F&F", className: "border-blue-400/20 bg-blue-500/10 text-blue-100" },
-  Card: { icon: "◫", label: "Card", className: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100" },
-  CashApp: { icon: "$", label: "CashApp", className: "border-green-400/20 bg-green-500/10 text-green-100" },
-  Skrill: { icon: "S", label: "Skrill", className: "border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-100" },
-  Wise: { icon: "W", label: "Wise", className: "border-teal-400/20 bg-teal-500/10 text-teal-100" },
-  "Gift Cards": { icon: "🎁", label: "Gift Cards", className: "border-rose-400/20 bg-rose-500/10 text-rose-100" },
-  "Bank Transfer": { icon: "⇄", label: "Bank Transfer", className: "border-indigo-400/20 bg-indigo-500/10 text-indigo-100" },
+const paymentStyles: Record<
+  PaymentMethod,
+  { icon: string; label: string; className: string; markClassName: string }
+> = {
+  Crypto: {
+    icon: "BTC",
+    label: "Crypto",
+    className: "border-amber-300/25 bg-amber-400/10 text-amber-100",
+    markClassName: "from-amber-300 to-orange-500",
+  },
+  "PayPal G&S": {
+    icon: "PP",
+    label: "PayPal G&S",
+    className: "border-sky-300/25 bg-sky-400/10 text-sky-100",
+    markClassName: "from-sky-300 to-blue-600",
+  },
+  "PayPal F&F": {
+    icon: "FF",
+    label: "PayPal F&F",
+    className: "border-blue-300/25 bg-blue-400/10 text-blue-100",
+    markClassName: "from-blue-300 to-indigo-600",
+  },
+  Card: {
+    icon: "CC",
+    label: "Card",
+    className: "border-emerald-300/25 bg-emerald-400/10 text-emerald-100",
+    markClassName: "from-emerald-300 to-teal-600",
+  },
+  CashApp: {
+    icon: "$",
+    label: "CashApp",
+    className: "border-green-300/25 bg-green-400/10 text-green-100",
+    markClassName: "from-green-300 to-emerald-600",
+  },
+  Skrill: {
+    icon: "SK",
+    label: "Skrill",
+    className: "border-fuchsia-300/25 bg-fuchsia-400/10 text-fuchsia-100",
+    markClassName: "from-fuchsia-300 to-purple-700",
+  },
+  Wise: {
+    icon: "W",
+    label: "Wise",
+    className: "border-teal-300/25 bg-teal-400/10 text-teal-100",
+    markClassName: "from-teal-300 to-cyan-700",
+  },
+  "Gift Cards": {
+    icon: "GC",
+    label: "Gift Cards",
+    className: "border-rose-300/25 bg-rose-400/10 text-rose-100",
+    markClassName: "from-rose-300 to-pink-700",
+  },
+  "Bank Transfer": {
+    icon: "BT",
+    label: "Bank Transfer",
+    className: "border-indigo-300/25 bg-indigo-400/10 text-indigo-100",
+    markClassName: "from-indigo-300 to-violet-700",
+  },
 };
 
 const statusStyles: Record<PaymentVerificationStatus, string> = {
@@ -25,11 +73,19 @@ export function PaymentPill({ method, compact = false }: { method: PaymentMethod
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium",
+        "inline-flex items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-xs font-medium shadow-sm shadow-black/10",
         style.className,
       )}
     >
-      <span className={cn("inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/15 bg-black/15 text-[11px] font-bold", compact && "h-4 w-4 text-[10px]")}>{style.icon}</span>
+      <span
+        className={cn(
+          "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-br px-1 text-[8px] font-black text-white shadow-inner shadow-white/15",
+          style.markClassName,
+          compact && "h-4 min-w-5 text-[7px]",
+        )}
+      >
+        {style.icon}
+      </span>
       <span>{style.label}</span>
     </span>
   );

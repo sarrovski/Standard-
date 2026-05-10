@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { featuredSlots as defaultSlots, games, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
+import { cn } from "@/lib/helpers";
+import { getCategoryVisualIdentity, getGameVisualIdentity } from "@/lib/visual-identities";
 
 // Combined status list so the filter works for both demo data ("Verified")
 // and Supabase data ("Published"). data.ts is left unchanged so existing
@@ -72,9 +74,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
         <div className="grid gap-6 xl:grid-cols-4">
           <FilterBlock title="Games">
             {(["All", ...games] as const).map((game) => (
-              <FilterButton key={game} active={selectedGame === game} onClick={() => setSelectedGame(game)}>
-                {game}
-              </FilterButton>
+              <GameFilterButton key={game} game={game} active={selectedGame === game} onClick={() => setSelectedGame(game)} />
             ))}
           </FilterBlock>
           <FilterBlock title="Payments">
@@ -119,7 +119,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
           return (
             <Card key={product.slug} className="overflow-hidden">
               <div
-                className={`relative h-36 overflow-hidden ${
+                className={`relative h-44 overflow-hidden ${
                   "coverImageUrl" in product && product.coverImageUrl
                     ? "bg-slate-950"
                     : `bg-gradient-to-br ${product.accent}`
@@ -134,19 +134,22 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                   />
                 ) : null}
                 <div className="relative p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="rounded-2xl border border-white/20 bg-black/20 px-3 py-2 text-sm font-black text-white">
-                    #{index + 1}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="rounded-2xl border border-white/20 bg-black/20 px-3 py-2 text-sm font-black text-white">
+                        #{index + 1}
+                      </div>
+                      <GameMark game={product.game} />
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
+                      {isFeatured && <Badge tone="purple">Featured</Badge>}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
-                    {isFeatured && <Badge tone="purple">Featured</Badge>}
+                  <div className="mt-7">
+                    <GameBadge game={product.game} />
+                    <h3 className="mt-3 text-2xl font-black text-white">{product.name}</h3>
                   </div>
-                </div>
-                <div className="mt-8">
-                  <div className="text-xs uppercase tracking-[0.24em] text-white/70">{product.game}</div>
-                  <h3 className="mt-2 text-2xl font-black text-white">{product.name}</h3>
-                </div>
                 </div>
               </div>
 
@@ -158,7 +161,10 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                   <Badge>{product.architecture}</Badge>
                 </div>
 
-                <p className="mt-3 text-sm text-slate-400">{product.seller} • {product.category}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-slate-400">{product.seller}</span>
+                  <CategoryBadge category={product.category} />
+                </div>
 
                 <div className="mt-4 grid grid-cols-3 gap-3 text-center text-sm">
                   <StatTile value={String(product.integrity ?? "-")} label="Integrity" />
@@ -212,16 +218,99 @@ function FilterBlock({ title, children }: { title: string; children: React.React
   );
 }
 
+function GameFilterButton({ game, active, onClick }: { game: string; active: boolean; onClick: () => void }) {
+  const identity =
+    game === "All"
+      ? {
+          mark: "All",
+          label: "All games",
+          className: "from-white/70 via-slate-400/70 to-slate-950",
+        }
+      : getGameVisualIdentity(game);
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "group inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition",
+        active
+          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-purple-950/30"
+          : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br px-1.5 text-[10px] font-black text-white shadow-inner shadow-white/10",
+          identity.className,
+          active && "ring-2 ring-white/15",
+        )}
+      >
+        {identity.mark}
+      </span>
+      <span>{game === "All" ? "All" : identity.label}</span>
+    </button>
+  );
+}
+
 function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-full border px-3 py-1.5 text-sm ${
-        active ? "border-purple-400/40 bg-purple-500/15 text-purple-100" : "border-white/10 bg-white/[0.04] text-slate-300"
-      }`}
+      className={cn(
+        "rounded-full border px-3 py-1.5 text-sm transition",
+        active
+          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-purple-950/30"
+          : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
+      )}
     >
       {children}
     </button>
+  );
+}
+
+function GameMark({ game }: { game: string }) {
+  const identity = getGameVisualIdentity(game);
+
+  return (
+    <span
+      className={cn(
+        "inline-flex h-10 min-w-10 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br px-2 text-xs font-black text-white shadow-lg shadow-black/20",
+        identity.className,
+      )}
+    >
+      {identity.mark}
+    </span>
+  );
+}
+
+function GameBadge({ game }: { game: string }) {
+  const identity = getGameVisualIdentity(game);
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/25 py-1 pl-1 pr-3 text-xs font-bold uppercase tracking-[0.16em] text-white/85">
+      <span
+        className={cn(
+          "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-br px-1 text-[9px] font-black text-white",
+          identity.className,
+        )}
+      >
+        {identity.mark}
+      </span>
+      {identity.label}
+    </span>
+  );
+}
+
+function CategoryBadge({ category }: { category: string }) {
+  const identity = getCategoryVisualIdentity(category);
+
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium", identity.className)}>
+      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-white/10 bg-black/15 px-1 text-[8px] font-black">
+        {identity.mark}
+      </span>
+      {category}
+    </span>
   );
 }
 
