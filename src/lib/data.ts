@@ -96,7 +96,7 @@ export function getVerifiedPayments(paymentProfiles: PaymentProfile[]) {
 
 
 export const sellerTags = ["All", "Seller", "Verified Seller", "Provider / Developer"] as const;
-export const productStatuses = ["All", "Verified", "Pending Review"] as const;
+export const productStatuses = ["All", "Published", "Pending Review"] as const;
 
 export const products = [
   {
@@ -107,7 +107,7 @@ export const products = [
     game: "Valorant",
     category: "Analytics / Overlay",
     architecture: "External",
-    productStatus: "Verified",
+    productStatus: "Published",
     integrity: 92 as number | null,
     confidence: "High",
     activity: { vouches: 326, views: 28400, replies: 184, lastSeen: "Recently active" },
@@ -283,7 +283,7 @@ export const products = [
     game: "Fortnite",
     category: "Utility / Companion",
     architecture: "Cloud",
-    productStatus: "Verified",
+    productStatus: "Published",
     integrity: 88 as number | null,
     confidence: "High",
     activity: { vouches: 143, views: 11200, replies: 63, lastSeen: "Today" },
@@ -346,7 +346,7 @@ export const products = [
     game: "Apex Legends",
     category: "Analytics",
     architecture: "External",
-    productStatus: "Verified",
+    productStatus: "Published",
     integrity: 90 as number | null,
     confidence: "High",
     activity: { vouches: 201, views: 16700, replies: 92, lastSeen: "Recently active" },
