@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { GameLogo } from "@/components/game-logo";
 import { Badge, ButtonLink, Card } from "@/components/ui";
 import { products as demoProducts } from "@/lib/data";
 import { getLocalProducts } from "@/lib/product-store";
@@ -119,7 +120,16 @@ export function ProductPageClient({
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
               <Badge tone={product.sellerTag === "Provider / Developer" ? "cyan" : product.sellerTag === "Verified Seller" ? "green" : "default"}>{product.sellerTag}</Badge>
-              <Badge>{product.game}</Badge>
+              <Badge>
+                <span className="inline-flex items-center gap-1.5">
+                  <GameLogo
+                    game={product.game}
+                    className="h-4 min-w-4 rounded-full px-1 text-[8px] font-black text-white"
+                    imageClassName="p-0.5"
+                  />
+                  {product.game}
+                </span>
+              </Badge>
               <Badge>{product.architecture}</Badge>
             </div>
             <h1 className="mt-6 text-4xl font-black md:text-5xl">{product.name}</h1>
