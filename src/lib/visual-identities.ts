@@ -2,6 +2,8 @@ export type VisualIdentity = {
   mark: string;
   label: string;
   className: string;
+  logoSrc?: string;
+  logoAlt?: string;
 };
 
 const unknownGameIdentity: VisualIdentity = {
@@ -15,41 +17,57 @@ const gameIdentities: Record<string, VisualIdentity> = {
     mark: "V",
     label: "Valorant",
     className: "from-rose-500/85 via-red-500/60 to-slate-950",
+    logoSrc: "/brand/games/valorant.svg",
+    logoAlt: "Valorant logo",
   },
   CS2: {
     mark: "CS",
     label: "CS2",
     className: "from-amber-400/85 via-orange-500/65 to-zinc-950",
+    logoSrc: "/brand/games/cs2.svg",
+    logoAlt: "CS2 logo",
   },
   Fortnite: {
     mark: "F",
     label: "Fortnite",
     className: "from-sky-400/85 via-indigo-500/70 to-fuchsia-950",
+    logoSrc: "/brand/games/fortnite.svg",
+    logoAlt: "Fortnite logo",
   },
   "Apex Legends": {
     mark: "A",
     label: "Apex Legends",
     className: "from-orange-500/90 via-red-500/70 to-stone-950",
+    logoSrc: "/brand/games/apex-legends.svg",
+    logoAlt: "Apex Legends logo",
   },
   "Call of Duty": {
     mark: "COD",
     label: "Call of Duty",
     className: "from-emerald-400/80 via-lime-700/65 to-neutral-950",
+    logoSrc: "/brand/games/call-of-duty.svg",
+    logoAlt: "Call of Duty logo",
   },
   "League of Legends": {
     mark: "LoL",
     label: "League of Legends",
     className: "from-cyan-300/85 via-blue-700/70 to-amber-950",
+    logoSrc: "/brand/games/league-of-legends.svg",
+    logoAlt: "League of Legends logo",
   },
   "Escape from Tarkov": {
     mark: "EFT",
     label: "Escape from Tarkov",
     className: "from-lime-300/75 via-emerald-900/75 to-zinc-950",
+    logoSrc: "/brand/games/escape-from-tarkov.svg",
+    logoAlt: "Escape from Tarkov logo",
   },
   Rust: {
     mark: "R",
     label: "Rust",
     className: "from-orange-600/90 via-stone-600/75 to-zinc-950",
+    logoSrc: "/brand/games/rust.svg",
+    logoAlt: "Rust logo",
   },
 };
 

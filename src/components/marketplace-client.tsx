@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { GameLogo } from "@/components/game-logo";
 import { Badge, Card } from "@/components/ui";
 import { featuredSlots as defaultSlots, games, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
 import { cn } from "@/lib/helpers";
@@ -238,15 +239,14 @@ function GameFilterButton({ game, active, onClick }: { game: string; active: boo
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >
-      <span
+      <GameLogo
+        identity={identity}
         className={cn(
-          "inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-white/20 bg-gradient-to-br px-1.5 text-[10px] font-black text-white shadow-inner shadow-white/10",
-          identity.className,
+          "h-6 min-w-6 rounded-full border border-white/20 px-1.5 text-[10px] font-black text-white shadow-inner shadow-white/10",
           active && "ring-2 ring-white/15",
         )}
-      >
-        {identity.mark}
-      </span>
+        imageClassName="p-1"
+      />
       <span>{game === "All" ? "All" : identity.label}</span>
     </button>
   );
@@ -272,14 +272,11 @@ function GameMark({ game }: { game: string }) {
   const identity = getGameVisualIdentity(game);
 
   return (
-    <span
-      className={cn(
-        "inline-flex h-10 min-w-10 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br px-2 text-xs font-black text-white shadow-lg shadow-black/20",
-        identity.className,
-      )}
-    >
-      {identity.mark}
-    </span>
+    <GameLogo
+      identity={identity}
+      className="h-10 min-w-10 rounded-2xl border border-white/20 px-2 text-xs font-black text-white shadow-lg shadow-black/20"
+      imageClassName="p-2"
+    />
   );
 }
 
@@ -288,14 +285,11 @@ function GameBadge({ game }: { game: string }) {
 
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/25 py-1 pl-1 pr-3 text-xs font-bold uppercase tracking-[0.16em] text-white/85">
-      <span
-        className={cn(
-          "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-br px-1 text-[9px] font-black text-white",
-          identity.className,
-        )}
-      >
-        {identity.mark}
-      </span>
+      <GameLogo
+        identity={identity}
+        className="h-5 min-w-5 rounded-full px-1 text-[9px] font-black text-white"
+        imageClassName="p-0.5"
+      />
       {identity.label}
     </span>
   );
