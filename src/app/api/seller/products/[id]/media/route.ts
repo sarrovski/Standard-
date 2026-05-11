@@ -8,6 +8,7 @@ import {
   isStorageError,
   uploadProductMedia,
 } from "@/lib/storage";
+import { parseYouTubeUrl } from "@/lib/youtube";
 import type { Database } from "@/lib/supabase/types";
 
 /**
@@ -54,7 +55,29 @@ type DeleteBody = {
   storage_path?: unknown;
 };
 
-type AuthError = { error: string; status: number; step?: string };
+type VideoBody = {
+  type?: unknown;
+  url?: unknown;
+  title?: unknown;
+  alt_text?: unknown;
+};
+
+type MediaApiStep =
+  | "auth"
+  | "ownership"
+  | "validation"
+  | "storage_upload"
+  | "storage_delete"
+  | "product_media_insert"
+  | "product_media_delete";
+
+type AuthError = {
+  error: string;
+  status: number;
+  step?: MediaApiStep;
+  code?: string;
+  details?: string;
+};
 
 type AuthSuccess = {
   user: NonNullable<
@@ -104,7 +127,8 @@ async function authSeller(productId: string): Promise<AuthResult> {
     return {
       error: "Missing Supabase service role configuration",
       status: 500,
-      step: "admin_client",
+      step: "auth",
+      code: "admin_client",
     };
   }
 
@@ -175,15 +199,60 @@ async function authSeller(productId: string): Promise<AuthResult> {
 function authErrorResponse(auth: {
   error: string;
   status: number;
-  step?: string;
+  step?: MediaApiStep;
+  code?: string;
+  details?: string;
 }) {
   return NextResponse.json(
     {
       error: auth.error,
       ...(auth.step ? { step: auth.step } : {}),
+      ...(auth.code ? { code: auth.code } : {}),
+      ...(auth.details ? { details: auth.details } : {}),
     },
     { status: auth.status },
   );
+}
+
+function jsonError(
+  status: number,
+  error: string,
+  step: MediaApiStep,
+  extra: { code?: string; details?: string } = {},
+) {
+  return NextResponse.json({ error, step, ...extra }, { status });
+}
+
+async function getNextSortOrder(
+  adminSupabase: ReturnType<typeof createAdminClient>,
+  productId: string,
+) {
+  const { data: lastMedia } = await adminSupabase
+    .from("product_media")
+    .select("sort_order")
+    .eq("product_id", productId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ sort_order: number }>();
+  return (lastMedia?.sort_order ?? -1) + 1;
+}
+
+function mediaSelect() {
+  return [
+    "id",
+    "product_id",
+    "storage_path",
+    "public_url",
+    "alt_text",
+    "sort_order",
+    "media_type",
+    "external_url",
+    "provider",
+    "video_id",
+    "thumbnail_url",
+    "title",
+    "created_at",
+  ].join(", ");
 }
 
 export async function POST(
@@ -203,35 +272,34 @@ export async function POST(
     return authErrorResponse(auth);
   }
 
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return addYouTubeMedia(request, productId, auth);
+  }
+
+  return addImageMedia(request, productId, auth);
+}
+
+async function addImageMedia(
+  request: NextRequest,
+  productId: string,
+  auth: AuthSuccess,
+) {
   let formData: FormData;
   try {
     formData = await request.formData();
   } catch {
-    return NextResponse.json(
-      { error: "Expected multipart/form-data body.", step: "storage_upload" },
-      { status: 400 },
-    );
+    return jsonError(400, "Expected multipart/form-data body.", "storage_upload");
   }
 
   const fileEntry = formData.get("file");
   if (!(fileEntry instanceof File)) {
-    return NextResponse.json(
-      { error: "No file provided in 'file' field.", step: "storage_upload" },
-      { status: 400 },
-    );
+    return jsonError(400, "No file provided in 'file' field.", "storage_upload");
   }
   const altTextRaw = formData.get("alt_text");
   const altText = readString(typeof altTextRaw === "string" ? altTextRaw : null);
 
-  // sort_order via admin client (bypass RLS).
-  const { data: lastMedia } = await auth.adminSupabase
-    .from("product_media")
-    .select("sort_order")
-    .eq("product_id", productId)
-    .order("sort_order", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ sort_order: number }>();
-  const nextSortOrder = (lastMedia?.sort_order ?? -1) + 1;
+  const nextSortOrder = await getNextSortOrder(auth.adminSupabase, productId);
 
   // Storage upload via admin client. This is the Batch 12 fix — previously
   // lib/storage.ts created its own cookies-scoped client, so storage.objects
@@ -263,21 +331,15 @@ export async function POST(
     public_url: upload.publicUrl,
     alt_text: altText,
     sort_order: nextSortOrder,
+    media_type: "image",
   };
 
   // Privileged DB write — admin client.
   const { data, error: insertError } = await auth.adminSupabase
     .from("product_media")
     .insert(insertRow as never)
-    .select("id, product_id, storage_path, public_url, alt_text, sort_order")
-    .single<{
-      id: string;
-      product_id: string;
-      storage_path: string;
-      public_url: string | null;
-      alt_text: string | null;
-      sort_order: number;
-    }>();
+    .select(mediaSelect())
+    .single<Database["public"]["Tables"]["product_media"]["Row"]>();
 
   if (insertError || !data) {
     // Best-effort cleanup: drop the orphan storage object via admin client.
@@ -299,14 +361,96 @@ export async function POST(
       insertError?.details,
     );
     const detail = insertError?.message ?? "Unknown insert error.";
-    return NextResponse.json(
+    return jsonError(
+      500,
+      `product_media_insert failed: ${detail}`,
+      "product_media_insert",
       {
-        error: `product_media_insert failed: ${detail}`,
-        step: "product_media_insert",
-        ...(insertError?.code ? { code: insertError.code } : {}),
-        ...(insertError?.details ? { details: insertError.details } : {}),
+        code: insertError?.code,
+        details: insertError?.details ?? undefined,
       },
-      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ media: data });
+}
+
+async function addYouTubeMedia(
+  request: NextRequest,
+  productId: string,
+  auth: AuthSuccess,
+) {
+  let raw: VideoBody;
+  try {
+    raw = (await request.json()) as VideoBody;
+  } catch {
+    return jsonError(400, "Invalid JSON body.", "validation", {
+      code: "invalid_json",
+    });
+  }
+
+  const type = readString(raw.type);
+  const url = readString(raw.url);
+  const title = readString(raw.title);
+  const altText = readString(raw.alt_text);
+
+  if (type !== "youtube") {
+    return jsonError(400, "Only YouTube video links are supported.", "validation", {
+      code: "unsupported_media_type",
+    });
+  }
+  if (!url) {
+    return jsonError(400, "YouTube URL is required.", "validation", {
+      code: "missing_url",
+    });
+  }
+
+  const parsed = parseYouTubeUrl(url);
+  if (!parsed) {
+    return jsonError(
+      400,
+      "Enter a valid YouTube watch, short, embed, shorts, or youtu.be URL.",
+      "validation",
+      { code: "invalid_youtube_url" },
+    );
+  }
+
+  const nextSortOrder = await getNextSortOrder(auth.adminSupabase, productId);
+  const insertRow: ProductMediaInsert = {
+    product_id: productId,
+    storage_path: null,
+    public_url: null,
+    alt_text: altText,
+    sort_order: nextSortOrder,
+    media_type: "youtube",
+    external_url: parsed.normalizedUrl,
+    provider: "youtube",
+    video_id: parsed.videoId,
+    thumbnail_url: parsed.thumbnailUrl,
+    title,
+  };
+
+  const { data, error: insertError } = await auth.adminSupabase
+    .from("product_media")
+    .insert(insertRow as never)
+    .select(mediaSelect())
+    .single<Database["public"]["Tables"]["product_media"]["Row"]>();
+
+  if (insertError || !data) {
+    console.error(
+      "[api/seller/products/[id]/media POST] youtube insert failed:",
+      insertError?.message,
+      insertError?.code,
+      insertError?.details,
+    );
+    return jsonError(
+      500,
+      `product_media_insert failed: ${insertError?.message ?? "Unknown insert error."}`,
+      "product_media_insert",
+      {
+        code: insertError?.code,
+        details: insertError?.details ?? undefined,
+      },
     );
   }
 
@@ -355,23 +499,38 @@ export async function DELETE(
   // Resolve the media row via admin client. We re-check product_id as
   // defense-in-depth — even though authSeller already verified ownership.
   let row:
-    | { id: string; product_id: string; storage_path: string }
+    | {
+        id: string;
+        product_id: string;
+        storage_path: string | null;
+        media_type: "image" | "youtube";
+      }
     | null = null;
   if (mediaId) {
     const { data } = await auth.adminSupabase
       .from("product_media")
-      .select("id, product_id, storage_path")
+      .select("id, product_id, storage_path, media_type")
       .eq("id", mediaId)
       .eq("product_id", productId)
-      .maybeSingle<{ id: string; product_id: string; storage_path: string }>();
+      .maybeSingle<{
+        id: string;
+        product_id: string;
+        storage_path: string | null;
+        media_type: "image" | "youtube";
+      }>();
     row = data ?? null;
   } else if (storagePath) {
     const { data } = await auth.adminSupabase
       .from("product_media")
-      .select("id, product_id, storage_path")
+      .select("id, product_id, storage_path, media_type")
       .eq("storage_path", storagePath)
       .eq("product_id", productId)
-      .maybeSingle<{ id: string; product_id: string; storage_path: string }>();
+      .maybeSingle<{
+        id: string;
+        product_id: string;
+        storage_path: string | null;
+        media_type: "image" | "youtube";
+      }>();
     row = data ?? null;
   }
 
@@ -385,24 +544,33 @@ export async function DELETE(
     );
   }
 
-  // Storage delete via admin client.
-  const storageErr = await deleteProductMedia(
-    auth.adminSupabase,
-    row.storage_path,
-  );
-  if (storageErr) {
-    console.error(
-      "[api/seller/products/[id]/media DELETE] storage delete failed:",
-      storageErr.message,
+  // Storage delete via admin client for images. YouTube link rows have no
+  // storage object and delete only the DB row below.
+  if (row.media_type === "image") {
+    if (!row.storage_path) {
+      return jsonError(
+        500,
+        "Image media row is missing storage_path.",
+        "storage_delete",
+        { code: "missing_storage_path" },
+      );
+    }
+    const storageErr = await deleteProductMedia(
+      auth.adminSupabase,
+      row.storage_path,
     );
-    return NextResponse.json(
-      {
-        error: `storage_delete failed: ${storageErr.message}`,
-        step: "storage_delete",
-        code: storageErr.code,
-      },
-      { status: 500 },
-    );
+    if (storageErr) {
+      console.error(
+        "[api/seller/products/[id]/media DELETE] storage delete failed:",
+        storageErr.message,
+      );
+      return jsonError(
+        500,
+        `storage_delete failed: ${storageErr.message}`,
+        "storage_delete",
+        { code: storageErr.code },
+      );
+    }
   }
 
   // DB delete via admin client.

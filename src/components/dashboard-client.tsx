@@ -22,6 +22,7 @@ import type {
   LocalProduct,
 } from "@/lib/product-types";
 import type { PaymentMethod } from "@/lib/data";
+import { youtubeEmbedUrl } from "@/lib/youtube";
 import type {
   UIProductMedia,
   UISellerPaymentMethodOption,
@@ -203,6 +204,37 @@ export function DashboardClient({
 // Per-product media upload + thumbnails (Supabase mode only)
 // =========================================================================
 
+type ProductMediaApiRow = {
+  id: string;
+  storage_path: string | null;
+  public_url: string | null;
+  alt_text: string | null;
+  sort_order: number;
+  media_type?: string | null;
+  external_url?: string | null;
+  provider?: string | null;
+  video_id?: string | null;
+  thumbnail_url?: string | null;
+  title?: string | null;
+};
+
+function apiMediaToUI(row: ProductMediaApiRow): UIProductMedia {
+  const type = row.media_type === "youtube" ? "youtube" : "image";
+  return {
+    id: row.id,
+    type,
+    storagePath: row.storage_path,
+    publicUrl: row.public_url,
+    imageUrl: type === "image" ? row.public_url : null,
+    thumbnailUrl: type === "youtube" ? row.thumbnail_url ?? null : row.public_url,
+    embedUrl: type === "youtube" && row.video_id ? youtubeEmbedUrl(row.video_id) : null,
+    externalUrl: row.external_url ?? null,
+    altText: row.alt_text,
+    title: row.title ?? row.alt_text ?? (type === "youtube" ? "Product video" : "Product image"),
+    sortOrder: row.sort_order,
+  };
+}
+
 function ProductMediaPanel({
   productId,
   initialMedia,
@@ -212,19 +244,22 @@ function ProductMediaPanel({
 }) {
   const [media, setMedia] = useState<UIProductMedia[]>(initialMedia);
   const [altText, setAltText] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoTitle, setVideoTitle] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [addingVideo, setAddingVideo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
   // Tracks the most recent successful upload so we can mark it as "Saved"
   // briefly. Auto-clears after a few seconds so the badge doesn't stick on
   // older items forever.
   const [lastSavedId, setLastSavedId] = useState<string | null>(null);
-  const [savedNotice, setSavedNotice] = useState(false);
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!savedNotice) return;
     const timeout = window.setTimeout(() => {
-      setSavedNotice(false);
+      setSavedNotice(null);
       setLastSavedId(null);
     }, 4000);
     return () => window.clearTimeout(timeout);
@@ -236,27 +271,21 @@ function ProductMediaPanel({
     event.target.value = "";
     if (!file) return;
     setError(null);
-    setSavedNotice(false);
+    setSavedNotice(null);
     setLastSavedId(null);
 
     const formData = new FormData();
     formData.append("file", file);
     if (altText.trim()) formData.append("alt_text", altText.trim());
 
-    setBusy(true);
+    setUploading(true);
     try {
       const response = await fetch(`/api/seller/products/${productId}/media`, {
         method: "POST",
         body: formData,
       });
       const payload = (await response.json()) as {
-        media?: {
-          id: string;
-          storage_path: string;
-          public_url: string | null;
-          alt_text: string | null;
-          sort_order: number;
-        };
+        media?: ProductMediaApiRow;
         error?: string;
         step?: string;
         code?: string;
@@ -273,21 +302,62 @@ function ProductMediaPanel({
       }
       setMedia((prev) => [
         ...prev,
-        {
-          id: uploaded.id,
-          storagePath: uploaded.storage_path,
-          publicUrl: uploaded.public_url,
-          altText: uploaded.alt_text,
-          sortOrder: uploaded.sort_order,
-        },
+        apiMediaToUI(uploaded),
       ]);
       setAltText("");
       setLastSavedId(uploaded.id);
-      setSavedNotice(true);
+      setSavedNotice("Image uploaded and saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error.");
     } finally {
-      setBusy(false);
+      setUploading(false);
+    }
+  };
+
+  const handleAddVideo = async () => {
+    setError(null);
+    setSavedNotice(null);
+    setLastSavedId(null);
+    if (!videoUrl.trim()) {
+      setError("[validation] Enter a YouTube URL.");
+      return;
+    }
+
+    setAddingVideo(true);
+    try {
+      const response = await fetch(`/api/seller/products/${productId}/media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "youtube",
+          url: videoUrl,
+          title: videoTitle || undefined,
+          alt_text: altText || undefined,
+        }),
+      });
+      const payload = (await response.json()) as {
+        media?: ProductMediaApiRow;
+        error?: string;
+        step?: string;
+        code?: string;
+        details?: string;
+      };
+      const added = payload.media;
+      if (!response.ok || !added) {
+        const stepLabel = payload.step ? `[${payload.step}] ` : "";
+        const detailSuffix = payload.details ? ` (${payload.details})` : "";
+        setError(`${stepLabel}${payload.error ?? "Could not add video."}${detailSuffix}`);
+        return;
+      }
+      setMedia((prev) => [...prev, apiMediaToUI(added)]);
+      setVideoUrl("");
+      setVideoTitle("");
+      setLastSavedId(added.id);
+      setSavedNotice("Video added and saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setAddingVideo(false);
     }
   };
 
@@ -320,20 +390,30 @@ function ProductMediaPanel({
 
   return (
     <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-      <div className="text-xs text-slate-500">Media</div>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Media</div>
+          <p className="mt-2 text-sm text-slate-400">
+            Add uploaded images or seller-provided YouTube links.
+          </p>
+        </div>
+        <Badge tone="purple">{media.length} items</Badge>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         {media.map((m) => {
           const isJustSaved = m.id === lastSavedId;
+          const previewUrl = m.type === "youtube" ? m.thumbnailUrl : m.imageUrl;
           return (
             <div
               key={m.id}
               className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/40 aspect-square"
             >
-              {m.publicUrl ? (
+              {previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={m.publicUrl}
-                  alt={m.altText ?? ""}
+                  src={previewUrl}
+                  alt={m.altText ?? m.title ?? ""}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -341,8 +421,11 @@ function ProductMediaPanel({
                   No URL
                 </div>
               )}
+              <div className="absolute left-1 top-1 rounded-md border border-white/20 bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white">
+                {m.type === "youtube" ? "YouTube" : "Image"}
+              </div>
               {isJustSaved && (
-                <div className="absolute left-1 top-1 rounded-md border border-emerald-400/40 bg-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-50">
+                <div className="absolute bottom-1 left-1 rounded-md border border-emerald-400/40 bg-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-50">
                   Saved
                 </div>
               )}
@@ -358,46 +441,80 @@ function ProductMediaPanel({
           );
         })}
         {media.length === 0 && (
-          <div className="col-span-full text-xs text-slate-500">
+          <div className="col-span-full rounded-xl border border-dashed border-white/15 bg-black/20 p-4 text-sm text-slate-400">
             No media yet.
           </div>
         )}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-        <label className="block">
-          <span className="text-[11px] text-slate-500">Alt text (optional)</span>
-          <input
-            value={altText}
-            onChange={(event) => setAltText(event.target.value)}
-            placeholder="Describe the image"
-            className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
-          />
-        </label>
-        <label
-          className={`inline-flex cursor-pointer items-center justify-center rounded-lg border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-200 ${
-            busy ? "opacity-60" : ""
-          }`}
-        >
-          {busy ? "Uploading..." : "Upload image"}
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={handleUpload}
-            disabled={busy}
-            className="hidden"
-          />
-        </label>
-      </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="text-sm font-semibold">Images</div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <label className="block">
+              <span className="text-[11px] text-slate-500">Alt text (optional)</span>
+              <input
+                value={altText}
+                onChange={(event) => setAltText(event.target.value)}
+                placeholder="Describe the image or video"
+                className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
+              />
+            </label>
+            <label
+              className={`inline-flex cursor-pointer items-center justify-center rounded-lg border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-200 ${
+                uploading ? "opacity-60" : ""
+              }`}
+            >
+              {uploading ? "Uploading..." : "Upload image"}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleUpload}
+                disabled={uploading}
+                className="hidden"
+              />
+            </label>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">
+            Images are saved automatically as soon as they upload.
+          </p>
+        </div>
 
-      <p className="mt-2 text-[11px] text-slate-500">
-        Images are saved automatically as soon as they upload — no extra
-        step needed.
-      </p>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="text-sm font-semibold">YouTube video</div>
+          <div className="mt-3 grid gap-3">
+            <input
+              value={videoUrl}
+              onChange={(event) => setVideoUrl(event.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
+            />
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <input
+                value={videoTitle}
+                onChange={(event) => setVideoTitle(event.target.value)}
+                placeholder="Video title (optional)"
+                className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddVideo}
+                disabled={addingVideo}
+                className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-60"
+              >
+                {addingVideo ? "Adding..." : "Add video"}
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">
+            Standard stores a safe YouTube ID and embeds from that ID.
+          </p>
+        </div>
+      </div>
 
       {savedNotice && (
         <div className="mt-3 rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-2 text-xs text-emerald-100">
-          Image uploaded and saved.
+          {savedNotice}
         </div>
       )}
 
