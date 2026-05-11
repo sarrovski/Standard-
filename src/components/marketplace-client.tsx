@@ -5,12 +5,13 @@ import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { featuredSlots as defaultSlots, games, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
 import { cn } from "@/lib/helpers";
+import { getPaymentVisualIdentity } from "@/lib/payment-identities";
 import { getCategoryVisualIdentity, getGameVisualIdentity } from "@/lib/visual-identities";
 
-// Combined status list so the filter works for both demo data ("Verified")
-// and Supabase data ("Published"). data.ts is left unchanged so existing
-// demo content keeps its labels; this local list is what the UI shows.
-const allProductStatuses = ["All", "Published", "Verified", "Pending Review"] as const;
+// Supabase marketplace results are already constrained to published products.
+// Pending review and draft products are never shown publicly.
+const publicProductStatuses = ["All", "Published"] as const;
+const publicVisibleStatuses = new Set<string>(["Published"]);
 
 import { getFeaturedSlots, getLocalProducts } from "@/lib/product-store";
 import type { LocalFeaturedSlot, LocalProduct } from "@/lib/product-types";
@@ -46,7 +47,9 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
 
   const allProducts = useMemo(() => {
     if (supabaseSourced) return initialProducts ?? [];
-    return [...localProducts, ...demoProducts];
+    return [...localProducts, ...demoProducts].filter((product) =>
+      publicVisibleStatuses.has(product.productStatus),
+    );
   }, [supabaseSourced, initialProducts, localProducts]);
 
   const filtered = allProducts.filter((product) => {
@@ -79,9 +82,12 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
           </FilterBlock>
           <FilterBlock title="Payments">
             {(["All", ...paymentMethods] as const).map((payment) => (
-              <FilterButton key={payment} active={selectedPayment === payment} onClick={() => setSelectedPayment(payment)}>
-                {payment}
-              </FilterButton>
+              <PaymentFilterButton
+                key={payment}
+                payment={payment}
+                active={selectedPayment === payment}
+                onClick={() => setSelectedPayment(payment)}
+              />
             ))}
           </FilterBlock>
           <FilterBlock title="Seller tag">
@@ -92,7 +98,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
             ))}
           </FilterBlock>
           <FilterBlock title="Status">
-            {allProductStatuses.map((status) => (
+            {publicProductStatuses.map((status) => (
               <FilterButton key={status} active={selectedStatus === status} onClick={() => setSelectedStatus(status)}>
                 {status}
               </FilterButton>
@@ -264,6 +270,41 @@ function FilterButton({ active, onClick, children }: { active: boolean; onClick:
       )}
     >
       {children}
+    </button>
+  );
+}
+
+function PaymentFilterButton({ payment, active, onClick }: { payment: string; active: boolean; onClick: () => void }) {
+  const identity =
+    payment === "All"
+      ? {
+          mark: "All",
+          label: "All",
+          className: "border-white/10 bg-white/[0.04] text-slate-300",
+          markClassName: "from-white/70 via-slate-400/70 to-slate-950",
+        }
+      : getPaymentVisualIdentity(payment);
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition",
+        active
+          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-purple-950/30"
+          : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-flex h-6 min-w-7 items-center justify-center rounded-full bg-gradient-to-br px-1.5 text-[8px] font-black text-white shadow-inner shadow-white/15",
+          identity.markClassName,
+          active && "ring-2 ring-white/15",
+        )}
+      >
+        {identity.mark}
+      </span>
+      <span>{identity.label}</span>
     </button>
   );
 }
