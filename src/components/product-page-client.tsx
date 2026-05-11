@@ -6,8 +6,8 @@ import { Badge, ButtonLink, Card } from "@/components/ui";
 import { products as demoProducts } from "@/lib/data";
 import { getLocalProducts } from "@/lib/product-store";
 import type { UIProductDetail } from "@/lib/adapters";
-import type { PaymentMethod, PaymentProfile } from "@/lib/data";
-import { NoVerifiedPayments, PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
+import type { PaymentMethod } from "@/lib/data";
+import { NoVerifiedPayments, PaymentPill } from "@/components/payment-pill";
 
 // Shape the page actually renders. UIProductDetail (Supabase-sourced) and the
 // demo products (data.ts) both satisfy this. Fields the UI uses but neither
@@ -30,7 +30,6 @@ type RenderableProduct = {
   features: string[];
   pricePoints: string[];
   verifiedPayments: PaymentMethod[];
-  paymentProfiles: PaymentProfile[];
   trustSignals?: string[];
   gallery?: { title: string; accent: string; imageUrl?: string | null }[];
   faq?: { q: string; a: string }[];
@@ -57,14 +56,18 @@ export function ProductPageClient({
     if (initialProduct) return initialProduct;
     // Demo path: data.ts fixture.
     const demo = demoProducts.find((item) => item.slug === slug);
-    return demo ? (demo as unknown as RenderableProduct) : null;
+    return demo && demo.productStatus === "Published"
+      ? (demo as unknown as RenderableProduct)
+      : null;
   });
 
   useEffect(() => {
     // Only fall back to the local builder products in demo mode.
     if (supabaseSourced) return;
     const local = getLocalProducts().find((item) => item.slug === slug);
-    if (local) setProduct(local as unknown as RenderableProduct);
+    if (local && local.productStatus === "Published") {
+      setProduct(local as unknown as RenderableProduct);
+    }
   }, [slug, supabaseSourced]);
 
   if (!product) {
@@ -114,7 +117,7 @@ export function ProductPageClient({
         <Card className="overflow-hidden border-purple-400/30">
           <div className={`bg-gradient-to-br ${product.accent} p-8`}>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={product.productStatus === "Verified" ? "green" : "amber"}>{product.productStatus}</Badge>
+              <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
               <Badge tone={product.sellerTag === "Provider / Developer" ? "cyan" : product.sellerTag === "Verified Seller" ? "green" : "default"}>{product.sellerTag}</Badge>
               <Badge>{product.game}</Badge>
               <Badge>{product.architecture}</Badge>
@@ -226,24 +229,6 @@ export function ProductPageClient({
                 product.verifiedPayments.map((payment) => <PaymentPill key={payment} method={payment} />)
               ) : (
                 <NoVerifiedPayments />
-              )}
-            </div>
-          </Panel>
-
-          <Panel title="Payment methods under review">
-            <div className="space-y-3">
-              {product.paymentProfiles
-                .filter((payment) => payment.status === "Pending verification" || payment.status === "Needs re-check")
-                .map((payment) => (
-                  <div key={payment.method} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <PaymentPill method={payment.method} />
-                      <PaymentStatusPill status={payment.status} />
-                    </div>
-                  </div>
-                ))}
-              {product.paymentProfiles.filter((payment) => payment.status === "Pending verification" || payment.status === "Needs re-check").length === 0 && (
-                <p className="text-sm text-slate-500">No payment methods under review.</p>
               )}
             </div>
           </Panel>

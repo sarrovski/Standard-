@@ -26,7 +26,6 @@ export function Nav() {
 
       <div className="hidden items-center gap-7 text-sm font-medium text-slate-300 md:flex">
         <Link href="/marketplace" className="transition hover:text-white">Marketplace</Link>
-        <Link href="/creators" className="transition hover:text-white">Creators</Link>
         <Link href="/start-selling" className="transition hover:text-white">Start Selling</Link>
         <Link href="/trust" className="transition hover:text-white">Trust</Link>
         <Link href="/plans" className="transition hover:text-white">Plans</Link>

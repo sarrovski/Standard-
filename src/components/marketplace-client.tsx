@@ -7,10 +7,10 @@ import { featuredSlots as defaultSlots, games, products as demoProducts, payment
 import { cn } from "@/lib/helpers";
 import { getCategoryVisualIdentity, getGameVisualIdentity } from "@/lib/visual-identities";
 
-// Combined status list so the filter works for both demo data ("Verified")
-// and Supabase data ("Published"). data.ts is left unchanged so existing
-// demo content keeps its labels; this local list is what the UI shows.
-const allProductStatuses = ["All", "Published", "Verified", "Pending Review"] as const;
+// Supabase marketplace results are already constrained to published products.
+// Pending review and draft products are never shown publicly.
+const publicProductStatuses = ["All", "Published"] as const;
+const publicVisibleStatuses = new Set<string>(["Published"]);
 
 import { getFeaturedSlots, getLocalProducts } from "@/lib/product-store";
 import type { LocalFeaturedSlot, LocalProduct } from "@/lib/product-types";
@@ -46,7 +46,9 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
 
   const allProducts = useMemo(() => {
     if (supabaseSourced) return initialProducts ?? [];
-    return [...localProducts, ...demoProducts];
+    return [...localProducts, ...demoProducts].filter((product) =>
+      publicVisibleStatuses.has(product.productStatus),
+    );
   }, [supabaseSourced, initialProducts, localProducts]);
 
   const filtered = allProducts.filter((product) => {
@@ -92,7 +94,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
             ))}
           </FilterBlock>
           <FilterBlock title="Status">
-            {allProductStatuses.map((status) => (
+            {publicProductStatuses.map((status) => (
               <FilterButton key={status} active={selectedStatus === status} onClick={() => setSelectedStatus(status)}>
                 {status}
               </FilterButton>

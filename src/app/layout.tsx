@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Standard | Trusted Gaming Tool Marketplace",
   description:
-    "Discover real gaming tool references, compare seller trust, payment methods, reseller offers, and verified product facts.",
+    "Discover real gaming tool products, compare seller trust, verified payment methods, and product facts.",
 };
 
 export default function RootLayout({

@@ -102,7 +102,7 @@ export function PaymentStatusPill({ status }: { status: PaymentVerificationStatu
 export function NoVerifiedPayments() {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-400">
-      Payment methods not verified yet
+      No verified payment methods yet.
     </div>
   );
 }
