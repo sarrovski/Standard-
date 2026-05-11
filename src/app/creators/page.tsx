@@ -129,7 +129,7 @@ export default function CreatorsPage() {
 
         <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">
           These creator cards are sample profiles for validation; live creator
-          listings are not active yet.
+          products are not active yet.
         </div>
 
         <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
