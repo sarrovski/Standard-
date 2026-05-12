@@ -643,14 +643,20 @@ function Products({
     }));
     return [
       ...localCards,
-      ...demoSellerProducts.map((item) => ({
-        ...item,
-        id: "phantomx-tracker",
-        slug: "phantomx-tracker",
-        category: "Analytics / Overlay",
-        rawStatus: "published" as const,
-        media: [],
-      })),
+      ...demoSellerProducts.map((item) => {
+        const slug = item.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+        return {
+          ...item,
+          id: slug,
+          slug,
+          category: "Analytics / Overlay",
+          rawStatus: "published" as const,
+          media: [],
+        };
+      }),
     ];
   }, [supabaseSourced, initialProducts, demoProductsList]);
 
@@ -754,7 +760,7 @@ function Products({
         <MiniStat label="Avg outbound CTR" value="4.93%" detail="+0.8 pts" />
       </section>
 
-      <Card className="overflow-hidden">
+      <Card>
         <div className="flex flex-col gap-4 border-b border-white/10 p-5 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-xl font-bold">Produits en ligne</h2>
@@ -822,7 +828,7 @@ function Products({
               No products match &ldquo;{searchQuery}&rdquo;.
             </p>
           )}
-          {filteredProducts.map((product) => {
+          {filteredProducts.map((product, productIndex) => {
             const thumbnail = product.media?.find(
               (item) => item.imageUrl || item.thumbnailUrl,
             );
@@ -832,6 +838,11 @@ function Products({
             const isMediaOpen = openMediaIds.has(product.id);
             const isBusy = busyProductId === product.id;
             const mediaCount = product.media?.length ?? 0;
+            // Drop the kebab menu upward for rows near the bottom of the
+            // list so it doesn't overflow the card / viewport.
+            const dropUp =
+              filteredProducts.length > 1 &&
+              productIndex >= filteredProducts.length - 2;
             return (
               <div key={product.slug + product.name} className="px-5 py-3">
                 <div className="flex items-center gap-4">
@@ -868,8 +879,8 @@ function Products({
                       <h3 className="truncate text-base font-semibold leading-tight">
                         {product.name}
                       </h3>
-                      <Badge tone={product.status === "Published" ? "green" : "amber"}>
-                        {product.status}
+                      <Badge tone={product.rawStatus === "published" ? "green" : "default"}>
+                        {product.rawStatus === "published" ? "Published" : "Private"}
                       </Badge>
                     </div>
                     <p className="mt-1 truncate text-xs text-slate-400">
@@ -928,8 +939,21 @@ function Products({
                     {isMenuOpen && (
                       <div
                         role="menu"
-                        className="absolute right-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/60"
+                        className={
+                          "absolute right-0 z-20 w-52 overflow-hidden rounded-xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/60 " +
+                          (dropUp ? "bottom-full mb-1" : "top-full mt-1")
+                        }
                       >
+                        {supabaseSourced && (
+                          <Link
+                            href={`/dashboard/products/${product.id}/edit`}
+                            role="menuitem"
+                            className="block px-3 py-2 text-sm text-slate-200 hover:bg-white/[0.04]"
+                            onClick={() => setOpenMenuId(null)}
+                          >
+                            Edit
+                          </Link>
+                        )}
                         <Link
                           href={`/products/${product.slug}`}
                           role="menuitem"
@@ -938,7 +962,7 @@ function Products({
                         >
                           View public page
                         </Link>
-                        {supabaseSourced && product.rawStatus === "draft" && (
+                        {supabaseSourced && product.rawStatus !== "published" && (
                           <button
                             type="button"
                             role="menuitem"
@@ -952,21 +976,7 @@ function Products({
                             {isBusy ? "Publishing…" : "Publish"}
                           </button>
                         )}
-                        {supabaseSourced && product.rawStatus === "archived" && (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setOpenMenuId(null);
-                              updateProductStatus(product.id, "draft");
-                            }}
-                            disabled={isBusy}
-                            className="block w-full px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/[0.04] disabled:opacity-60"
-                          >
-                            {isBusy ? "Restoring…" : "Restore to draft"}
-                          </button>
-                        )}
-                        {supabaseSourced && product.rawStatus !== "archived" && (
+                        {supabaseSourced && product.rawStatus === "published" && (
                           <button
                             type="button"
                             role="menuitem"
@@ -993,8 +1003,8 @@ function Products({
                         )}
                         {!supabaseSourced && (
                           <p className="px-3 py-2 text-xs text-slate-500">
-                            Connect Supabase to enable publish, make private,
-                            and delete.
+                            Connect Supabase to enable edit, publish, make
+                            private, and delete.
                           </p>
                         )}
                       </div>
