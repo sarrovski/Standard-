@@ -397,7 +397,7 @@ function ProductMediaPanel({
             Add uploaded images or seller-provided YouTube links.
           </p>
         </div>
-        <Badge tone="purple">{media.length} items</Badge>
+        <Badge tone="default">{media.length} items</Badge>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -447,24 +447,29 @@ function ProductMediaPanel({
         )}
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="text-sm font-semibold">Images</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Images
+          </div>
           <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
             <label className="block">
-              <span className="text-[11px] text-slate-500">Alt text (optional)</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Alt text (optional)
+              </span>
               <input
                 value={altText}
                 onChange={(event) => setAltText(event.target.value)}
                 placeholder="Describe the image or video"
-                className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
+                className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none transition focus:border-orange-400/50"
               />
             </label>
             <label
-              className={`inline-flex cursor-pointer items-center justify-center rounded-lg border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-200 ${
+              className={`inline-flex cursor-pointer items-center justify-center gap-1 rounded-lg bg-orange-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-orange-400 ${
                 uploading ? "opacity-60" : ""
               }`}
             >
+              <span aria-hidden="true" className="leading-none">+</span>
               {uploading ? "Uploading..." : "Upload image"}
               <input
                 type="file"
@@ -481,27 +486,30 @@ function ProductMediaPanel({
         </div>
 
         <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="text-sm font-semibold">YouTube video</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+            YouTube video
+          </div>
           <div className="mt-3 grid gap-3">
             <input
               value={videoUrl}
               onChange={(event) => setVideoUrl(event.target.value)}
               placeholder="https://www.youtube.com/watch?v=..."
-              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
+              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none transition focus:border-orange-400/50"
             />
             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
               <input
                 value={videoTitle}
                 onChange={(event) => setVideoTitle(event.target.value)}
                 placeholder="Video title (optional)"
-                className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
+                className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none transition focus:border-orange-400/50"
               />
               <button
                 type="button"
                 onClick={handleAddVideo}
                 disabled={addingVideo}
-                className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-1 rounded-lg border border-orange-400/40 bg-orange-500/15 px-4 py-2 text-xs font-semibold text-orange-100 transition hover:bg-orange-500/25 disabled:opacity-60"
               >
+                <span aria-hidden="true" className="leading-none">+</span>
                 {addingVideo ? "Adding..." : "Add video"}
               </button>
             </div>
@@ -541,6 +549,7 @@ function Products({
   const [demoProductsList, setDemoProducts] = useState<LocalProduct[]>([]);
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (supabaseSourced) return;
@@ -583,6 +592,16 @@ function Products({
       })),
     ];
   }, [supabaseSourced, initialProducts, demoProductsList]);
+
+  const filteredProducts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return displayProducts;
+    return displayProducts.filter((product) =>
+      [product.name, product.game, product.website, product.category]
+        .filter((value): value is string => typeof value === "string")
+        .some((value) => value.toLowerCase().includes(query)),
+    );
+  }, [displayProducts, searchQuery]);
 
   // Real publish/archive (Supabase mode only). On success we reload the page
   // so server-side initialData reflects the change. A finer-grained client
@@ -645,10 +664,45 @@ function Products({
           </div>
           <Link
             href="/dashboard/products/new"
-            className="inline-flex justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_8px_24px_-12px_rgba(249,115,22,0.65)] transition hover:bg-orange-400"
           >
+            <span aria-hidden="true" className="text-base leading-none">+</span>
             Create product
           </Link>
+        </div>
+
+        <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <label className="relative w-full sm:max-w-md">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
+              <svg
+                aria-hidden="true"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search for a product"
+              className="w-full rounded-xl border border-white/10 bg-slate-950/60 py-2 pl-10 pr-3 text-sm text-white outline-none transition focus:border-orange-400/50"
+              aria-label="Search products"
+            />
+          </label>
+          <p className="text-xs text-slate-500">
+            {searchQuery.trim()
+              ? `Showing ${filteredProducts.length} of ${displayProducts.length} ${displayProducts.length === 1 ? "product" : "products"}`
+              : `${displayProducts.length} ${displayProducts.length === 1 ? "product" : "products"}`}
+          </p>
         </div>
 
         {actionError && (
@@ -663,48 +717,76 @@ function Products({
               No products yet. Create a product to start building your catalog.
             </p>
           )}
-          {displayProducts.map((product) => (
-            <div key={product.slug + product.name} className="p-5">
-              <div className="grid gap-5 xl:grid-cols-[1fr_360px] xl:items-start">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-2xl font-black">{product.name}</h3>
-                    <Badge tone={product.status === "Published" ? "green" : "amber"}>
-                      {product.status}
-                    </Badge>
-                    <Badge tone="cyan">{product.pageTemplate}</Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {product.game} • {product.toolStatus} • {product.website}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {product.features.map((feature) => (
-                      <span
-                        key={feature}
-                        className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-300"
+          {displayProducts.length > 0 && filteredProducts.length === 0 && (
+            <p className="p-6 text-sm text-slate-500">
+              No products match &ldquo;{searchQuery}&rdquo;.
+            </p>
+          )}
+          {filteredProducts.map((product) => {
+            const thumbnail = product.media?.find(
+              (item) => item.imageUrl || item.thumbnailUrl,
+            );
+            const thumbnailUrl = thumbnail?.imageUrl ?? thumbnail?.thumbnailUrl ?? null;
+            return (
+              <div key={product.slug + product.name} className="p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-slate-950/60">
+                    {thumbnailUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumbnailUrl}
+                        alt={product.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <svg
+                        aria-hidden="true"
+                        width="22"
+                        height="22"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-slate-500"
                       >
-                        {feature}
-                      </span>
-                    ))}
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <path d="m21 15-5-5L5 21" />
+                      </svg>
+                    )}
                   </div>
-                  <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="text-xs text-slate-500">Next action</div>
-                    <div className="mt-1 text-sm font-semibold text-white">
-                      {product.nextAction}
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-xl font-bold leading-tight">{product.name}</h3>
+                      <Badge tone={product.status === "Published" ? "green" : "amber"}>
+                        {product.status}
+                      </Badge>
+                      <Badge tone="cyan">{product.pageTemplate}</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {product.game} · {product.toolStatus} · {product.website}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
+                      <span>
+                        <span className="text-slate-500">Views</span> {product.views}
+                      </span>
+                      <span>
+                        <span className="text-slate-500">Clicks</span>{" "}
+                        {product.outboundClicks}
+                      </span>
+                      <span>
+                        <span className="text-slate-500">CTR</span> {product.outboundCtr}
+                      </span>
                     </div>
                   </div>
-                </div>
-                <div className="rounded-3xl border border-white/10 bg-slate-950/40 p-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    <MetricCard label="Views" value={String(product.views)} />
-                    <MetricCard label="Clicks" value={String(product.outboundClicks)} />
-                    <MetricCard label="CTR" value={product.outboundCtr} />
-                    <MetricCard label="Status" value={product.status} />
-                  </div>
-                  <div className="mt-5 grid gap-2">
+
+                  <div className="flex shrink-0 flex-col gap-2 lg:w-48">
                     <Link
                       href={`/products/${product.slug}`}
-                      className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold"
+                      className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-center text-sm font-semibold transition hover:bg-white/[0.08]"
                     >
                       View public page
                     </Link>
@@ -712,7 +794,7 @@ function Products({
                       <button
                         onClick={() => updateProductStatus(product.id, "published")}
                         disabled={busyProductId === product.id}
-                        className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-200 disabled:opacity-60"
+                        className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-center text-sm font-semibold text-emerald-200 disabled:opacity-60"
                       >
                         {busyProductId === product.id ? "Publishing…" : "Publish"}
                       </button>
@@ -721,7 +803,7 @@ function Products({
                       <button
                         onClick={() => archiveProduct(product.id, product.name)}
                         disabled={busyProductId === product.id}
-                        className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-center text-sm font-semibold text-red-200 disabled:opacity-60"
+                        className="rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-2 text-center text-sm font-semibold text-red-200 disabled:opacity-60"
                       >
                         {busyProductId === product.id ? "Archiving…" : "Archive"}
                       </button>
@@ -730,22 +812,50 @@ function Products({
                       <button
                         onClick={() => updateProductStatus(product.id, "draft")}
                         disabled={busyProductId === product.id}
-                        className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold disabled:opacity-60"
+                        className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-center text-sm font-semibold disabled:opacity-60"
                       >
                         {busyProductId === product.id ? "Restoring…" : "Restore to draft"}
                       </button>
                     )}
                   </div>
                 </div>
+
+                {(product.features.length > 0 || product.nextAction) && (
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
+                    {product.features.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {product.features.map((feature) => (
+                          <span
+                            key={feature}
+                            className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-300"
+                          >
+                            {feature}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div />
+                    )}
+                    {product.nextAction && (
+                      <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-xs lg:max-w-sm">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                          Next action
+                        </div>
+                        <div className="mt-0.5 text-slate-200">{product.nextAction}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {supabaseSourced && (
+                  <ProductMediaPanel
+                    productId={product.id}
+                    initialMedia={product.media ?? []}
+                  />
+                )}
               </div>
-              {supabaseSourced && (
-                <ProductMediaPanel
-                  productId={product.id}
-                  initialMedia={product.media ?? []}
-                />
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 
@@ -1297,14 +1407,5 @@ function DashboardTextInput({
         className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none"
       />
     </label>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 truncate text-lg font-black">{value}</div>
-    </div>
   );
 }
