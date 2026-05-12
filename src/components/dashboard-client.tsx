@@ -590,11 +590,32 @@ function Products({
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [openMediaIds, setOpenMediaIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (supabaseSourced) return;
     setDemoProducts(getLocalProducts());
   }, [supabaseSourced]);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-product-menu]")) {
+        setOpenMenuId(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenMenuId(null);
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openMenuId]);
 
   const displayProducts = useMemo(() => {
     if (supabaseSourced) {
@@ -673,12 +694,51 @@ function Products({
     }
   };
 
-  const archiveProduct = async (productId: string, productName: string) => {
+  const makePrivate = async (productId: string, productName: string) => {
     const confirmed = window.confirm(
-      `Archive "${productName}"? It will be removed from the public marketplace, but its product record and media will remain saved.`,
+      `Make "${productName}" private? It will be removed from the public marketplace and marketplace filters. The product record and media stay saved and you can restore it later.`,
     );
     if (!confirmed) return;
     await updateProductStatus(productId, "archived");
+  };
+
+  const deleteProduct = async (productId: string, productName: string) => {
+    if (!supabaseSourced) return;
+    const confirmed = window.confirm(
+      `Permanently delete "${productName}"?\n\nThis removes the product, every uploaded image and YouTube link, and any associated storage files. This action cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setActionError(null);
+    setBusyProductId(productId);
+    setOpenMenuId(null);
+    try {
+      const response = await fetch(
+        `/api/seller/products?id=${encodeURIComponent(productId)}`,
+        { method: "DELETE" },
+      );
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setActionError(payload.error ?? "Could not delete product.");
+        return;
+      }
+      window.location.reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusyProductId(null);
+    }
+  };
+
+  const toggleMedia = (productId: string) => {
+    setOpenMediaIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
   };
 
   return (
@@ -766,11 +826,16 @@ function Products({
             const thumbnail = product.media?.find(
               (item) => item.imageUrl || item.thumbnailUrl,
             );
-            const thumbnailUrl = thumbnail?.imageUrl ?? thumbnail?.thumbnailUrl ?? null;
+            const thumbnailUrl =
+              thumbnail?.imageUrl ?? thumbnail?.thumbnailUrl ?? null;
+            const isMenuOpen = openMenuId === product.id;
+            const isMediaOpen = openMediaIds.has(product.id);
+            const isBusy = busyProductId === product.id;
+            const mediaCount = product.media?.length ?? 0;
             return (
-              <div key={product.slug + product.name} className="p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-slate-950/60">
+              <div key={product.slug + product.name} className="px-5 py-3">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-slate-950/60">
                     {thumbnailUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -781,8 +846,8 @@ function Products({
                     ) : (
                       <svg
                         aria-hidden="true"
-                        width="22"
-                        height="22"
+                        width="18"
+                        height="18"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -800,98 +865,181 @@ function Products({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-xl font-bold leading-tight">{product.name}</h3>
+                      <h3 className="truncate text-base font-semibold leading-tight">
+                        {product.name}
+                      </h3>
                       <Badge tone={product.status === "Published" ? "green" : "amber"}>
                         {product.status}
                       </Badge>
-                      <Badge tone="default">{product.pageTemplate}</Badge>
                     </div>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {product.game} · {product.toolStatus} · {product.website}
+                    <p className="mt-1 truncate text-xs text-slate-400">
+                      {product.game}
+                      {product.website ? ` · ${product.website}` : ""}
+                      {` · ${product.outboundCtr} CTR · ${product.views} views`}
                     </p>
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
-                      <span>
-                        <span className="text-slate-500">Views</span> {product.views}
-                      </span>
-                      <span>
-                        <span className="text-slate-500">Clicks</span>{" "}
-                        {product.outboundClicks}
-                      </span>
-                      <span>
-                        <span className="text-slate-500">CTR</span> {product.outboundCtr}
-                      </span>
-                    </div>
                   </div>
 
-                  <div className="flex shrink-0 flex-col gap-2 lg:w-48">
-                    <Link
-                      href={`/products/${product.slug}`}
-                      className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-center text-sm font-semibold transition hover:bg-white/[0.08]"
+                  <Link
+                    href={`/products/${product.slug}`}
+                    aria-label="View public page"
+                    title="View public page"
+                    className="hidden h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] text-slate-400 transition hover:bg-white/[0.06] hover:text-white sm:inline-flex"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     >
-                      View public page
-                    </Link>
-                    {supabaseSourced && product.rawStatus === "draft" && (
-                      <button
-                        onClick={() => updateProductStatus(product.id, "published")}
-                        disabled={busyProductId === product.id}
-                        className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-center text-sm font-semibold text-emerald-200 disabled:opacity-60"
+                      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.5 1.5" />
+                      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+                    </svg>
+                  </Link>
+
+                  <div className="relative" data-product-menu>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenMenuId(isMenuOpen ? null : product.id)
+                      }
+                      aria-label="Product actions"
+                      aria-haspopup="menu"
+                      aria-expanded={isMenuOpen}
+                      disabled={isBusy}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:opacity-60"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
                       >
-                        {busyProductId === product.id ? "Publishing…" : "Publish"}
-                      </button>
-                    )}
-                    {supabaseSourced && product.rawStatus !== "archived" && (
-                      <button
-                        onClick={() => archiveProduct(product.id, product.name)}
-                        disabled={busyProductId === product.id}
-                        className="rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-2 text-center text-sm font-semibold text-red-200 disabled:opacity-60"
+                        <circle cx="5" cy="12" r="1.7" />
+                        <circle cx="12" cy="12" r="1.7" />
+                        <circle cx="19" cy="12" r="1.7" />
+                      </svg>
+                    </button>
+                    {isMenuOpen && (
+                      <div
+                        role="menu"
+                        className="absolute right-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/60"
                       >
-                        {busyProductId === product.id ? "Archiving…" : "Archive"}
-                      </button>
-                    )}
-                    {supabaseSourced && product.rawStatus === "archived" && (
-                      <button
-                        onClick={() => updateProductStatus(product.id, "draft")}
-                        disabled={busyProductId === product.id}
-                        className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-center text-sm font-semibold disabled:opacity-60"
-                      >
-                        {busyProductId === product.id ? "Restoring…" : "Restore to draft"}
-                      </button>
+                        <Link
+                          href={`/products/${product.slug}`}
+                          role="menuitem"
+                          className="block px-3 py-2 text-sm text-slate-200 hover:bg-white/[0.04]"
+                          onClick={() => setOpenMenuId(null)}
+                        >
+                          View public page
+                        </Link>
+                        {supabaseSourced && product.rawStatus === "draft" && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              updateProductStatus(product.id, "published");
+                            }}
+                            disabled={isBusy}
+                            className="block w-full px-3 py-2 text-left text-sm text-emerald-200 hover:bg-white/[0.04] disabled:opacity-60"
+                          >
+                            {isBusy ? "Publishing…" : "Publish"}
+                          </button>
+                        )}
+                        {supabaseSourced && product.rawStatus === "archived" && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              updateProductStatus(product.id, "draft");
+                            }}
+                            disabled={isBusy}
+                            className="block w-full px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/[0.04] disabled:opacity-60"
+                          >
+                            {isBusy ? "Restoring…" : "Restore to draft"}
+                          </button>
+                        )}
+                        {supabaseSourced && product.rawStatus !== "archived" && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              makePrivate(product.id, product.name);
+                            }}
+                            disabled={isBusy}
+                            className="block w-full px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/[0.04] disabled:opacity-60"
+                          >
+                            {isBusy ? "Updating…" : "Make private"}
+                          </button>
+                        )}
+                        {supabaseSourced && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => deleteProduct(product.id, product.name)}
+                            disabled={isBusy}
+                            className="block w-full border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-60"
+                          >
+                            {isBusy ? "Working…" : "Delete"}
+                          </button>
+                        )}
+                        {!supabaseSourced && (
+                          <p className="px-3 py-2 text-xs text-slate-500">
+                            Connect Supabase to enable publish, make private,
+                            and delete.
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
 
-                {(product.features.length > 0 || product.nextAction) && (
-                  <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
-                    {product.features.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {product.features.map((feature) => (
-                          <span
-                            key={feature}
-                            className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-300"
-                          >
-                            {feature}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <div />
-                    )}
-                    {product.nextAction && (
-                      <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-xs lg:max-w-sm">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          Next action
-                        </div>
-                        <div className="mt-0.5 text-slate-200">{product.nextAction}</div>
-                      </div>
+                {supabaseSourced && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleMedia(product.id)}
+                      aria-expanded={isMediaOpen}
+                      className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.05]"
+                    >
+                      <span>
+                        Manage media{" "}
+                        <span className="text-slate-500">
+                          ({mediaCount} {mediaCount === 1 ? "item" : "items"})
+                        </span>
+                      </span>
+                      <svg
+                        aria-hidden="true"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={
+                          "transition " + (isMediaOpen ? "rotate-180" : "")
+                        }
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    {isMediaOpen && (
+                      <ProductMediaPanel
+                        productId={product.id}
+                        initialMedia={product.media ?? []}
+                      />
                     )}
                   </div>
-                )}
-
-                {supabaseSourced && (
-                  <ProductMediaPanel
-                    productId={product.id}
-                    initialMedia={product.media ?? []}
-                  />
                 )}
               </div>
             );

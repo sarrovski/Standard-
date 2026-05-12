@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/roles";
 import { getSellerByProfileId } from "@/lib/repositories/seller";
 import type { Database } from "@/lib/supabase/types";
@@ -28,7 +29,8 @@ type ProductCreateStep =
   | "ownership"
   | "seller_lookup"
   | "validation"
-  | "product_insert";
+  | "product_insert"
+  | "product_delete";
 type ProductApiError = {
   error: string;
   step: ProductCreateStep;
@@ -331,4 +333,123 @@ export async function PATCH(request: NextRequest) {
   }
 
   return NextResponse.json({ product: data });
+}
+
+/**
+ * Hard-delete a product. Requires seller ownership.
+ *
+ * Cleanup order:
+ *   1. Fetch all product_media storage_paths for the product (admin client).
+ *   2. Bulk-remove storage objects from the product-media bucket.
+ *   3. Delete the products row. product_media rows cascade automatically
+ *      (`on delete cascade` per migration 001).
+ *
+ * If storage cleanup fails we log and continue to the DB delete: orphan
+ * storage objects can be recovered from the bucket, but a half-deleted DB
+ * row is harder to reason about.
+ *
+ * Ownership is verified with the user-scoped client (RLS applies); the
+ * privileged mutations use the admin client (mirrors the established
+ * Batch 12 pattern from /api/seller/products/[id]/media).
+ */
+export async function DELETE(request: NextRequest) {
+  const auth = await requireSeller();
+  if ("error" in auth) {
+    const status = typeof auth.status === "number" ? auth.status : 500;
+    const error = typeof auth.error === "string" ? auth.error : "Unauthorized";
+    const step = typeof auth.step === "string" ? auth.step : "auth";
+    return jsonError(status, error, step as ProductCreateStep, {
+      code: auth.code,
+      details: auth.details,
+    });
+  }
+
+  let id: string | null = null;
+  const url = new URL(request.url);
+  id = readString(url.searchParams.get("id"));
+  if (!id) {
+    try {
+      const raw = (await request.json()) as { id?: unknown };
+      id = readString(raw.id);
+    } catch {
+      // No JSON body — fall through; the validation check below surfaces
+      // the missing-id error.
+    }
+  }
+  if (!id) {
+    return jsonError(400, "id is required.", "validation", {
+      code: "missing_product_id",
+    });
+  }
+
+  const { data: product, error: lookupError } = await auth.supabase
+    .from("products")
+    .select("id, slug")
+    .eq("id", id)
+    .eq("seller_id", auth.seller.id)
+    .maybeSingle<{ id: string; slug: string }>();
+  if (lookupError) {
+    return jsonError(500, "Product lookup failed.", "ownership", {
+      code: lookupError.code ?? "lookup_failed",
+      details: lookupError.message,
+    });
+  }
+  if (!product) {
+    return jsonError(404, "Product not found or you don't own it.", "ownership", {
+      code: "product_not_found",
+    });
+  }
+
+  let adminSupabase: ReturnType<typeof createAdminClient>;
+  try {
+    adminSupabase = createAdminClient();
+  } catch (err) {
+    console.error(
+      "[api/seller/products DELETE] admin client init failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return jsonError(500, "Service role not configured.", "auth", {
+      code: "admin_client",
+    });
+  }
+
+  const { data: mediaRows } = await adminSupabase
+    .from("product_media")
+    .select("storage_path")
+    .eq("product_id", id);
+  const storagePaths = (mediaRows ?? [])
+    .map((row) => row.storage_path)
+    .filter((path): path is string => typeof path === "string" && path.length > 0);
+
+  if (storagePaths.length > 0) {
+    const { error: storageErr } = await adminSupabase.storage
+      .from("product-media")
+      .remove(storagePaths);
+    if (storageErr) {
+      console.error(
+        "[api/seller/products DELETE] storage cleanup failed; continuing to DB delete:",
+        storageErr.message,
+      );
+    }
+  }
+
+  const { error: deleteError } = await adminSupabase
+    .from("products")
+    .delete()
+    .eq("id", id);
+  if (deleteError) {
+    console.error(
+      "[api/seller/products DELETE] product delete failed:",
+      deleteError.message,
+    );
+    return jsonError(500, "Could not delete product.", "product_delete", {
+      code: deleteError.code ?? "delete_failed",
+      details: deleteError.message,
+    });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    deleted: { id: product.id, slug: product.slug },
+  });
 }
