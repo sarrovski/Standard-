@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { addLocalProduct, slugify } from "@/lib/product-store";
+import { games, productCategories } from "@/lib/data";
 import type { LocalProduct } from "@/lib/product-types";
 
 type ProductCreateError = {
@@ -83,8 +84,8 @@ export function ProductCreateClient({
   const router = useRouter();
   const [form, setForm] = useState<ProductCreateForm>({
     name: "",
-    game: "",
-    category: "",
+    game: games[0] ?? "",
+    category: productCategories[0] ?? "",
     summary: "",
   });
   const [error, setError] = useState<string | null>(null);
@@ -173,23 +174,33 @@ export function ProductCreateClient({
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-200">
             Game
-            <input
+            <select
               value={form.game}
               onChange={(event) => update("game", event.target.value)}
               className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
-              placeholder="Rust"
               required
-            />
+            >
+              {games.map((game) => (
+                <option key={game} value={game}>
+                  {game}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-200">
             Category
-            <input
+            <select
               value={form.category}
               onChange={(event) => update("category", event.target.value)}
               className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
-              placeholder="Cheat"
               required
-            />
+            >
+              {productCategories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 

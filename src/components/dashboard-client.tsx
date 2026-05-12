@@ -1078,12 +1078,10 @@ function Payments({
 }) {
   // Demo state
   const [demoRequests, setDemoRequests] = useState<LocalPaymentRequest[]>([]);
-  const [demoProducts, setDemoProducts] = useState<LocalProduct[]>([]);
 
-  // Form state — used in both modes; in Supabase mode we send IDs, in demo
-  // mode we send the same labels we always used.
+  // Form state. Verification is at the seller-account level, so the only
+  // selection a seller makes is which payment method they want approved.
   const [demoMethod, setDemoMethod] = useState<PaymentMethod>("Card");
-  const [productSelection, setProductSelection] = useState(""); // slug (demo) | id (supabase)
   const [paymentMethodId, setPaymentMethodId] = useState<string>("");
   const [processor, setProcessor] = useState("Stripe");
   const [checkoutUrl, setCheckoutUrl] = useState("https://example.com/checkout");
@@ -1102,7 +1100,6 @@ function Payments({
 
   useEffect(() => {
     if (supabaseSourced) return;
-    setDemoProducts(getLocalProducts());
     setDemoRequests(getPaymentRequests());
   }, [supabaseSourced]);
 
@@ -1121,17 +1118,11 @@ function Payments({
     setSubmitOk(null);
 
     if (!supabaseSourced) {
-      const product =
-        demoProducts.find((item) => item.slug === productSelection) || demoProducts[0];
-      if (!product) {
-        setSubmitError("Create a product first.");
-        return;
-      }
       const request: LocalPaymentRequest = {
         id: crypto.randomUUID(),
-        seller: product.seller,
-        productSlug: product.slug,
-        productName: product.name,
+        seller: "Demo Seller",
+        productSlug: null,
+        productName: null,
         method: demoMethod,
         processor,
         checkoutUrl,
@@ -1152,11 +1143,9 @@ function Payments({
       return;
     }
 
-    // Supabase path: submit real UUIDs.
-    if (!productSelection) {
-      setSubmitError("Select a product.");
-      return;
-    }
+    // Supabase path: submit real UUIDs. No product_id — verification is
+    // at the seller-account level and applies to every product the
+    // seller publishes once admin approves.
     if (!paymentMethodId) {
       setSubmitError("Select a payment method.");
       return;
@@ -1168,7 +1157,6 @@ function Payments({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          product_id: productSelection,
           payment_method_id: paymentMethodId,
           external_proof_url: proofUrl || checkoutUrl || undefined,
           seller_notes: sellerNotes || undefined,
@@ -1181,15 +1169,13 @@ function Payments({
       }
 
       // Optimistic UI update: prepend a local row so the seller sees their
-      // submission immediately without reloading. Look up the names from our
-      // existing options to render correctly.
-      const product = (initialProducts ?? []).find((p) => p.id === productSelection);
+      // submission immediately without reloading.
       const method = paymentMethods.find((m) => m.id === paymentMethodId);
-      if (product && method && payload.request) {
+      if (method && payload.request) {
         const optimistic: UISellerPaymentRequest = {
           id: payload.request.id,
-          productName: product.name,
-          productSlug: product.slug,
+          productName: null,
+          productSlug: null,
           method: method.name as PaymentMethod,
           status: "Pending verification",
           proofNote: sellerNotes || proofUrl || "—",
@@ -1240,11 +1226,11 @@ function Payments({
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="p-6">
           <h2 className="text-2xl font-black">Add payment method</h2>
-          {supabaseSourced && (initialProducts?.length ?? 0) === 0 && (
-            <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-              You don't have any products yet. Create a product before submitting payment proof.
-            </p>
-          )}
+          <p className="mt-2 text-sm text-slate-500">
+            Verification is per seller account, not per product. Once a
+            payment method is approved it shows on every product you
+            publish.
+          </p>
           {supabaseSourced && paymentMethods.length === 0 && (
             <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
               No payment methods are configured in the database. Ask an admin to seed
@@ -1253,28 +1239,6 @@ function Payments({
           )}
 
           <form onSubmit={handleSubmit} className="mt-5 grid gap-4">
-            <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <span className="text-xs text-slate-500">Product</span>
-              <select
-                value={productSelection}
-                onChange={(event) => setProductSelection(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
-              >
-                <option value="">Select…</option>
-                {supabaseSourced
-                  ? (initialProducts ?? []).map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name}
-                      </option>
-                    ))
-                  : demoProducts.map((product) => (
-                      <option key={product.slug} value={product.slug}>
-                        {product.name}
-                      </option>
-                    ))}
-              </select>
-            </label>
-
             <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <span className="text-xs text-slate-500">Payment method</span>
               {supabaseSourced ? (
@@ -1351,8 +1315,7 @@ function Payments({
                   <PaymentPill method={item.method} />
                   <PaymentStatusPill status={item.status} />
                 </div>
-                <div className="mt-3 text-sm font-semibold">{item.productName}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.proofNote}</div>
+                <div className="mt-2 text-xs text-slate-500">{item.proofNote}</div>
               </div>
             ))}
           </div>

@@ -55,6 +55,21 @@ export const games = [
   "Rust",
 ];
 
+/**
+ * Closed list of product categories sellers can pick from. Keeping this
+ * constrained prevents typo / spelling drift across the marketplace and
+ * keeps marketplace filters meaningful.
+ */
+export const productCategories = [
+  "Aim Assist",
+  "ESP / Visuals",
+  "Stat Tracker / Analytics",
+  "Overlay / HUD",
+  "Coaching",
+  "Macros / Scripts",
+  "Utility",
+];
+
 export const paymentMethods = [
   "Crypto",
   "PayPal G&S",

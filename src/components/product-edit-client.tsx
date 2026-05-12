@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
+import { games, productCategories } from "@/lib/data";
 
 type EditableProduct = {
   id: string;
@@ -48,6 +49,22 @@ export function ProductEditClient({ product }: { product: EditableProduct }) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const isPublished = product.status === "published";
+
+  // Closed picker lists. If a product was created before the closed lists
+  // existed (legacy data), preserve its current value as the first option
+  // so saving doesn't silently rewrite it.
+  const gameOptions = useMemo(() => {
+    if (form.game && !games.includes(form.game)) {
+      return [form.game, ...games];
+    }
+    return games;
+  }, [form.game]);
+  const categoryOptions = useMemo(() => {
+    if (form.category && !productCategories.includes(form.category)) {
+      return [form.category, ...productCategories];
+    }
+    return productCategories;
+  }, [form.category]);
 
   const update = (key: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -137,21 +154,33 @@ export function ProductEditClient({ product }: { product: EditableProduct }) {
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-200">
             Game
-            <input
+            <select
               value={form.game}
               onChange={(event) => update("game", event.target.value)}
               className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
               required
-            />
+            >
+              {gameOptions.map((game) => (
+                <option key={game} value={game}>
+                  {game}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-200">
             Category
-            <input
+            <select
               value={form.category}
               onChange={(event) => update("category", event.target.value)}
               className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
               required
-            />
+            >
+              {categoryOptions.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 

@@ -459,7 +459,11 @@ export function adaptSellerProductCard(
  */
 export type UISellerPaymentRequest = {
   id: string;
-  productName: string;
+  /**
+   * Legacy: when a request was filed against a specific product before the
+   * dashboard moved to per-seller verification. Null on all new requests.
+   */
+  productName: string | null;
   productSlug: string | null;
   method: PaymentMethod;
   status: PaymentVerificationStatus;
@@ -474,7 +478,7 @@ export function adaptSellerPaymentRequest(
 ): UISellerPaymentRequest {
   return {
     id: row.id,
-    productName: row.products?.name ?? "—",
+    productName: row.products?.name ?? null,
     productSlug: row.products?.slug ?? null,
     method: coercePaymentMethod(row.payment_methods?.name),
     status: mapPaymentStatusToUI(row.status),
