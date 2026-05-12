@@ -1,5 +1,4 @@
 import { requireRole, isSupabaseConfigured } from "@/lib/roles";
-import { Nav, SectionHeader, Shell } from "@/components/ui";
 import { DashboardClient, type DashboardInitialData } from "@/components/dashboard-client";
 import { getSellerDashboardData } from "@/lib/repositories/seller";
 import {
@@ -59,23 +58,9 @@ export default async function DashboardPage({
   const initialData = await loadDashboardData();
 
   return (
-    <Shell>
-      <Nav />
-      <section className="mx-auto max-w-7xl px-6 py-10">
-        <SectionHeader
-          eyebrow="Seller dashboard"
-          title={
-            initialData
-              ? `Dashboard${initialData.sellerName ? ` • ${initialData.sellerName}` : ""}`
-              : "Dashboard"
-          }
-          text="Manage products, payment verification, analytics, provider tag, and billing."
-        />
-        <DashboardClient
-          initialTab={searchParams?.tab}
-          initialData={initialData}
-        />
-      </section>
-    </Shell>
+    <DashboardClient
+      initialTab={searchParams?.tab}
+      initialData={initialData}
+    />
   );
 }

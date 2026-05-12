@@ -3,7 +3,16 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Badge, Card, MiniStat } from "@/components/ui";
+import { Badge } from "@/components/ui";
+import {
+  ConsolePanel,
+  ConsoleStat,
+  DashboardReadinessPanel,
+  DashboardShell,
+  DashboardWorkspace,
+  type DashboardTabItem,
+  type ReadinessItem,
+} from "@/components/dashboard-console";
 import {
   analytics,
   paymentMethods as paymentMethodsList,
@@ -16,6 +25,7 @@ import {
   addPaymentRequest,
   getLocalProducts,
   getPaymentRequests,
+  saveLocalProducts,
 } from "@/lib/product-store";
 import type {
   LocalPaymentRequest,
@@ -32,12 +42,47 @@ import type {
 } from "@/lib/adapters";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
-const tabs = [
-  { key: "products", label: "Produits" },
-  { key: "payments", label: "Payment Verification" },
-  { key: "analytics", label: "Analytics" },
-  { key: "verification", label: "Provider Tag" },
-  { key: "billing", label: "Billing" },
+const tabs: DashboardTabItem[] = [
+  {
+    key: "products",
+    label: "Produits",
+    eyebrow: "Catalog",
+    title: "Product control center",
+    description: "Manage product status, media, and public page readiness without changing how publishing works.",
+    icon: "box",
+  },
+  {
+    key: "payments",
+    label: "Payment Verification",
+    eyebrow: "Trust",
+    title: "Payment verification console",
+    description: "Submit payment proof and review method statuses. Only verified methods appear publicly.",
+    icon: "shield",
+  },
+  {
+    key: "analytics",
+    label: "Analytics",
+    eyebrow: "Signals",
+    title: "Performance snapshot",
+    description: "A compact read-only view of the seller metrics currently available in Standard.",
+    icon: "chart",
+  },
+  {
+    key: "verification",
+    label: "Provider Tag",
+    eyebrow: "Seller tag",
+    title: "Provider / Developer tag",
+    description: "Request the seller tag for manual admin review. This is not a role or automatic guarantee.",
+    icon: "badge",
+  },
+  {
+    key: "billing",
+    label: "Billing",
+    eyebrow: "Plan",
+    title: "Billing and visibility",
+    description: "Open billing and Featured visibility controls without changing any Stripe routes.",
+    icon: "billing",
+  },
 ];
 
 const VALID_TAB_KEYS = new Set(tabs.map((t) => t.key));
@@ -64,51 +109,88 @@ function normalizeTab(candidate: string | null | undefined): string {
   return DEFAULT_TAB;
 }
 
-/**
- * Button-based tabs for the seller dashboard.
- *
- * The shared <Tabs> in components/ui renders <Link> elements, which works
- * for static dashboards but caused this batch's bug: clicking a Link
- * navigated /dashboard?tab=X, but the parent client component had its
- * tab state seeded only at mount, so navigation didn't update the visible
- * panel until a full reload.
- *
- * This local component takes a click handler instead, so the parent owns
- * both the state and the URL update. Same visual styling as the shared
- * Tabs to keep design consistent.
- */
-function DashboardTabs({
-  items,
-  active,
-  onSelect,
+function toRawProductStatus(status: string): "draft" | "published" | "archived" {
+  const normalized = status.toLowerCase();
+  if (normalized === "published") return "published";
+  if (normalized === "archived") return "archived";
+  return "draft";
+}
+
+function productStatusLabel(status: "draft" | "published" | "archived") {
+  if (status === "published") return "Published";
+  if (status === "archived") return "Archived";
+  return "Draft";
+}
+
+function getActiveTab(key: string) {
+  return tabs.find((item) => item.key === key) ?? tabs[0]!;
+}
+
+function buildReadinessItems({
+  supabaseSourced,
+  products,
+  paymentRequests,
+  providerTagStatus,
+  subscription,
 }: {
-  items: Array<{ key: string; label: string }>;
-  active: string;
-  onSelect: (key: string) => void;
-}) {
-  return (
-    <div className="flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.035] p-2">
-      {items.map((item) => {
-        const isActive = active === item.key;
-        return (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => onSelect(item.key)}
-            className={
-              "whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition " +
-              (isActive
-                ? "bg-purple-500/20 text-purple-100"
-                : "text-slate-400 hover:bg-white/[0.04] hover:text-white")
-            }
-            aria-pressed={isActive}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-    </div>
-  );
+  supabaseSourced: boolean;
+  products: UISellerProductCard[];
+  paymentRequests: UISellerPaymentRequest[];
+  providerTagStatus: UISellerProviderTagStatus;
+  subscription: UISellerSubscription | null;
+}): ReadinessItem[] {
+  if (!supabaseSourced) {
+    return [
+      {
+        label: "Demo fallback",
+        detail: "Dashboard remains usable when Supabase env vars are absent.",
+        complete: true,
+      },
+      {
+        label: "Create a product",
+        detail: "Local demo product creation uses the existing draft flow.",
+        complete: true,
+      },
+      {
+        label: "Payment verification",
+        detail: "Connect Supabase to submit real seller verification requests.",
+        complete: false,
+      },
+      {
+        label: "Provider tag",
+        detail: "Provider / Developer remains a seller tag reviewed by admins.",
+        complete: false,
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Create a product",
+      detail: products.length > 0 ? `${products.length} product records found.` : "Create a product draft first.",
+      complete: products.length > 0,
+    },
+    {
+      label: "Add product media",
+      detail: "Images help buyers inspect the product before leaving Standard.",
+      complete: products.some((product) => product.mediaAssets > 0 || (product.media ?? []).length > 0),
+    },
+    {
+      label: "Submit payment verification",
+      detail: paymentRequests.length > 0 ? "Payment proof has been submitted for review." : "Verified methods are the only methods shown publicly.",
+      complete: paymentRequests.length > 0,
+    },
+    {
+      label: "Request Provider / Developer tag",
+      detail: providerTagStatus === "Not requested" ? "Optional seller tag; admin review is manual." : `Current request status: ${providerTagStatus}.`,
+      complete: providerTagStatus !== "Not requested",
+    },
+    {
+      label: "Configure billing",
+      detail: subscription ? `Subscription status: ${subscription.status}.` : "Open Billing when you are ready to manage plan details.",
+      complete: Boolean(subscription),
+    },
+  ];
 }
 
 /**
@@ -164,18 +246,39 @@ export function DashboardClient({
   };
 
   const supabaseSourced = initialData !== null;
+  const activeTab = getActiveTab(tab);
+  const sellerName = initialData?.sellerName || (supabaseSourced ? "Pending seller" : "Demo seller");
+  const subscriptionLabel = initialData?.subscription
+    ? `${initialData.subscription.status} plan`
+    : supabaseSourced
+      ? "Plan pending"
+      : "Demo mode";
+  const readinessItems = buildReadinessItems({
+    supabaseSourced,
+    products: initialData?.products ?? [],
+    paymentRequests: initialData?.paymentRequests ?? [],
+    providerTagStatus: initialData?.providerTagStatus ?? "Not requested",
+    subscription: initialData?.subscription ?? null,
+  });
 
   return (
-    <>
-      <div className="mt-8">
-        <DashboardTabs items={tabs} active={tab} onSelect={handleTabClick} />
-      </div>
-
-      <div className="mt-8">
+    <DashboardShell
+      tabs={tabs}
+      active={tab}
+      sellerName={sellerName}
+      supabaseSourced={supabaseSourced}
+      subscriptionLabel={subscriptionLabel}
+      onSelect={handleTabClick}
+    >
+      <DashboardWorkspace
+        activeTab={activeTab}
+        aside={<DashboardReadinessPanel title="Product readiness" items={readinessItems} />}
+      >
         {tab === "products" && (
           <Products
             supabaseSourced={supabaseSourced}
             initialProducts={initialData?.products ?? null}
+            initialPaymentRequests={initialData?.paymentRequests ?? null}
           />
         )}
         {tab === "payments" && (
@@ -194,8 +297,8 @@ export function DashboardClient({
           />
         )}
         {tab === "billing" && <Billing />}
-      </div>
-    </>
+      </DashboardWorkspace>
+    </DashboardShell>
   );
 }
 
@@ -319,9 +422,20 @@ function ProductMediaPanel({
   };
 
   return (
-    <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-      <div className="text-xs text-slate-500">Media</div>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Media
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Uploaded image assets stay attached to this product.
+          </p>
+        </div>
+        <Badge tone="cyan">{media.length} images</Badge>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         {media.map((m) => {
           const isJustSaved = m.id === lastSavedId;
           return (
@@ -358,7 +472,7 @@ function ProductMediaPanel({
           );
         })}
         {media.length === 0 && (
-          <div className="col-span-full text-xs text-slate-500">
+          <div className="col-span-full rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-xs text-slate-500">
             No media yet.
           </div>
         )}
@@ -366,16 +480,18 @@ function ProductMediaPanel({
 
       <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
         <label className="block">
-          <span className="text-[11px] text-slate-500">Alt text (optional)</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Alt text (optional)
+          </span>
           <input
             value={altText}
             onChange={(event) => setAltText(event.target.value)}
             placeholder="Describe the image"
-            className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
+            className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white outline-none transition focus:border-purple-300/40"
           />
         </label>
         <label
-          className={`inline-flex cursor-pointer items-center justify-center rounded-lg border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-200 ${
+          className={`inline-flex cursor-pointer items-center justify-center rounded-xl border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-200 transition hover:border-purple-300/50 hover:bg-purple-500/15 ${
             busy ? "opacity-60" : ""
           }`}
         >
@@ -391,7 +507,7 @@ function ProductMediaPanel({
       </div>
 
       <p className="mt-2 text-[11px] text-slate-500">
-        Images are saved automatically as soon as they upload — no extra
+        Images are saved automatically as soon as they upload - no extra
         step needed.
       </p>
 
@@ -417,9 +533,11 @@ function ProductMediaPanel({
 function Products({
   supabaseSourced,
   initialProducts,
+  initialPaymentRequests,
 }: {
   supabaseSourced: boolean;
   initialProducts: UISellerProductCard[] | null;
+  initialPaymentRequests: UISellerPaymentRequest[] | null;
 }) {
   const [demoProductsList, setDemoProducts] = useState<LocalProduct[]>([]);
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
@@ -434,38 +552,56 @@ function Products({
     if (supabaseSourced) {
       return initialProducts ?? [];
     }
-    const localCards = demoProductsList.map((product) => ({
-      id: product.slug, // demo: no real UUID, slug doubles as id
-      slug: product.slug,
-      name: product.name,
-      status: product.productStatus,
-      rawStatus: "draft" as const,
-      toolStatus: "Draft / database-ready",
-      game: product.game,
-      category: product.category,
-      features: product.features,
-      views: product.activity.views,
-      outboundClicks: 0,
-      outboundCtr: "0%",
-      integrity: String(product.integrity ?? "Pending"),
-      pageTemplate: "Hero Spotlight",
-      mediaAssets: product.gallery.length,
-      website: product.websiteUrl.replace("https://", ""),
-      nextAction: "Submit for review and verify payment methods",
-      media: [],
-    }));
+    const localCards = demoProductsList.map((product) => {
+      const rawStatus = toRawProductStatus(product.productStatus);
+      return {
+        id: product.slug, // demo: no real UUID, slug doubles as id
+        slug: product.slug,
+        name: product.name,
+        status: productStatusLabel(rawStatus),
+        rawStatus,
+        toolStatus: "Demo draft / database-ready",
+        game: product.game,
+        category: product.category,
+        features: product.features,
+        views: product.activity.views,
+        outboundClicks: 0,
+        outboundCtr: "0%",
+        integrity: String(product.integrity ?? "Pending"),
+        pageTemplate: "Hero Spotlight",
+        mediaAssets: product.gallery.length,
+        website: product.websiteUrl.replace("https://", ""),
+        nextAction:
+          rawStatus === "draft"
+            ? "Publish locally when the product is ready"
+            : rawStatus === "published"
+              ? "Confirm public page and payment verification"
+              : "Restore to draft before publishing again",
+        media: [],
+      };
+    });
     return [
       ...localCards,
       ...demoSellerProducts.map((item) => ({
         ...item,
         id: "phantomx-tracker",
         slug: "phantomx-tracker",
+        status: "Published",
         category: "Analytics / Overlay",
         rawStatus: "published" as const,
         media: [],
       })),
     ];
   }, [supabaseSourced, initialProducts, demoProductsList]);
+
+  const paymentRequestsBySlug = useMemo(() => {
+    const requests = initialPaymentRequests ?? [];
+    return new Map(
+      requests
+        .filter((request) => request.productSlug)
+        .map((request) => [request.productSlug!, request.status]),
+    );
+  }, [initialPaymentRequests]);
 
   // Real publish/archive (Supabase mode only). On success we reload the page
   // so server-side initialData reflects the change. A finer-grained client
@@ -474,7 +610,19 @@ function Products({
     productId: string,
     nextStatus: "published" | "archived" | "draft",
   ) => {
-    if (!supabaseSourced) return;
+    if (!supabaseSourced) {
+      const nextLabel = productStatusLabel(nextStatus);
+      setDemoProducts((current) => {
+        const updated = current.map((product) =>
+          product.slug === productId
+            ? { ...product, productStatus: nextLabel }
+            : product,
+        );
+        saveLocalProducts(updated);
+        return updated;
+      });
+      return;
+    }
     setActionError(null);
     setBusyProductId(productId);
     try {
@@ -498,6 +646,10 @@ function Products({
   };
 
   const archiveProduct = async (productId: string, productName: string) => {
+    if (!supabaseSourced) {
+      await updateProductStatus(productId, "archived");
+      return;
+    }
     const confirmed = window.confirm(
       `Archive "${productName}"? It will be removed from the public marketplace, but its product record and media will remain saved.`,
     );
@@ -505,23 +657,27 @@ function Products({
     await updateProductStatus(productId, "archived");
   };
 
+  const publishedCount = displayProducts.filter((product) => product.rawStatus === "published").length;
+  const draftCount = displayProducts.filter((product) => product.rawStatus === "draft").length;
+  const mediaCount = displayProducts.reduce((total, product) => total + product.mediaAssets, 0);
+
   return (
-    <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-4">
-        <MiniStat
-          label="Produits en ligne"
+    <div className="space-y-5">
+      <section className="grid gap-3 md:grid-cols-4">
+        <ConsoleStat
+          label="Products"
           value={String(displayProducts.length)}
           detail={supabaseSourced ? "from Supabase" : "demo + database-ready"}
         />
-        <MiniStat label="Views produits" value="35.2K" detail="+16.4%" />
-        <MiniStat label="Outbound clicks" value="1.7K" detail="website traffic" />
-        <MiniStat label="Avg outbound CTR" value="4.93%" detail="+0.8 pts" />
+        <ConsoleStat label="Published" value={String(publishedCount)} detail="public visibility" />
+        <ConsoleStat label="Drafts" value={String(draftCount)} detail="private workspace" />
+        <ConsoleStat label="Media assets" value={String(mediaCount)} detail="attached images" />
       </section>
 
-      <Card className="overflow-hidden">
+      <ConsolePanel className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-white/10 p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl font-bold">Produits en ligne</h2>
+            <h2 className="text-xl font-black">Products workspace</h2>
             <p className="mt-1 text-sm text-slate-400">
               Draft, publish, archive, restore, and manage media for your products.
             </p>
@@ -540,58 +696,77 @@ function Products({
           </div>
         )}
 
-        <div className="divide-y divide-white/10">
+        <div className="grid gap-3 p-3">
           {displayProducts.length === 0 && (
-            <p className="p-6 text-sm text-slate-500">
+            <p className="rounded-2xl border border-dashed border-white/10 bg-white/[0.025] p-6 text-sm text-slate-500">
               No products yet. Create a product to start building your catalog.
             </p>
           )}
-          {displayProducts.map((product) => (
-            <div key={product.slug + product.name} className="p-5">
-              <div className="grid gap-5 xl:grid-cols-[1fr_360px] xl:items-start">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-2xl font-black">{product.name}</h3>
-                    <Badge tone={product.status === "Published" ? "green" : "amber"}>
-                      {product.status}
-                    </Badge>
-                    <Badge tone="cyan">{product.pageTemplate}</Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {product.game} • {product.toolStatus} • {product.website}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {product.features.map((feature) => (
-                      <span
-                        key={feature}
-                        className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-300"
-                      >
-                        {feature}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="text-xs text-slate-500">Next action</div>
-                    <div className="mt-1 text-sm font-semibold text-white">
-                      {product.nextAction}
+          {displayProducts.map((product) => {
+            const coverUrl = product.media?.find((item) => item.publicUrl)?.publicUrl ?? null;
+            const paymentStatus = paymentRequestsBySlug.get(product.slug) ?? "Not submitted";
+            const statusLabel = productStatusLabel(product.rawStatus);
+            const canUpdateStatus =
+              supabaseSourced || demoProductsList.some((item) => item.slug === product.slug);
+            return (
+              <div
+                key={product.slug + product.name}
+                className="rounded-3xl border border-white/10 bg-white/[0.025] p-4"
+              >
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-start">
+                  <div className="flex min-w-0 gap-4">
+                    <div className="h-24 w-24 flex-none overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70">
+                      {coverUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-end bg-gradient-to-br from-cyan-500/25 via-purple-500/25 to-fuchsia-500/20 p-3">
+                          <span className="text-xs font-black text-white/80">STD</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate text-xl font-black">{product.name}</h3>
+                        <Badge tone={product.rawStatus === "published" ? "green" : "amber"}>
+                          {statusLabel}
+                        </Badge>
+                        <Badge tone="cyan">{product.mediaAssets} media</Badge>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {product.game} / {product.category} / {product.website}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full border border-white/10 bg-slate-950/45 px-3 py-1 text-xs text-slate-300">
+                          Payment: {paymentStatus}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-slate-950/45 px-3 py-1 text-xs text-slate-300">
+                          {product.toolStatus}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-slate-950/45 px-3 py-1 text-xs text-slate-300">
+                          Trust score: {product.integrity}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {product.features.slice(0, 4).map((feature) => (
+                          <span
+                            key={feature}
+                            className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-400"
+                          >
+                            {feature}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="rounded-3xl border border-white/10 bg-slate-950/40 p-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    <MetricCard label="Views" value={String(product.views)} />
-                    <MetricCard label="Clicks" value={String(product.outboundClicks)} />
-                    <MetricCard label="CTR" value={product.outboundCtr} />
-                    <MetricCard label="Status" value={product.status} />
-                  </div>
-                  <div className="mt-5 grid gap-2">
+                  <div className="grid gap-2">
                     <Link
                       href={`/products/${product.slug}`}
-                      className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold"
+                      className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold transition hover:border-cyan-300/30"
                     >
                       View public page
                     </Link>
-                    {supabaseSourced && product.rawStatus === "draft" && (
+                    {canUpdateStatus && product.rawStatus === "draft" && (
                       <button
                         onClick={() => updateProductStatus(product.id, "published")}
                         disabled={busyProductId === product.id}
@@ -600,16 +775,16 @@ function Products({
                         {busyProductId === product.id ? "Publishing…" : "Publish"}
                       </button>
                     )}
-                    {supabaseSourced && product.rawStatus !== "archived" && (
+                    {canUpdateStatus && product.rawStatus !== "archived" && (
                       <button
                         onClick={() => archiveProduct(product.id, product.name)}
                         disabled={busyProductId === product.id}
                         className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-center text-sm font-semibold text-red-200 disabled:opacity-60"
                       >
-                        {busyProductId === product.id ? "Archiving…" : "Archive"}
+                        {busyProductId === product.id ? "Archiving…" : "Archive product"}
                       </button>
                     )}
-                    {supabaseSourced && product.rawStatus === "archived" && (
+                    {canUpdateStatus && product.rawStatus === "archived" && (
                       <button
                         onClick={() => updateProductStatus(product.id, "draft")}
                         disabled={busyProductId === product.id}
@@ -618,20 +793,27 @@ function Products({
                         {busyProductId === product.id ? "Restoring…" : "Restore to draft"}
                       </button>
                     )}
+                    <div className="rounded-xl border border-white/10 bg-slate-950/35 px-4 py-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        Next action
+                      </div>
+                      <div className="mt-1 text-xs font-semibold text-slate-300">
+                        {product.nextAction}
+                      </div>
+                    </div>
                   </div>
                 </div>
+                {supabaseSourced && (
+                  <ProductMediaPanel
+                    productId={product.id}
+                    initialMedia={product.media ?? []}
+                  />
+                )}
               </div>
-              {supabaseSourced && (
-                <ProductMediaPanel
-                  productId={product.id}
-                  initialMedia={product.media ?? []}
-                />
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
-      </Card>
-
+      </ConsolePanel>
     </div>
   );
 }
@@ -803,17 +985,17 @@ function Payments({
 
   return (
     <div className="space-y-6">
-      <Card className="p-6">
+      <ConsolePanel className="p-6">
         <Badge tone="cyan">Payment verification</Badge>
         <h2 className="mt-4 text-2xl font-black">Prove the payment methods you accept</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
           Payment methods stay private or under review until admin approves them. Only verified
           methods appear on your public product page and in marketplace filters.
         </p>
-      </Card>
+      </ConsolePanel>
 
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="p-6">
+        <ConsolePanel className="p-6">
           <h2 className="text-2xl font-black">Add payment method</h2>
           {supabaseSourced && (initialProducts?.length ?? 0) === 0 && (
             <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
@@ -909,9 +1091,9 @@ function Payments({
               </div>
             )}
           </form>
-        </Card>
+        </ConsolePanel>
 
-        <Card className="p-6">
+        <ConsolePanel className="p-6">
           <h2 className="text-2xl font-black">Your payment status</h2>
           <div className="mt-5 space-y-3">
             {requestsToShow.length === 0 && (
@@ -931,7 +1113,7 @@ function Payments({
               </div>
             ))}
           </div>
-        </Card>
+        </ConsolePanel>
       </section>
     </div>
   );
@@ -944,7 +1126,7 @@ function Payments({
 function Analytics() {
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-      <Card className="p-6">
+      <ConsolePanel className="p-6">
         <Badge tone="green">Analytics</Badge>
         <h2 className="mt-4 text-2xl font-black">Performance</h2>
         <p className="mt-2 text-sm text-slate-500">
@@ -952,11 +1134,11 @@ function Analytics() {
         </p>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {analytics.map((item) => (
-            <MiniStat key={item.label} label={item.label} value={item.value} detail={item.change} />
+            <ConsoleStat key={item.label} label={item.label} value={item.value} detail={item.change} />
           ))}
         </div>
-      </Card>
-      <Card className="p-6">
+      </ConsolePanel>
+      <ConsolePanel className="p-6">
         <h2 className="text-2xl font-black">Traffic sources</h2>
         <div className="mt-6 space-y-4">
           {trafficSources.map(([source, share]) => (
@@ -974,7 +1156,7 @@ function Analytics() {
             </div>
           ))}
         </div>
-      </Card>
+      </ConsolePanel>
     </section>
   );
 }
@@ -1039,7 +1221,7 @@ function Verification({
 
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-      <Card className="p-6">
+      <ConsolePanel className="p-6">
         <Badge tone="purple">Provider tag request</Badge>
         <h2 className="mt-4 text-2xl font-black">Request Provider / Developer tag</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
@@ -1074,9 +1256,9 @@ function Verification({
             </div>
           )}
         </form>
-      </Card>
+      </ConsolePanel>
 
-      <Card className="p-6">
+      <ConsolePanel className="p-6">
         <h2 className="text-2xl font-black">Status</h2>
         <div className="mt-5 space-y-3">
           {supabaseSourced ? (
@@ -1124,7 +1306,7 @@ function Verification({
             ))
           )}
         </div>
-      </Card>
+      </ConsolePanel>
     </section>
   );
 }
@@ -1135,7 +1317,7 @@ function Verification({
 
 function Billing() {
   return (
-    <Card className="p-6">
+    <ConsolePanel className="p-6">
       <Badge tone="purple">Billing</Badge>
       <h2 className="mt-4 text-2xl font-black">Subscription, billing portal, and featured slots</h2>
       <p className="mt-2 text-sm leading-6 text-slate-400">
@@ -1154,7 +1336,7 @@ function Billing() {
         Featured visibility. Plans remains the only place to start a seller
         subscription.
       </div>
-    </Card>
+    </ConsolePanel>
   );
 }
 
@@ -1173,21 +1355,12 @@ function DashboardTextInput({
 }) {
   return (
     <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</div>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none"
+        className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-purple-300/40"
       />
     </label>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 truncate text-lg font-black">{value}</div>
-    </div>
   );
 }
