@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
+import { CategoryPicker } from "@/components/category-picker";
 import { addLocalProduct, slugify } from "@/lib/product-store";
 import { games, productCategories } from "@/lib/data";
 import type { LocalProduct } from "@/lib/product-types";
@@ -161,7 +162,7 @@ export function ProductCreateClient({
       </div>
 
       <form onSubmit={submit} className="mt-6 grid gap-5">
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid gap-5 md:grid-cols-2">
           <label className="grid gap-2 text-sm font-semibold text-slate-200">
             Product name
             <input
@@ -187,22 +188,12 @@ export function ProductCreateClient({
               ))}
             </select>
           </label>
-          <label className="grid gap-2 text-sm font-semibold text-slate-200">
-            Category
-            <select
-              value={form.category}
-              onChange={(event) => update("category", event.target.value)}
-              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
-              required
-            >
-              {productCategories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
+
+        <CategoryPicker
+          value={form.category}
+          onChange={(category) => update("category", category)}
+        />
 
         <label className="grid gap-2 text-sm font-semibold text-slate-200">
           Short summary

@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
+import { CategoryPicker } from "@/components/category-picker";
 import { games, productCategories } from "@/lib/data";
 
 type EditableProduct = {
@@ -50,21 +51,16 @@ export function ProductEditClient({ product }: { product: EditableProduct }) {
   const [saving, setSaving] = useState(false);
   const isPublished = product.status === "published";
 
-  // Closed picker lists. If a product was created before the closed lists
-  // existed (legacy data), preserve its current value as the first option
-  // so saving doesn't silently rewrite it.
+  // Closed picker list for game. If a product was created before the closed
+  // list existed (legacy data), preserve its current value as the first
+  // option so saving doesn't silently rewrite it. Category is handled by
+  // <CategoryPicker> via its `extraOptions` prop.
   const gameOptions = useMemo(() => {
     if (form.game && !games.includes(form.game)) {
       return [form.game, ...games];
     }
     return games;
   }, [form.game]);
-  const categoryOptions = useMemo(() => {
-    if (form.category && !productCategories.includes(form.category)) {
-      return [form.category, ...productCategories];
-    }
-    return productCategories;
-  }, [form.category]);
 
   const update = (key: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -142,7 +138,7 @@ export function ProductEditClient({ product }: { product: EditableProduct }) {
       </div>
 
       <form onSubmit={submit} className="mt-6 grid gap-5">
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid gap-5 md:grid-cols-2">
           <label className="grid gap-2 text-sm font-semibold text-slate-200">
             Product name
             <input
@@ -167,22 +163,17 @@ export function ProductEditClient({ product }: { product: EditableProduct }) {
               ))}
             </select>
           </label>
-          <label className="grid gap-2 text-sm font-semibold text-slate-200">
-            Category
-            <select
-              value={form.category}
-              onChange={(event) => update("category", event.target.value)}
-              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
-              required
-            >
-              {categoryOptions.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
+
+        <CategoryPicker
+          value={form.category}
+          onChange={(category) => update("category", category)}
+          extraOptions={
+            form.category && !productCategories.includes(form.category)
+              ? [form.category]
+              : []
+          }
+        />
 
         <label className="grid gap-2 text-sm font-semibold text-slate-200">
           Website URL
