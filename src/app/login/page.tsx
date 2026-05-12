@@ -28,7 +28,7 @@ export default function LoginPage({
       <Nav />
       <section className="mx-auto grid min-h-[calc(100vh-96px)] max-w-7xl items-center gap-10 px-6 py-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
-          <Badge tone="purple">Standard account</Badge>
+          <Badge tone="orange">Standard account</Badge>
           <h1 className="mt-5 text-5xl font-black tracking-tight md:text-6xl">
             Welcome back.
           </h1>

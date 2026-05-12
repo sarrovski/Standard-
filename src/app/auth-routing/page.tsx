@@ -24,7 +24,7 @@ export default function AuthRoutingPage({
 
         <section className="mt-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <Card className="p-6">
-            <Badge tone="purple">Current mock session</Badge>
+            <Badge tone="orange">Current mock session</Badge>
             <h2 className="mt-4 text-2xl font-black">{session.name}</h2>
             <div className="mt-5 grid gap-3">
               <Info label="Email" value={session.email} />
@@ -35,7 +35,7 @@ export default function AuthRoutingPage({
             </div>
             <Link
               href={redirect}
-              className="mt-6 inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white"
+              className="mt-6 inline-flex w-full justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white"
             >
               Continue to destination
             </Link>
@@ -48,7 +48,7 @@ export default function AuthRoutingPage({
                 <div key={step.label} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="font-bold">{step.label}</div>
-                    <Badge tone="cyan">{step.redirect}</Badge>
+                    <Badge tone="default">{step.redirect}</Badge>
                   </div>
                   <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 font-mono text-xs text-slate-400">
                     {step.condition}

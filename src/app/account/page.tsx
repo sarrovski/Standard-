@@ -23,7 +23,7 @@ export default async function AccountPage({
           <div className="mt-8 space-y-8">
             <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <Card className="p-6">
-                <Badge tone="purple">Start Selling</Badge>
+                <Badge tone="orange">Start Selling</Badge>
                 <h2 className="mt-4 text-2xl font-black">How selling on Standard works</h2>
                 <p className="mt-3 text-sm leading-6 text-slate-400">
                   Standard helps sellers create trusted product announcements, verify payment methods, and send qualified users to their own website.
@@ -51,7 +51,7 @@ export default async function AccountPage({
               </Card>
 
               <Card className="p-6">
-                <Badge tone="cyan">Seller tools</Badge>
+                <Badge tone="default">Seller tools</Badge>
                 <h2 className="mt-4 text-2xl font-black">What you unlock</h2>
                 <div className="mt-5 grid gap-3">
                   {[
@@ -103,7 +103,7 @@ export default async function AccountPage({
 
             <section className="mt-8 grid gap-6 lg:grid-cols-2">
               <Card className="p-6">
-                <Badge tone="purple">Saved</Badge>
+                <Badge tone="orange">Saved</Badge>
                 <h2 className="mt-4 text-2xl font-black">Watchlist</h2>
                 <div className="mt-5 space-y-3">
                   {["PhantomX Tracker", "Shadow Overlay", "NovaKeys Offer"].map((item) => (
@@ -116,7 +116,7 @@ export default async function AccountPage({
               </Card>
 
               <Card className="p-6">
-                <Badge tone="cyan">Payments</Badge>
+                <Badge tone="default">Payments</Badge>
                 <h2 className="mt-4 text-2xl font-black">Payment preferences</h2>
                 <p className="mt-3 text-sm leading-6 text-slate-400">
                   Users can filter marketplace results by payment methods they can actually use.

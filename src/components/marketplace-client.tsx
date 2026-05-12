@@ -114,9 +114,9 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
           <p className="mt-1 text-sm text-slate-500">{orderedProducts.length} products found</p>
         </div>
         <div className="hidden gap-2 md:flex">
-          <Badge tone="purple">Featured first</Badge>
+          <Badge tone="orange">Featured first</Badge>
           <Badge tone="green">Verified</Badge>
-          <Badge tone="cyan">Provider / Developer</Badge>
+          <Badge tone="default">Provider / Developer</Badge>
         </div>
       </div>
 
@@ -150,7 +150,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
                       <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
-                      {isFeatured && <Badge tone="purple">Featured</Badge>}
+                      {isFeatured && <Badge tone="orange">Featured</Badge>}
                     </div>
                   </div>
                   <div className="mt-7">
@@ -202,7 +202,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                   </div>
                   <Link
                     href={`/products/${product.slug}`}
-                    className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold"
+                    className="inline-flex items-center justify-center rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold"
                   >
                     View product
                   </Link>
@@ -241,7 +241,7 @@ function GameFilterButton({ game, active, onClick }: { game: string; active: boo
       className={cn(
         "group inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition",
         active
-          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-purple-950/30"
+          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-orange-950/30"
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >
@@ -265,7 +265,7 @@ function FilterButton({ active, onClick, children }: { active: boolean; onClick:
       className={cn(
         "rounded-full border px-3 py-1.5 text-sm transition",
         active
-          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-purple-950/30"
+          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-orange-950/30"
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >
@@ -291,7 +291,7 @@ function PaymentFilterButton({ payment, active, onClick }: { payment: string; ac
       className={cn(
         "inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition",
         active
-          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-purple-950/30"
+          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-orange-950/30"
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >

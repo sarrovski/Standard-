@@ -8,10 +8,10 @@ export default function HomePage() {
       <Nav />
       <section className="mx-auto max-w-7xl px-6 pb-16 pt-12">
         <div className="mx-auto max-w-4xl text-center">
-          <Badge tone="purple">Third-party seller verification for gaming tools</Badge>
+          <Badge tone="orange">Third-party seller verification for gaming tools</Badge>
           <h1 className="mt-6 text-5xl font-black leading-[1.04] tracking-tight md:text-7xl">
             Compare sellers before
-            <span className="bg-gradient-to-r from-purple-400 to-cyan-300 bg-clip-text text-transparent"> you buy.</span>
+            <span className="bg-gradient-to-r from-orange-400 to-orange-200 bg-clip-text text-transparent"> you buy.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-400">
             Standard acts as an independent trust layer where customers can compare sellers,
@@ -55,7 +55,7 @@ export default function HomePage() {
               <Link
                 key={game}
                 href={`/marketplace?game=${encodeURIComponent(game)}`}
-                className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:border-purple-400/40"
+                className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:border-orange-400/40"
               >
                 <div className="font-bold">{game}</div>
                 <div className="mt-1 text-sm text-slate-500">

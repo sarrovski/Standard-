@@ -49,7 +49,7 @@ function createDemoProduct(form: ProductCreateForm): LocalProduct {
     pricePoints: [],
     delivery: "Pending verification",
     refundPolicy: "Pending verification",
-    accent: "from-violet-500/70 to-cyan-400/40",
+    accent: "from-orange-500/70 to-cyan-400/40",
     summary: form.summary,
     websiteUrl: "",
     websiteLabel: "Visit website",
@@ -144,7 +144,7 @@ export function ProductCreateClient({
     <Card className="mt-8 p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <Badge tone="purple">Draft product</Badge>
+          <Badge tone="orange">Draft product</Badge>
           <h2 className="mt-4 text-2xl font-black">Create product</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
             Products start as drafts. Add media from Produits after creation,
@@ -166,7 +166,7 @@ export function ProductCreateClient({
             <input
               value={form.name}
               onChange={(event) => update("name", event.target.value)}
-              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-300/50"
+              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
               placeholder="Matrix Inter"
               required
             />
@@ -176,7 +176,7 @@ export function ProductCreateClient({
             <input
               value={form.game}
               onChange={(event) => update("game", event.target.value)}
-              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-300/50"
+              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
               placeholder="Rust"
               required
             />
@@ -186,7 +186,7 @@ export function ProductCreateClient({
             <input
               value={form.category}
               onChange={(event) => update("category", event.target.value)}
-              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-300/50"
+              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
               placeholder="Cheat"
               required
             />
@@ -198,7 +198,7 @@ export function ProductCreateClient({
           <textarea
             value={form.summary}
             onChange={(event) => update("summary", event.target.value)}
-            className="min-h-28 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-300/50"
+            className="min-h-28 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
             placeholder="rust most advanced cheat"
           />
         </label>
@@ -213,7 +213,7 @@ export function ProductCreateClient({
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "Creating..." : "Create product"}
           </button>

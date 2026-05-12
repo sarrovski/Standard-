@@ -66,49 +66,83 @@ function normalizeTab(candidate: string | null | undefined): string {
 }
 
 /**
- * Button-based tabs for the seller dashboard.
+ * Vertical sidebar nav for the seller dashboard. Sits on the left at
+ * lg+ widths and stacks above the active panel on small screens.
  *
- * The shared <Tabs> in components/ui renders <Link> elements, which works
- * for static dashboards but caused this batch's bug: clicking a Link
- * navigated /dashboard?tab=X, but the parent client component had its
- * tab state seeded only at mount, so navigation didn't update the visible
- * panel until a full reload.
- *
- * This local component takes a click handler instead, so the parent owns
- * both the state and the URL update. Same visual styling as the shared
- * Tabs to keep design consistent.
+ * The parent owns both the active-tab state and the URL update — clicks
+ * call `onSelect`, which keeps the visible panel and `?tab=` in sync
+ * without a full reload.
  */
-function DashboardTabs({
+function DashboardSidebar({
   items,
   active,
   onSelect,
+  sellerName,
+  supabaseSourced,
+  hasProducts,
 }: {
   items: Array<{ key: string; label: string }>;
   active: string;
   onSelect: (key: string) => void;
+  sellerName: string | null;
+  supabaseSourced: boolean;
+  hasProducts: boolean;
 }) {
+  const statusLabel = !supabaseSourced
+    ? "Demo"
+    : hasProducts
+      ? "Live"
+      : "Pending";
+  const statusTone: "default" | "green" | "amber" =
+    statusLabel === "Live" ? "green" : statusLabel === "Pending" ? "amber" : "default";
+
   return (
-    <div className="flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.035] p-2">
-      {items.map((item) => {
-        const isActive = active === item.key;
-        return (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => onSelect(item.key)}
-            className={
-              "whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition " +
-              (isActive
-                ? "bg-purple-500/20 text-purple-100"
-                : "text-slate-400 hover:bg-white/[0.04] hover:text-white")
-            }
-            aria-pressed={isActive}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-    </div>
+    <aside className="lg:sticky lg:top-6 lg:self-start">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-sm font-black text-white">
+            {(sellerName?.[0] ?? "S").toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-white">
+              {sellerName ?? "Dashboard"}
+            </div>
+            <div className="mt-1">
+              <Badge tone={statusTone}>{statusLabel}</Badge>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <nav className="mt-4 grid gap-1 rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+        {items.map((item) => {
+          const isActive = active === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onSelect(item.key)}
+              className={
+                "flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold transition " +
+                (isActive
+                  ? "bg-orange-500/15 text-white"
+                  : "text-slate-400 hover:bg-white/[0.04] hover:text-white")
+              }
+              aria-pressed={isActive}
+            >
+              <span
+                aria-hidden="true"
+                className={
+                  "h-4 w-1 rounded-full transition " +
+                  (isActive ? "bg-orange-400" : "bg-transparent")
+                }
+              />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+    </aside>
   );
 }
 
@@ -165,14 +199,20 @@ export function DashboardClient({
   };
 
   const supabaseSourced = initialData !== null;
+  const hasProducts = (initialData?.products?.length ?? 0) > 0;
 
   return (
-    <>
-      <div className="mt-8">
-        <DashboardTabs items={tabs} active={tab} onSelect={handleTabClick} />
-      </div>
+    <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+      <DashboardSidebar
+        items={tabs}
+        active={tab}
+        onSelect={handleTabClick}
+        sellerName={initialData?.sellerName ?? null}
+        supabaseSourced={supabaseSourced}
+        hasProducts={hasProducts}
+      />
 
-      <div className="mt-8">
+      <div className="min-w-0">
         {tab === "products" && (
           <Products
             supabaseSourced={supabaseSourced}
@@ -196,7 +236,7 @@ export function DashboardClient({
         )}
         {tab === "billing" && <Billing />}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -764,7 +804,7 @@ function Products({
                       <Badge tone={product.status === "Published" ? "green" : "amber"}>
                         {product.status}
                       </Badge>
-                      <Badge tone="cyan">{product.pageTemplate}</Badge>
+                      <Badge tone="default">{product.pageTemplate}</Badge>
                     </div>
                     <p className="mt-1 text-xs text-slate-400">
                       {product.game} · {product.toolStatus} · {product.website}
@@ -1031,7 +1071,7 @@ function Payments({
   return (
     <div className="space-y-6">
       <Card className="p-6">
-        <Badge tone="cyan">Payment verification</Badge>
+        <Badge tone="default">Payment verification</Badge>
         <h2 className="mt-4 text-2xl font-black">Prove the payment methods you accept</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
           Payment methods stay private or under review until admin approves them. Only verified
@@ -1121,7 +1161,7 @@ function Payments({
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
+              className="mt-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
             >
               {submitting ? "Submitting…" : "Submit payment verification"}
             </button>
@@ -1194,7 +1234,7 @@ function Analytics() {
               </div>
               <div className="mt-2 h-2 rounded-full bg-white/10">
                 <div
-                  className="h-full rounded-full bg-purple-400"
+                  className="h-full rounded-full bg-orange-400"
                   style={{ width: `${share}%` }}
                 />
               </div>
@@ -1267,7 +1307,7 @@ function Verification({
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
       <Card className="p-6">
-        <Badge tone="purple">Provider tag request</Badge>
+        <Badge tone="orange">Provider tag request</Badge>
         <h2 className="mt-4 text-2xl font-black">Request Provider / Developer tag</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
           If you are the official developer or provider, submit your public proof here. Admin
@@ -1282,7 +1322,7 @@ function Verification({
           <button
             type="submit"
             disabled={submitting || currentStatus === "Pending"}
-            className="rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
+            className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
           >
             {currentStatus === "Pending"
               ? "Request pending review"
@@ -1363,7 +1403,7 @@ function Verification({
 function Billing() {
   return (
     <Card className="p-6">
-      <Badge tone="purple">Billing</Badge>
+      <Badge tone="orange">Billing</Badge>
       <h2 className="mt-4 text-2xl font-black">Subscription, billing portal, and featured slots</h2>
       <p className="mt-2 text-sm leading-6 text-slate-400">
         Everything money-related lives on a dedicated page so it stays organized.
@@ -1372,7 +1412,7 @@ function Billing() {
       </p>
       <Link
         href="/dashboard/billing"
-        className="mt-5 inline-flex rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white"
+        className="mt-5 inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white"
       >
         Open billing
       </Link>

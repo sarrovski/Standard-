@@ -4,8 +4,8 @@ import { cn } from "@/lib/helpers";
 
 export function Shell({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-screen overflow-hidden bg-[#070812] text-white">
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_80%_0%,rgba(139,92,246,0.16),transparent_30%),radial-gradient(circle_at_0%_42%,rgba(34,211,238,0.08),transparent_28%)]" />
+    <main className="min-h-screen overflow-hidden bg-black text-white">
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_80%_0%,rgba(249,115,22,0.14),transparent_32%),radial-gradient(circle_at_0%_42%,rgba(249,115,22,0.06),transparent_30%)]" />
       <div className="relative">
         {children}
         <Footer />
@@ -18,7 +18,7 @@ export function Nav() {
   return (
     <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
       <Link href="/" className="flex items-center gap-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-300 via-violet-500 to-purple-700 text-lg font-black text-white">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white">
           S
         </span>
         <span className="text-2xl font-black tracking-tight">Standard</span>
@@ -64,11 +64,11 @@ export function Badge({
   tone = "default",
 }: {
   children: ReactNode;
-  tone?: "default" | "purple" | "green" | "amber" | "red" | "cyan";
+  tone?: "default" | "orange" | "green" | "amber" | "red" | "cyan";
 }) {
   const styles = {
     default: "border-white/10 bg-white/[0.04] text-slate-300",
-    purple: "border-purple-400/20 bg-purple-500/10 text-purple-200",
+    orange: "border-orange-400/20 bg-orange-500/10 text-orange-200",
     green: "border-emerald-400/20 bg-emerald-500/10 text-emerald-200",
     amber: "border-amber-400/20 bg-amber-500/10 text-amber-200",
     red: "border-red-400/20 bg-red-500/10 text-red-200",
@@ -96,7 +96,7 @@ export function ButtonLink({
       href={href}
       className={
         variant === "primary"
-          ? "inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20"
+          ? "inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400"
           : "inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white"
       }
     >
@@ -116,7 +116,7 @@ export function SectionHeader({
 }) {
   return (
     <div>
-      <p className="text-sm font-medium text-purple-300">{eyebrow}</p>
+      <p className="text-sm font-medium text-orange-300">{eyebrow}</p>
       <h1 className="mt-3 text-4xl font-black tracking-tight md:text-6xl">{title}</h1>
       <p className="mt-4 max-w-3xl text-slate-400">{text}</p>
     </div>
@@ -151,7 +151,7 @@ export function Tabs({
           className={cn(
             "whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition",
             active === item.key
-              ? "bg-purple-500/20 text-purple-100"
+              ? "bg-orange-500/20 text-orange-100"
               : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
           )}
         >
@@ -169,7 +169,7 @@ export function Footer() {
       <div className="grid gap-8 md:grid-cols-[1.2fr_0.8fr_0.8fr]">
         <div>
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-300 via-violet-500 to-purple-700 text-lg font-black text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white">
               S
             </span>
             <span className="text-2xl font-black tracking-tight">Standard</span>

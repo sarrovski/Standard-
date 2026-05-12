@@ -47,7 +47,7 @@ export default function TrustPage() {
             </p>
           </Card>
           <Card className="p-6">
-            <Badge tone="cyan">Provider / Developer</Badge>
+            <Badge tone="default">Provider / Developer</Badge>
             <h2 className="mt-4 text-2xl font-black">Official seller tag</h2>
             <p className="mt-3 text-sm leading-6 text-slate-400">
               The Provider / Developer tag is reserved for sellers who can show they are the official
@@ -55,7 +55,7 @@ export default function TrustPage() {
             </p>
           </Card>
           <Card className="p-6">
-            <Badge tone="purple">Reviews</Badge>
+            <Badge tone="orange">Reviews</Badge>
             <h2 className="mt-4 text-2xl font-black">Real customer feedback</h2>
             <p className="mt-3 text-sm leading-6 text-slate-400">
               Reviews are designed to come from real customers. Sellers cannot directly manipulate,

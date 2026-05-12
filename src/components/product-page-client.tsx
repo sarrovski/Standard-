@@ -154,7 +154,7 @@ export function ProductPageClient({
   return (
     <>
       <section className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="overflow-hidden border-purple-400/30">
+        <Card className="overflow-hidden border-orange-400/30">
           <div className={`bg-gradient-to-br ${product.accent} p-8`}>
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
@@ -181,7 +181,7 @@ export function ProductPageClient({
         </Card>
 
         <Card className="p-6">
-          <Badge tone="purple">Seller conversion panel</Badge>
+          <Badge tone="orange">Seller conversion panel</Badge>
           <h2 className="mt-4 text-2xl font-black">Continue to seller website</h2>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Standard gives the buyer context. The next step is to continue on the seller’s official website.
@@ -193,7 +193,7 @@ export function ProductPageClient({
             <Fact label="Telegram" value={telegram || "—"} />
           </div>
           {websiteUrl ? (
-            <a href={websiteUrl} className="mt-6 inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white">
+            <a href={websiteUrl} className="mt-6 inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white">
               Go to official website
             </a>
           ) : null}
@@ -348,7 +348,7 @@ function MediaCarousel({
                   type="button"
                   onClick={() => onSelect(index)}
                   className={`relative h-20 w-28 flex-none overflow-hidden rounded-2xl border text-left transition ${
-                    active ? "border-purple-300" : "border-white/10 hover:border-white/30"
+                    active ? "border-orange-300" : "border-white/10 hover:border-white/30"
                   }`}
                   aria-pressed={active}
                 >

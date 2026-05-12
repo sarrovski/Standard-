@@ -214,7 +214,7 @@ export default async function BillingPage({
             </p>
             <a
               href="/plans"
-              className="mt-6 inline-flex rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white"
+              className="mt-6 inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white"
             >
               View seller plan
             </a>
@@ -261,7 +261,7 @@ export default async function BillingPage({
 
             {/* 2. Featured slots — purchase + active */}
             <Card className="p-6">
-              <Badge tone="purple">Featured slots</Badge>
+              <Badge tone="orange">Featured slots</Badge>
               <h2 className="mt-4 text-2xl font-black">Boost a product to the top</h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
                 Featured placement raises a product&apos;s visibility inside its game/category.

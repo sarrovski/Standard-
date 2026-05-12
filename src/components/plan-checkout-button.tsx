@@ -55,7 +55,7 @@ export function PlanCheckoutButton({
 
   const className =
     variant === "primary"
-      ? "inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+      ? "inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
       : "inline-flex w-full justify-center rounded-xl border border-white/15 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white disabled:opacity-60";
 
   return (

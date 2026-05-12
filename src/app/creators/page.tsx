@@ -18,7 +18,7 @@ const CREATORS: Creator[] = [
     platforms: ["TikTok", "YouTube Shorts", "YouTube"],
     startingRate: "$120",
     availability: "Open this week",
-    accent: "from-cyan-400/60 via-purple-500/30 to-slate-950",
+    accent: "from-cyan-400/60 via-orange-500/30 to-slate-950",
   },
   {
     name: "ClipForge",
@@ -36,7 +36,7 @@ const CREATORS: Creator[] = [
     platforms: ["YouTube", "Discord", "Web"],
     startingRate: "$45",
     availability: "Available next week",
-    accent: "from-amber-300/50 via-fuchsia-500/30 to-slate-950",
+    accent: "from-amber-300/50 via-orange-500/30 to-slate-950",
   },
   {
     name: "Pulse Review Lab",
@@ -45,7 +45,7 @@ const CREATORS: Creator[] = [
     platforms: ["YouTube", "TikTok", "Twitch"],
     startingRate: "$180",
     availability: "Invite only",
-    accent: "from-indigo-400/60 via-cyan-400/25 to-slate-950",
+    accent: "from-orange-400/60 via-cyan-400/25 to-slate-950",
   },
 ];
 
@@ -63,7 +63,7 @@ export default function CreatorsPage() {
       <section className="mx-auto max-w-7xl px-6 py-10">
         <div className="grid gap-10 lg:grid-cols-[1fr_0.82fr] lg:items-center">
           <div>
-            <Badge tone="purple">Media creators</Badge>
+            <Badge tone="orange">Media creators</Badge>
             <h1 className="mt-5 max-w-4xl text-4xl font-black tracking-tight md:text-6xl">
               Find creators for gaming product content
             </h1>
@@ -100,7 +100,7 @@ export default function CreatorsPage() {
                 key={title}
                 className="rounded-2xl border border-white/10 bg-slate-950/50 p-5"
               >
-                <div className="h-28 rounded-xl border border-white/10 bg-gradient-to-br from-slate-900 via-purple-500/20 to-cyan-400/20" />
+                <div className="h-28 rounded-xl border border-white/10 bg-gradient-to-br from-slate-900 via-orange-500/20 to-orange-400/10" />
                 <h2 className="mt-4 text-lg font-black">{title}</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-400">{text}</p>
               </div>
@@ -159,7 +159,7 @@ function FilterBlock({
             type="button"
             className={
               index === 0
-                ? "rounded-full border border-purple-400/40 bg-purple-500/15 px-3 py-1.5 text-sm text-purple-100"
+                ? "rounded-full border border-orange-400/40 bg-orange-500/15 px-3 py-1.5 text-sm text-orange-100"
                 : "rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-slate-300"
             }
           >
@@ -181,7 +181,7 @@ function CreatorCard({ creator }: { creator: Creator }) {
             <h3 className="text-xl font-black">{creator.name}</h3>
             <p className="mt-1 text-sm text-slate-500">{creator.availability}</p>
           </div>
-          <Badge tone="cyan">Concept profile</Badge>
+          <Badge tone="default">Concept profile</Badge>
         </div>
 
         <CreatorMeta label="Games" values={creator.games} />

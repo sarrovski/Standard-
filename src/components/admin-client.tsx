@@ -301,7 +301,7 @@ export function AdminClient({
                       {risk} risk
                     </Badge>
                     {item._source === "supabase" && <Badge tone="green">Live</Badge>}
-                    {item._source === "demo-local" && <Badge tone="purple">Demo</Badge>}
+                    {item._source === "demo-local" && <Badge tone="orange">Demo</Badge>}
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
                     <div><span className="text-slate-500">Proof:</span> {proof}</div>

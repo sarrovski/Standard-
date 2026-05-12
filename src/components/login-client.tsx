@@ -236,7 +236,7 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
               disabled={isBusy}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-orange-400/50 disabled:opacity-60"
             />
           </label>
 
@@ -248,7 +248,7 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
               onChange={(event) => setPassword(event.target.value)}
               placeholder={supabaseConfigured ? "Your password" : "Optional in demo mode"}
               disabled={isBusy}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-orange-400/50 disabled:opacity-60"
             />
           </label>
 
@@ -267,7 +267,7 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
           <button
             type="submit"
             disabled={isBusy}
-            className="inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20 disabled:opacity-60"
+            className="inline-flex w-full justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 disabled:opacity-60"
           >
             {submittingAction === "password"
               ? "Logging in…"
@@ -281,7 +281,7 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
               type="button"
               onClick={handleMagicLink}
               disabled={isBusy}
-              className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white disabled:opacity-60"
+              className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-orange-400/40 hover:text-white disabled:opacity-60"
             >
               {submittingAction === "magic" ? "Sending…" : "Send magic link"}
             </button>
@@ -289,7 +289,7 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
               type="button"
               onClick={handleResetPassword}
               disabled={isBusy}
-              className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white disabled:opacity-60"
+              className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-orange-400/40 hover:text-white disabled:opacity-60"
             >
               {submittingAction === "reset" ? "Sending…" : "Forgot password?"}
             </button>
@@ -298,7 +298,7 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
 
         <div className="mt-6 border-t border-white/10 pt-6 text-center text-sm text-slate-400">
           New to Standard?{" "}
-          <Link href="/signup" className="font-semibold text-purple-300 hover:text-purple-200">
+          <Link href="/signup" className="font-semibold text-orange-300 hover:text-orange-200">
             Create an account
           </Link>
         </div>
@@ -326,7 +326,7 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
                 key={mail}
                 type="button"
                 onClick={() => setEmail(mail)}
-                className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-left text-sm text-slate-300 transition hover:border-purple-400/40 hover:text-white"
+                className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-left text-sm text-slate-300 transition hover:border-orange-400/40 hover:text-white"
               >
                 <div className="font-semibold">{mail}</div>
                 <div className="mt-1 text-xs text-slate-500">{label}</div>

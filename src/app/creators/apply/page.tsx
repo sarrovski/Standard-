@@ -21,7 +21,7 @@ export default function CreatorApplyPage() {
       <section className="mx-auto max-w-5xl px-6 py-10">
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
           <div>
-            <Badge tone="purple">Creator application</Badge>
+            <Badge tone="orange">Creator application</Badge>
             <h1 className="mt-5 text-4xl font-black tracking-tight md:text-5xl">
               Apply as a Standard media creator
             </h1>
@@ -82,7 +82,7 @@ export default function CreatorApplyPage() {
 
               <button
                 type="submit"
-                className="inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20"
+                className="inline-flex w-full justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20"
               >
                 Submit application mock
               </button>
@@ -115,7 +115,7 @@ function TextField({
         type={type}
         required={required}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50"
+        className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-orange-400/50"
       />
     </label>
   );
@@ -137,7 +137,7 @@ function TextArea({
         name={name}
         rows={4}
         placeholder={placeholder}
-        className="w-full resize-none rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50"
+        className="w-full resize-none rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-orange-400/50"
       />
     </label>
   );
@@ -165,7 +165,7 @@ function CheckGroup({
               type="checkbox"
               name={name}
               value={option}
-              className="h-4 w-4 rounded border-white/20 bg-slate-950 accent-purple-500"
+              className="h-4 w-4 rounded border-white/20 bg-slate-950 accent-orange-500"
             />
             {option}
           </label>

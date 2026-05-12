@@ -11,7 +11,7 @@ export function AccountMenuPreview() {
             Once auth is connected, the navbar can show an avatar menu instead of public Login.
           </p>
         </div>
-        <Badge tone="purple">Preview</Badge>
+        <Badge tone="orange">Preview</Badge>
       </div>
 
       <div className="mt-5 grid gap-2">

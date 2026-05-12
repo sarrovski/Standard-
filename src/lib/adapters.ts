@@ -112,10 +112,10 @@ export function coercePaymentMethod(name: string | null | undefined): PaymentMet
 // Rotates through gradients deterministically based on slug hash so the same
 // product always gets the same accent across renders.
 const ACCENTS: readonly string[] = [
-  "from-violet-500/70 to-cyan-400/40",
-  "from-fuchsia-500/70 to-orange-400/40",
+  "from-orange-500/70 to-cyan-400/40",
+  "from-orange-500/70 to-orange-400/40",
   "from-emerald-500/70 to-cyan-400/40",
-  "from-indigo-500/70 to-purple-500/40",
+  "from-orange-500/70 to-orange-500/40",
   "from-amber-500/70 to-rose-400/40",
 ];
 

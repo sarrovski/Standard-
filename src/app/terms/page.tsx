@@ -63,9 +63,9 @@ export default function TermsPage() {
           ))}
         </div>
 
-        <Card className="mt-8 border-purple-400/20 bg-purple-500/10 p-6">
+        <Card className="mt-8 border-orange-400/20 bg-orange-500/10 p-6">
           <h2 className="text-xl font-bold">Plain-English summary</h2>
-          <p className="mt-3 text-sm leading-7 text-purple-100/90">
+          <p className="mt-3 text-sm leading-7 text-orange-100/90">
             Standard helps customers compare sellers so they can make better decisions and avoid scams.
             Verified Sellers are approved by our team. Provider / Developer tags require proof.
             Reviews should come from real customers and sellers cannot manipulate them. Standard does

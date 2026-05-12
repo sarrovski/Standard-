@@ -35,14 +35,14 @@ export default function StartSellingPage() {
         />
 
         <Card className="mt-8 p-6">
-          <Badge tone="purple">How it works</Badge>
+          <Badge tone="orange">How it works</Badge>
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {STEPS.map((step, index) => (
               <div
                 key={step.title}
                 className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
               >
-                <div className="text-xs font-semibold text-purple-200">
+                <div className="text-xs font-semibold text-orange-200">
                   Step {index + 1}
                 </div>
                 <h2 className="mt-2 text-lg font-bold">{step.title}</h2>
