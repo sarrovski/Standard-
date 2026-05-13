@@ -507,6 +507,11 @@ export type UISellerProductCard = {
   rawStatus: "draft" | "published" | "archived";
   // Sorted list of attached media (Supabase mode). Empty array in demo mode.
   media: UIProductMedia[];
+  // Extra fields used by the seller-facing "Listing strength" score.
+  summary: string;
+  featureGroups: FeatureGroup[];
+  faq: FaqItem[];
+  websiteUrl: string;
 };
 
 export function adaptSellerProductCard(
@@ -522,6 +527,11 @@ export function adaptSellerProductCard(
         ? "Draft"
         : "Archived";
   const media = sortedProductMedia(row.product_media);
+  const parsedGroups = parseFeatureGroups(row.features_grouped);
+  const featureGroups =
+    parsedGroups.length > 0
+      ? parsedGroups
+      : groupsFromFlatFeatures(row.features ?? []);
   return {
     id: row.id,
     slug: row.slug,
@@ -546,6 +556,10 @@ export function adaptSellerProductCard(
           ? "Drive traffic from your website"
           : "Restore from Produits",
     media,
+    summary: row.summary ?? "",
+    featureGroups,
+    faq: parseFaq(row.faq),
+    websiteUrl: row.website_url ?? "",
   };
 }
 

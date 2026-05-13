@@ -2,7 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { Nav, Shell } from "@/components/ui";
 import { ProductEditClient } from "@/components/product-edit-client";
 import { isSupabaseConfigured, requireRole } from "@/lib/roles";
-import { getSellerByProfileId } from "@/lib/repositories/seller";
+import {
+  getSellerByProfileId,
+  getVerifiedPaymentMethodCount,
+} from "@/lib/repositories/seller";
 import { sortedProductMedia } from "@/lib/adapters";
 import {
   groupsFromFlatFeatures,
@@ -84,6 +87,13 @@ export default async function ProductEditPage({
       ? parsedGroups
       : groupsFromFlatFeatures(product.features ?? []);
 
+  // Admins can edit any product; their own verified-payment count is
+  // unrelated to this seller's score, so only credit a "verified payment
+  // method" check when we know which seller owns the product.
+  const verifiedPaymentMethodCount = seller
+    ? await getVerifiedPaymentMethodCount(seller.id)
+    : undefined;
+
   return (
     <Shell>
       <Nav />
@@ -102,6 +112,7 @@ export default async function ProductEditPage({
             status: product.status,
           }}
           initialMedia={initialMedia}
+          verifiedPaymentMethodCount={verifiedPaymentMethodCount}
         />
       </section>
     </Shell>

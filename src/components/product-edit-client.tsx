@@ -8,6 +8,8 @@ import { CategoryPicker } from "@/components/category-picker";
 import { FeatureGroupsEditor } from "@/components/feature-groups-editor";
 import { FaqEditor } from "@/components/faq-editor";
 import { ProductMediaPanel } from "@/components/product-media-panel";
+import { ListingStrengthCard } from "@/components/listing-strength";
+import { evaluateListingStrength } from "@/lib/listing-strength";
 import { games, productCategories } from "@/lib/data";
 import { type FeatureGroup } from "@/lib/product-features";
 import { type FaqItem } from "@/lib/product-faq";
@@ -47,9 +49,11 @@ function formatEditError(status: number | null, payload: ProductEditError) {
 export function ProductEditClient({
   product,
   initialMedia,
+  verifiedPaymentMethodCount,
 }: {
   product: EditableProduct;
   initialMedia: UIProductMedia[];
+  verifiedPaymentMethodCount: number | undefined;
 }) {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -61,9 +65,30 @@ export function ProductEditClient({
     feature_groups: product.featureGroups,
     faq: product.faq,
   });
+  // Mirror of the media panel's state so the listing-strength score can
+  // recompute live as the seller adds/removes images and videos.
+  const [media, setMedia] = useState<UIProductMedia[]>(initialMedia);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const isPublished = product.status === "published";
+
+  const strength = useMemo(
+    () =>
+      evaluateListingStrength({
+        name: form.name,
+        game: form.game,
+        category: form.category,
+        websiteUrl: form.website_url,
+        summary: form.summary,
+        featureGroups: form.feature_groups,
+        faq: form.faq,
+        imageCount: media.filter((m) => m.type === "image").length,
+        videoCount: media.filter((m) => m.type === "youtube").length,
+        verifiedPaymentMethodCount,
+        status: product.status,
+      }),
+    [form, media, verifiedPaymentMethodCount, product.status],
+  );
 
   // Closed picker list for game. If a product was created before the closed
   // list existed (legacy data), preserve its current value as the first
@@ -161,6 +186,10 @@ export function ProductEditClient({
         >
           Back to Produits
         </Link>
+      </div>
+
+      <div className="mt-6">
+        <ListingStrengthCard result={strength} />
       </div>
 
       <form onSubmit={submit} className="mt-6 grid gap-5">
@@ -266,6 +295,7 @@ export function ProductEditClient({
           <ProductMediaPanel
             productId={product.id}
             initialMedia={initialMedia}
+            onMediaChange={setMedia}
           />
         </div>
       </Card>

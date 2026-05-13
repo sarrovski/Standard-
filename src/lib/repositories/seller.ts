@@ -44,6 +44,32 @@ export async function getSellerProducts(sellerId: string) {
     .order("created_at", { ascending: false });
 }
 
+/**
+ * Count the verified seller_payment_methods rows for a seller. Used by the
+ * seller-facing "Listing strength" score so we can credit the seller once
+ * they've gone through payment-method verification at least once.
+ *
+ * Returns 0 on any error so callers can fall back gracefully.
+ */
+export async function getVerifiedPaymentMethodCount(
+  sellerId: string,
+): Promise<number> {
+  const supabase = createClient();
+  const { count, error } = await supabase
+    .from("seller_payment_methods")
+    .select("*", { count: "exact", head: true })
+    .eq("seller_id", sellerId)
+    .eq("status", "verified");
+  if (error) {
+    console.error(
+      "[seller-repo] verified payment method count failed:",
+      error.message,
+    );
+    return 0;
+  }
+  return count ?? 0;
+}
+
 export async function getSellerPaymentVerificationRequests(sellerId: string) {
   const supabase = createClient();
   return supabase

@@ -50,11 +50,17 @@ function apiMediaToUI(row: ProductMediaApiRow): UIProductMedia {
 export function ProductMediaPanel({
   productId,
   initialMedia,
+  onMediaChange,
 }: {
   productId: string;
   initialMedia: UIProductMedia[];
+  /** Fires after every successful add/remove so the parent can react live. */
+  onMediaChange?: (media: UIProductMedia[]) => void;
 }) {
   const [media, setMedia] = useState<UIProductMedia[]>(initialMedia);
+  useEffect(() => {
+    onMediaChange?.(media);
+  }, [media, onMediaChange]);
   const [altText, setAltText] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [videoTitle, setVideoTitle] = useState("");

@@ -30,6 +30,12 @@ import type {
   UISellerSubscription,
 } from "@/lib/adapters";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
+import { ListingStrengthBadge } from "@/components/listing-strength";
+import {
+  evaluateListingStrength,
+  type ListingStrengthInput,
+} from "@/lib/listing-strength";
+import { groupsFromFlatFeatures } from "@/lib/product-features";
 
 const tabs = [
   { key: "products", label: "Produits" },
@@ -157,6 +163,8 @@ export type DashboardInitialData = {
   sellerName: string;
   paymentMethods: UISellerPaymentMethodOption[];
   subscription: UISellerSubscription | null;
+  /** Count of verified payment methods on the seller's profile (seller-level). */
+  verifiedPaymentMethodCount: number;
 } | null;
 
 type DashboardClientProps = {
@@ -215,6 +223,7 @@ export function DashboardClient({
           <Products
             supabaseSourced={supabaseSourced}
             initialProducts={initialData?.products ?? null}
+            verifiedPaymentMethodCount={initialData?.verifiedPaymentMethodCount}
           />
         )}
         {tab === "payments" && (
@@ -245,9 +254,11 @@ export function DashboardClient({
 function Products({
   supabaseSourced,
   initialProducts,
+  verifiedPaymentMethodCount,
 }: {
   supabaseSourced: boolean;
   initialProducts: UISellerProductCard[] | null;
+  verifiedPaymentMethodCount: number | undefined;
 }) {
   const [demoProductsList, setDemoProducts] = useState<LocalProduct[]>([]);
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
@@ -283,7 +294,7 @@ function Products({
     if (supabaseSourced) {
       return initialProducts ?? [];
     }
-    const localCards = demoProductsList.map((product) => ({
+    const localCards: UISellerProductCard[] = demoProductsList.map((product) => ({
       id: product.slug, // demo: no real UUID, slug doubles as id
       slug: product.slug,
       name: product.name,
@@ -302,24 +313,30 @@ function Products({
       website: product.websiteUrl.replace("https://", ""),
       nextAction: "Submit for review and verify payment methods",
       media: [],
+      summary: product.summary,
+      featureGroups: groupsFromFlatFeatures(product.features),
+      faq: product.faq.map((item) => ({ q: item.q, a: item.a })),
+      websiteUrl: product.websiteUrl,
     }));
-    return [
-      ...localCards,
-      ...demoSellerProducts.map((item) => {
-        const slug = item.name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "");
-        return {
-          ...item,
-          id: slug,
-          slug,
-          category: "Analytics / Overlay",
-          rawStatus: "published" as const,
-          media: [],
-        };
-      }),
-    ];
+    const fromSellerProducts: UISellerProductCard[] = demoSellerProducts.map((item) => {
+      const slug = item.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      return {
+        ...item,
+        id: slug,
+        slug,
+        category: "Analytics / Overlay",
+        rawStatus: "published" as const,
+        media: [],
+        summary: "",
+        featureGroups: groupsFromFlatFeatures(item.features),
+        faq: [],
+        websiteUrl: `https://${item.website}`,
+      };
+    });
+    return [...localCards, ...fromSellerProducts];
   }, [supabaseSourced, initialProducts, demoProductsList]);
 
   const filteredProducts = useMemo(() => {
@@ -486,6 +503,23 @@ function Products({
               thumbnail?.imageUrl ?? thumbnail?.thumbnailUrl ?? null;
             const isMenuOpen = openMenuId === product.id;
             const isBusy = busyProductId === product.id;
+            const strengthInput: ListingStrengthInput = {
+              name: product.name,
+              game: product.game,
+              category: product.category,
+              websiteUrl: product.websiteUrl,
+              summary: product.summary,
+              featureGroups: product.featureGroups,
+              flatFeatures: product.features,
+              faq: product.faq,
+              imageCount: product.media.filter((m) => m.type === "image").length,
+              videoCount: product.media.filter((m) => m.type === "youtube").length,
+              verifiedPaymentMethodCount: supabaseSourced
+                ? verifiedPaymentMethodCount
+                : undefined,
+              status: product.rawStatus,
+            };
+            const strength = evaluateListingStrength(strengthInput);
             // Drop the kebab menu upward for rows near the bottom of the
             // list so it doesn't overflow the card / viewport.
             const dropUp =
@@ -530,6 +564,10 @@ function Products({
                       <Badge tone={product.rawStatus === "published" ? "green" : "default"}>
                         {product.rawStatus === "published" ? "Published" : "Private"}
                       </Badge>
+                      <ListingStrengthBadge
+                        score={strength.score}
+                        missingCount={strength.missing.length}
+                      />
                     </div>
                     <p className="mt-1 truncate text-xs text-slate-400">
                       {product.game}

@@ -1,7 +1,10 @@
 import { requireRole, isSupabaseConfigured } from "@/lib/roles";
 import { Nav, Shell } from "@/components/ui";
 import { DashboardClient, type DashboardInitialData } from "@/components/dashboard-client";
-import { getSellerDashboardData } from "@/lib/repositories/seller";
+import {
+  getSellerDashboardData,
+  getVerifiedPaymentMethodCount,
+} from "@/lib/repositories/seller";
 import {
   adaptPaymentMethodOption,
   adaptProviderTagStatus,
@@ -35,8 +38,13 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
       sellerName: "Pending",
       paymentMethods: [],
       subscription: null,
+      verifiedPaymentMethodCount: 0,
     };
   }
+
+  const verifiedPaymentMethodCount = await getVerifiedPaymentMethodCount(
+    data.seller.id,
+  );
 
   return {
     products: data.products.map(adaptSellerProductCard),
@@ -47,6 +55,7 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
     sellerName: data.seller.seller_name,
     paymentMethods: data.paymentMethods.map(adaptPaymentMethodOption),
     subscription: adaptSellerSubscription(data.subscription),
+    verifiedPaymentMethodCount,
   };
 }
 
