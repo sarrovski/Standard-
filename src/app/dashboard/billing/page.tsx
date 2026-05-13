@@ -269,7 +269,7 @@ export default async function BillingPage({
               </p>
               <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-500">
                 <li>Featured does not increase trust score.</li>
-                <li>Featured does not bypass payment verification.</li>
+                <li>Featured does not skip payment verification.</li>
                 <li>Provider / Developer tag is reviewed separately.</li>
               </ul>
 

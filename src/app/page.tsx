@@ -1,7 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge, ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import { games, products } from "@/lib/data";
 import { toSlug } from "@/lib/slugs";
+
+export const metadata: Metadata = {
+  title: "Standard — verified gaming-tool marketplace",
+  description:
+    "Compare gaming-tool sellers before you buy. Standard surfaces seller verification, verified payment methods, and trust signals on every product page.",
+  alternates: { canonical: "/" },
+};
 
 export default function HomePage() {
   return (

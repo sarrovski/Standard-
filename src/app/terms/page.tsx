@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { Card, Nav, SectionHeader, Shell } from "@/components/ui";
+
+export const metadata: Metadata = {
+  title: "Terms — Standard",
+  description:
+    "Standard's platform terms covering seller verification, Provider / Developer tags, reviews, payment-method verification, and buyer / seller responsibilities.",
+  alternates: { canonical: "/terms" },
+};
 
 const sections = [
   {

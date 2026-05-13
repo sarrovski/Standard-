@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { Badge, ButtonLink, Card, Nav, Shell } from "@/components/ui";
+
+export const metadata: Metadata = {
+  title: "Creators on Standard",
+  description:
+    "Standard's creator partner programme: build gaming-tool reviews and walkthroughs alongside verified seller listings and trust signals.",
+  alternates: { canonical: "/creators" },
+};
 
 type Creator = {
   name: string;
