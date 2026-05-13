@@ -94,52 +94,56 @@ function CategoryIcon({ name }: { name: string }): ReactNode {
     strokeLinejoin: "round" as const,
   };
   switch (name) {
-    case "Aim Assist":
+    case "Internal":
+      // CPU chip — runs inside the game process.
       return (
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" {...stroke}>
-          <circle cx="12" cy="12" r="8" />
-          <circle cx="12" cy="12" r="3" />
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+          <rect x="9.5" y="9.5" width="5" height="5" rx="0.5" />
+          <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" />
         </svg>
       );
-    case "ESP / Visuals":
+    case "External":
+      // Monitor / out-of-process overlay window.
       return (
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" {...stroke}>
-          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-          <circle cx="12" cy="12" r="3" />
+          <rect x="2" y="4" width="20" height="13" rx="2" />
+          <path d="M8 20h8M12 17v3" />
         </svg>
       );
-    case "Stat Tracker / Analytics":
+    case "DMA":
+      // Hardware board with traces.
       return (
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" {...stroke}>
-          <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+          <rect x="3" y="6" width="18" height="12" rx="1.5" />
+          <circle cx="8" cy="12" r="1.2" />
+          <circle cx="16" cy="12" r="1.2" />
+          <path d="M9.2 12H14.8M8 9.5V8M16 9.5V8M8 14.5V16M16 14.5V16" />
         </svg>
       );
-    case "Overlay / HUD":
-      return (
-        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" {...stroke}>
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <path d="M3 9h18M9 21V9" />
-        </svg>
-      );
-    case "Coaching":
-      return (
-        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" {...stroke}>
-          <path d="M22 10L12 5 2 10l10 5 10-5z" />
-          <path d="M6 12v5c3 2 9 2 12 0v-5" />
-        </svg>
-      );
-    case "Macros / Scripts":
+    case "Scripts":
+      // Angle brackets — code / macros.
       return (
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" {...stroke}>
           <path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 4l-4 16" />
         </svg>
       );
-    case "Utility":
+    case "Spoofer":
+      // Shield + refresh arrows for HWID rotation.
       return (
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" {...stroke}>
-          <path d="M14.7 6.3a4 4 0 1 1 3 3l-8 8a2.5 2.5 0 1 1-3.5-3.5l8-8z" />
-          <path d="M14 9l1 1" />
+          <path d="M12 3l8 3v5c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-3z" />
+          <path d="M9 13a3 3 0 0 0 6-1M15 11a3 3 0 0 0-6 1" />
+          <path d="M14.5 10.5L16 12l-2-0.5M9.5 13.5L8 12l2 0.5" />
+        </svg>
+      );
+    case "Other":
+      // Three dots — anything that doesn't fit above.
+      return (
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="19" cy="12" r="2" />
         </svg>
       );
     default:

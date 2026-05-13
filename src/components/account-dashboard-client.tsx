@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Card } from "@/components/ui";
 import { useRecentlyViewed } from "@/lib/recently-viewed";
+import { createClient } from "@/lib/supabase/client";
 import type { SavedProductRow } from "@/lib/repositories/buyer";
 
 type AccountProfile = {
@@ -339,6 +340,16 @@ function RecentlyViewedTab() {
 }
 
 function SettingsTab({ profile }: { profile: AccountProfile }) {
+  return (
+    <div className="grid gap-6">
+      <ProfileCard profile={profile} />
+      <ChangePasswordCard />
+      <TwoFactorCard />
+    </div>
+  );
+}
+
+function ProfileCard({ profile }: { profile: AccountProfile }) {
   const [displayName, setDisplayName] = useState(profile.display_name ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -381,11 +392,11 @@ function SettingsTab({ profile }: { profile: AccountProfile }) {
 
   return (
     <Card className="p-6">
-      <Badge tone="default">Settings</Badge>
-      <h2 className="mt-3 text-2xl font-black">Account settings</h2>
+      <Badge tone="default">Profile</Badge>
+      <h2 className="mt-3 text-2xl font-black">Profile</h2>
       <p className="mt-2 text-sm text-slate-400">
-        Edit how you appear on Standard. Email and account type are managed
-        by Supabase Auth and your subscription — they can't be changed here.
+        How you appear on Standard. Email and account type are managed by
+        Supabase Auth and your subscription, so they can't be edited here.
       </p>
 
       <form onSubmit={submit} className="mt-6 grid gap-5">
@@ -422,7 +433,7 @@ function SettingsTab({ profile }: { profile: AccountProfile }) {
         ) : null}
         {savedOk ? (
           <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
-            Settings saved.
+            Profile saved.
           </div>
         ) : null}
 
@@ -432,10 +443,370 @@ function SettingsTab({ profile }: { profile: AccountProfile }) {
             disabled={saving || !dirty}
             className="inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? "Saving…" : "Save profile"}
           </button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+function ChangePasswordCard() {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedOk, setSavedOk] = useState(false);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setSavedOk(false);
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("Passwords don't match.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+      setSavedOk(true);
+      setPassword("");
+      setConfirm("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <Badge tone="default">Security</Badge>
+      <h2 className="mt-3 text-2xl font-black">Change password</h2>
+      <p className="mt-2 text-sm text-slate-400">
+        Pick a new password of at least 8 characters. You'll stay signed
+        in on this device.
+      </p>
+
+      <form onSubmit={submit} className="mt-6 grid gap-5 md:grid-cols-2">
+        <label className="grid gap-2 text-sm font-semibold text-slate-200">
+          New password
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-slate-200">
+          Confirm password
+          <input
+            type="password"
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
+        </label>
+
+        {error ? (
+          <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200 md:col-span-2">
+            {error}
+          </div>
+        ) : null}
+        {savedOk ? (
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100 md:col-span-2">
+            Password updated.
+          </div>
+        ) : null}
+
+        <div className="md:col-span-2">
+          <button
+            type="submit"
+            disabled={saving || password.length === 0}
+            className="inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "Updating…" : "Update password"}
+          </button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+type EnrollState =
+  | { kind: "loading" }
+  | { kind: "disabled" }
+  | { kind: "enrolling"; factorId: string; qrCode: string; secret: string }
+  | { kind: "enabled"; factorId: string };
+
+function TwoFactorCard() {
+  const supabase = useMemo(() => createClient(), []);
+  const [state, setState] = useState<EnrollState>({ kind: "loading" });
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    const { data, error: listErr } = await supabase.auth.mfa.listFactors();
+    if (listErr) {
+      setError(listErr.message);
+      setState({ kind: "disabled" });
+      return;
+    }
+    const verified = data?.totp?.find((factor) => factor.status === "verified");
+    if (verified) {
+      setState({ kind: "enabled", factorId: verified.id });
+      return;
+    }
+    setState({ kind: "disabled" });
+  }, [supabase]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const startEnroll = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      // Clean up any unverified leftover factors first so enroll doesn't
+      // 409 on the unique factor-name constraint.
+      const { data: list } = await supabase.auth.mfa.listFactors();
+      const leftover = list?.totp?.find(
+        (factor) => factor.status !== "verified",
+      );
+      if (leftover) {
+        await supabase.auth.mfa.unenroll({ factorId: leftover.id });
+      }
+      const { data, error: enrollErr } = await supabase.auth.mfa.enroll({
+        factorType: "totp",
+      });
+      if (enrollErr || !data) {
+        setError(enrollErr?.message ?? "Could not start 2FA enrollment.");
+        return;
+      }
+      setState({
+        kind: "enrolling",
+        factorId: data.id,
+        qrCode: data.totp.qr_code,
+        secret: data.totp.secret,
+      });
+      setCode("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifyEnroll = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (state.kind !== "enrolling") return;
+    setError(null);
+    setBusy(true);
+    try {
+      const challenge = await supabase.auth.mfa.challenge({
+        factorId: state.factorId,
+      });
+      if (challenge.error || !challenge.data) {
+        setError(challenge.error?.message ?? "Could not start challenge.");
+        return;
+      }
+      const { error: verifyErr } = await supabase.auth.mfa.verify({
+        factorId: state.factorId,
+        challengeId: challenge.data.id,
+        code: code.trim(),
+      });
+      if (verifyErr) {
+        setError(verifyErr.message);
+        return;
+      }
+      setState({ kind: "enabled", factorId: state.factorId });
+      setNotice("Two-factor authentication enabled.");
+      setCode("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelEnroll = async () => {
+    if (state.kind !== "enrolling") return;
+    setBusy(true);
+    try {
+      await supabase.auth.mfa.unenroll({ factorId: state.factorId });
+      setState({ kind: "disabled" });
+      setCode("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    if (state.kind !== "enabled") return;
+    const confirmed = window.confirm(
+      "Disable two-factor authentication? You'll go back to password-only sign in.",
+    );
+    if (!confirmed) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const { error: unenrollErr } = await supabase.auth.mfa.unenroll({
+        factorId: state.factorId,
+      });
+      if (unenrollErr) {
+        setError(unenrollErr.message);
+        return;
+      }
+      setState({ kind: "disabled" });
+      setNotice("Two-factor authentication disabled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Badge tone="default">Security</Badge>
+          <h2 className="mt-3 text-2xl font-black">Two-factor authentication</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Add an authenticator app code on top of your password. Standard
+            uses TOTP — works with Google Authenticator, 1Password, Authy, etc.
+          </p>
+        </div>
+        {state.kind === "enabled" && (
+          <Badge tone="green">2FA enabled</Badge>
+        )}
+        {state.kind === "disabled" && (
+          <Badge tone="amber">2FA off</Badge>
+        )}
+      </div>
+
+      <div className="mt-5">
+        {state.kind === "loading" && (
+          <p className="text-sm text-slate-500">Loading 2FA status…</p>
+        )}
+
+        {state.kind === "disabled" && (
+          <button
+            type="button"
+            onClick={startEnroll}
+            disabled={busy}
+            className="inline-flex rounded-xl border border-orange-400/40 bg-orange-500/15 px-5 py-3 text-sm font-semibold text-orange-100 transition hover:bg-orange-500/25 disabled:opacity-60"
+          >
+            {busy ? "Starting…" : "Enable two-factor authentication"}
+          </button>
+        )}
+
+        {state.kind === "enrolling" && (
+          <div className="grid gap-5 md:grid-cols-[auto_1fr] md:items-start">
+            <div className="flex h-44 w-44 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={state.qrCode}
+                alt="Scan with your authenticator app"
+                className="h-full w-full"
+              />
+            </div>
+            <div>
+              <p className="text-sm text-slate-300">
+                Scan this QR with your authenticator app, then enter the
+                6-digit code it shows.
+              </p>
+              <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-slate-400">
+                Can't scan? Enter this secret manually:
+                <code className="mt-1 block font-mono text-xs text-slate-200">
+                  {state.secret}
+                </code>
+              </div>
+              <form onSubmit={verifyEnroll} className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <input
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  value={code}
+                  onChange={(event) =>
+                    setCode(event.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="123456"
+                  className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-mono tracking-[0.4em] text-white outline-none transition focus:border-orange-300/50"
+                  required
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={busy || code.length !== 6}
+                    className="inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {busy ? "Verifying…" : "Verify"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEnroll}
+                    disabled={busy}
+                    className="inline-flex rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.08] disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {state.kind === "enabled" && (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-slate-300">
+              Codes from your authenticator app are required at sign-in.
+            </p>
+            <button
+              type="button"
+              onClick={disable}
+              disabled={busy}
+              className="inline-flex rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:opacity-60"
+            >
+              {busy ? "Disabling…" : "Disable 2FA"}
+            </button>
+          </div>
+        )}
+
+        {error ? (
+          <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+            {error}
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+            {notice}
+          </div>
+        ) : null}
+      </div>
     </Card>
   );
 }

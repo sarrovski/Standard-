@@ -56,18 +56,19 @@ export const games = [
 ];
 
 /**
- * Closed list of product categories sellers can pick from. Keeping this
- * constrained prevents typo / spelling drift across the marketplace and
- * keeps marketplace filters meaningful.
+ * Closed list of product categories sellers can pick from. These describe
+ * the product type / architecture (Internal, External, DMA, etc.) rather
+ * than the in-game features, so buyers can filter by what they're after.
+ * Keeping this constrained prevents typo / spelling drift across the
+ * marketplace and keeps filters meaningful.
  */
 export const productCategories = [
-  "Aim Assist",
-  "ESP / Visuals",
-  "Stat Tracker / Analytics",
-  "Overlay / HUD",
-  "Coaching",
-  "Macros / Scripts",
-  "Utility",
+  "Internal",
+  "External",
+  "DMA",
+  "Scripts",
+  "Spoofer",
+  "Other",
 ];
 
 export const paymentMethods = [
