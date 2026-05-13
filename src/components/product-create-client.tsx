@@ -6,9 +6,11 @@ import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { CategoryPicker } from "@/components/category-picker";
 import { FeatureGroupsEditor } from "@/components/feature-groups-editor";
+import { FaqEditor } from "@/components/faq-editor";
 import { addLocalProduct, slugify } from "@/lib/product-store";
 import { games, productCategories } from "@/lib/data";
 import { flattenFeatureGroups, type FeatureGroup } from "@/lib/product-features";
+import type { FaqItem } from "@/lib/product-faq";
 import type { LocalProduct } from "@/lib/product-types";
 
 type ProductCreateError = {
@@ -79,6 +81,7 @@ type ProductCreateForm = {
   website_url: string;
   summary: string;
   feature_groups: FeatureGroup[];
+  faq: FaqItem[];
 };
 
 export function ProductCreateClient({
@@ -94,6 +97,7 @@ export function ProductCreateClient({
     website_url: "",
     summary: "",
     feature_groups: [],
+    faq: [],
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -121,6 +125,10 @@ export function ProductCreateClient({
       }))
       .filter((group) => group.name || group.features.length > 0);
 
+    const faq = form.faq
+      .map((item) => ({ q: item.q.trim(), a: item.a.trim() }))
+      .filter((item) => item.q && item.a);
+
     if (!supabaseConfigured) {
       addLocalProduct(createDemoProduct(form));
       router.push("/dashboard?tab=products");
@@ -139,6 +147,7 @@ export function ProductCreateClient({
           website_url: form.website_url || null,
           summary: form.summary || null,
           features_grouped: featureGroups,
+          faq,
         }),
       });
       const payload = (await response.json()) as ProductCreateResponse;
@@ -244,6 +253,11 @@ export function ProductCreateClient({
         <FeatureGroupsEditor
           value={form.feature_groups}
           onChange={(next) => update("feature_groups", next)}
+        />
+
+        <FaqEditor
+          value={form.faq}
+          onChange={(next) => update("faq", next)}
         />
 
         {error ? (

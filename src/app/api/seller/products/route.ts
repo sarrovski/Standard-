@@ -7,6 +7,7 @@ import {
   flattenFeatureGroups,
   parseFeatureGroups,
 } from "@/lib/product-features";
+import { parseFaq } from "@/lib/product-faq";
 import type { Database } from "@/lib/supabase/types";
 
 /**
@@ -52,6 +53,7 @@ type CreateProductBody = {
   summary?: unknown;
   features?: unknown;
   features_grouped?: unknown;
+  faq?: unknown;
   price_points?: unknown;
 };
 
@@ -217,6 +219,8 @@ export async function POST(request: NextRequest) {
       ? flattenFeatureGroups(featureGroups)
       : readStringArray(raw.features);
 
+  const faq = parseFaq(raw.faq);
+
   const insertRow: ProductInsert = {
     seller_id: auth.seller.id,
     slug: slugResult.slug,
@@ -228,6 +232,7 @@ export async function POST(request: NextRequest) {
     summary: readString(raw.summary),
     features: flatFeatures,
     features_grouped: featureGroups as never,
+    faq: faq as never,
     price_points: readStringArray(raw.price_points),
     trust_score: null,
   };
@@ -318,6 +323,9 @@ export async function PATCH(request: NextRequest) {
     update.features = flattenFeatureGroups(groups);
   } else if (raw.features !== undefined) {
     update.features = readStringArray(raw.features);
+  }
+  if (raw.faq !== undefined) {
+    update.faq = parseFaq(raw.faq) as never;
   }
   if (raw.price_points !== undefined) {
     update.price_points = readStringArray(raw.price_points);

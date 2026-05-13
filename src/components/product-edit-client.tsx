@@ -6,9 +6,11 @@ import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { CategoryPicker } from "@/components/category-picker";
 import { FeatureGroupsEditor } from "@/components/feature-groups-editor";
+import { FaqEditor } from "@/components/faq-editor";
 import { ProductMediaPanel } from "@/components/product-media-panel";
 import { games, productCategories } from "@/lib/data";
 import { type FeatureGroup } from "@/lib/product-features";
+import { type FaqItem } from "@/lib/product-faq";
 import type { UIProductMedia } from "@/lib/adapters";
 
 type EditableProduct = {
@@ -20,6 +22,7 @@ type EditableProduct = {
   website_url: string;
   summary: string;
   featureGroups: FeatureGroup[];
+  faq: FaqItem[];
   status: "draft" | "published" | "archived";
 };
 
@@ -56,6 +59,7 @@ export function ProductEditClient({
     website_url: product.website_url,
     summary: product.summary,
     feature_groups: product.featureGroups,
+    faq: product.faq,
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -95,6 +99,10 @@ export function ProductEditClient({
       }))
       .filter((group) => group.name || group.features.length > 0);
 
+    const faq = form.faq
+      .map((item) => ({ q: item.q.trim(), a: item.a.trim() }))
+      .filter((item) => item.q && item.a);
+
     setSaving(true);
     try {
       const response = await fetch("/api/seller/products", {
@@ -108,6 +116,7 @@ export function ProductEditClient({
           website_url: form.website_url || null,
           summary: form.summary || null,
           features_grouped: featureGroups,
+          faq,
         }),
       });
       const payload = (await response.json()) as
@@ -215,6 +224,11 @@ export function ProductEditClient({
         <FeatureGroupsEditor
           value={form.feature_groups}
           onChange={(next) => update("feature_groups", next)}
+        />
+
+        <FaqEditor
+          value={form.faq}
+          onChange={(next) => update("faq", next)}
         />
 
         {error ? (

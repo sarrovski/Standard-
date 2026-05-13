@@ -26,6 +26,7 @@ import {
   parseFeatureGroups,
   type FeatureGroup,
 } from "@/lib/product-features";
+import { parseFaq, type FaqItem } from "@/lib/product-faq";
 
 // ---------- DB row aliases ---------------------------------------------------
 
@@ -342,7 +343,7 @@ export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
     telegram: seller?.telegram_handle ?? "",
     trustSignals,
     gallery,
-    faq: [],
+    faq: parseFaq(row.faq),
   };
 }
 

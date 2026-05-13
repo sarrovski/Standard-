@@ -7,9 +7,10 @@ import { Badge, ButtonLink, Card } from "@/components/ui";
 import { products as demoProducts } from "@/lib/data";
 import { getLocalProducts } from "@/lib/product-store";
 import type { UIProductDetail, UIProductMedia } from "@/lib/adapters";
-import type { PaymentMethod } from "@/lib/data";
+import type { PaymentMethod, PaymentProfile } from "@/lib/data";
 import { NoVerifiedPayments, PaymentPill } from "@/components/payment-pill";
 import { SaveProductButton } from "@/components/save-product-button";
+import { TrustBox } from "@/components/trust-box";
 import { recordRecentlyViewed } from "@/lib/recently-viewed";
 
 // Shape the page actually renders. UIProductDetail (Supabase-sourced) and the
@@ -35,6 +36,7 @@ type RenderableProduct = {
   featureGroups?: Array<{ name: string; features: string[] }>;
   pricePoints: string[];
   verifiedPayments: PaymentMethod[];
+  paymentProfiles?: PaymentProfile[];
   trustSignals?: string[];
   gallery?: Array<UIProductMedia | DemoMediaItem>;
   faq?: { q: string; a: string }[];
@@ -233,8 +235,19 @@ export function ProductPageClient({
             <Fact label="Discord" value={discord || "—"} />
             <Fact label="Telegram" value={telegram || "—"} />
           </div>
+
+          <div className="mt-5">
+            <TrustBox
+              paymentProfiles={product.paymentProfiles ?? []}
+              websiteUrl={websiteUrl || undefined}
+              discord={discord || undefined}
+              telegram={telegram || undefined}
+              sellerTag={product.sellerTag}
+            />
+          </div>
+
           {websiteUrl ? (
-            <a href={websiteUrl} className="mt-6 inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white">
+            <a href={websiteUrl} className="mt-5 inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white">
               Go to official website
             </a>
           ) : null}

@@ -8,6 +8,7 @@ import {
   groupsFromFlatFeatures,
   parseFeatureGroups,
 } from "@/lib/product-features";
+import { parseFaq } from "@/lib/product-faq";
 import type { Database } from "@/lib/supabase/types";
 
 /**
@@ -46,7 +47,7 @@ export default async function ProductEditPage({
   let query = supabase
     .from("products")
     .select(
-      "id, slug, name, game, category, website_url, summary, features, features_grouped, status, product_media(*)",
+      "id, slug, name, game, category, website_url, summary, features, features_grouped, faq, status, product_media(*)",
     )
     .eq("id", params.id);
   if (!isAdmin && seller) {
@@ -62,6 +63,7 @@ export default async function ProductEditPage({
     summary: string | null;
     features: string[] | null;
     features_grouped: unknown;
+    faq: unknown;
     status: "draft" | "published" | "archived";
     product_media:
       | Database["public"]["Tables"]["product_media"]["Row"][]
@@ -96,6 +98,7 @@ export default async function ProductEditPage({
             website_url: product.website_url ?? "",
             summary: product.summary ?? "",
             featureGroups,
+            faq: parseFaq(product.faq),
             status: product.status,
           }}
           initialMedia={initialMedia}
