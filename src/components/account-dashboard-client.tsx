@@ -16,10 +16,13 @@ type AccountProfile = {
   role: "user" | "seller" | "admin";
 };
 
+// Settings is the default landing tab — the account menu's "Account" link
+// goes to /account and the buyer almost always wants their own settings
+// first. Saved products + Recently viewed move below it.
 const TABS = [
+  { key: "settings", label: "Settings" },
   { key: "saved", label: "Saved products" },
   { key: "recent", label: "Recently viewed" },
-  { key: "settings", label: "Settings" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -27,7 +30,7 @@ const VALID_TABS: Set<string> = new Set(TABS.map((t) => t.key));
 
 function normalizeTab(candidate: string | null | undefined): TabKey {
   if (candidate && VALID_TABS.has(candidate)) return candidate as TabKey;
-  return "saved";
+  return "settings";
 }
 
 export function AccountDashboardClient({
