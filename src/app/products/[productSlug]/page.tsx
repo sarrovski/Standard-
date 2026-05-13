@@ -1,3 +1,5 @@
+import { cache } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Nav, Shell } from "@/components/ui";
 import { ProductPageClient } from "@/components/product-page-client";
@@ -10,6 +12,11 @@ import {
   type ProductFullJoins,
   type UIProductDetail,
 } from "@/lib/adapters";
+import {
+  buildNonIndexableMetadata,
+  buildProductJsonLd,
+  buildProductMetadata,
+} from "@/lib/product-seo";
 
 type LoadResult =
   | { product: UIProductDetail; source: "supabase"; state: "ok" }
@@ -18,7 +25,7 @@ type LoadResult =
   | { product: null; source: "supabase"; state: "timeout" }
   | { product: null; source: "demo"; state: "demo" };
 
-async function loadProduct(slug: string): Promise<LoadResult> {
+const loadProduct = cache(async (slug: string): Promise<LoadResult> => {
   if (!isSupabaseConfigured()) {
     return { product: null, source: "demo", state: "demo" };
   }
@@ -41,7 +48,7 @@ async function loadProduct(slug: string): Promise<LoadResult> {
   }
   const row = data as unknown as ProductFullJoins;
   return { product: adaptProductDetail(row), source: "supabase", state: "ok" };
-}
+});
 
 /**
  * Pull current user + initial saved state from Supabase, when configured.
@@ -61,6 +68,18 @@ async function loadSaveState(productId: string | null) {
   return { loggedIn: true, saved };
 }
 
+export async function generateMetadata({
+  params,
+}: {
+  params: { productSlug: string };
+}): Promise<Metadata> {
+  const result = await loadProduct(params.productSlug);
+  if (result.state === "ok" && result.product) {
+    return buildProductMetadata(result.product, params.productSlug);
+  }
+  return buildNonIndexableMetadata(result.state);
+}
+
 export default async function ProductPage({
   params,
 }: {
@@ -68,6 +87,11 @@ export default async function ProductPage({
 }) {
   const result = await loadProduct(params.productSlug);
   const saveState = await loadSaveState(result.product?.id ?? null);
+
+  const jsonLdBlocks =
+    result.state === "ok" && result.product
+      ? buildProductJsonLd(result.product, params.productSlug)
+      : [];
 
   return (
     <Shell>
@@ -83,6 +107,13 @@ export default async function ProductPage({
           loggedIn={saveState.loggedIn}
         />
       </section>
+      {jsonLdBlocks.map((block, index) => (
+        <script
+          key={`product-jsonld-${index}`}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(block) }}
+        />
+      ))}
     </Shell>
   );
 }

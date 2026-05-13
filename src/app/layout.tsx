@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { getSiteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
   title: "Standard | Trusted Gaming Tool Marketplace",
   description:
     "Discover real gaming tool references, compare seller trust, payment methods, reseller offers, and verified product facts.",
