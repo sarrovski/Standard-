@@ -166,6 +166,12 @@ export type UIProductCard = {
   // First product media image when available, otherwise the first YouTube
   // thumbnail. Falls back to the gradient accent when null.
   coverImageUrl: string | null;
+  // Used by marketplace sort ("Newest"). Always present from Supabase;
+  // synthesised from a slug hash for demo data so the sort is stable.
+  createdAt: string;
+  // Used by marketplace filter ("Has FAQ"). True when the product has at
+  // least one well-formed FAQ entry.
+  hasFaq: boolean;
 };
 
 function resolveFeatureGroups(
@@ -217,6 +223,8 @@ export function adaptProductCard(
     websiteLabel: row.website_url ? "Visit official website" : undefined,
     paymentProfiles: [],
     coverImageUrl,
+    createdAt: row.created_at,
+    hasFaq: parseFaq(row.faq).length > 0,
   };
 }
 

@@ -18,6 +18,77 @@ function readOrAll(
   return "All";
 }
 
+const SORT_OPTIONS = [
+  { value: "most_trusted", label: "Most trusted" },
+  { value: "newest", label: "Newest" },
+  { value: "most_viewed", label: "Most viewed" },
+] as const;
+type SortKey = (typeof SORT_OPTIONS)[number]["value"];
+const DEFAULT_SORT: SortKey = "most_trusted";
+const SORT_VALUES = new Set<SortKey>(SORT_OPTIONS.map((option) => option.value));
+
+function readSort(value: string | null): SortKey {
+  return value && SORT_VALUES.has(value as SortKey)
+    ? (value as SortKey)
+    : DEFAULT_SORT;
+}
+
+/**
+ * Stable hash → ISO date in 2025, so demo products have distinct createdAt
+ * values for the Newest sort without us hand-encoding them in data.ts.
+ */
+function synthCreatedAt(slug: string): string {
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
+  }
+  const base = Date.parse("2025-01-01T00:00:00Z");
+  const offsetMs = (hash % 365) * 86_400_000;
+  return new Date(base + offsetMs).toISOString();
+}
+
+type DemoLikeProduct = {
+  slug: string;
+  faq?: ReadonlyArray<{ q: string; a: string }>;
+  gallery?: ReadonlyArray<{ title: string; accent: string }>;
+};
+
+function productHasMedia(product: UIProductCard | DemoLikeProduct): boolean {
+  if ("coverImageUrl" in product && product.coverImageUrl) return true;
+  // Demo products carry a `gallery` array of placeholder entries with at
+  // least a title; treat any non-empty gallery as "has media" so the
+  // filter is useful in demo mode too.
+  if ("gallery" in product && Array.isArray(product.gallery)) {
+    return product.gallery.length > 0;
+  }
+  return false;
+}
+
+function productHasFaq(product: UIProductCard | DemoLikeProduct): boolean {
+  if ("hasFaq" in product) return Boolean(product.hasFaq);
+  if ("faq" in product && Array.isArray(product.faq)) {
+    return product.faq.some(
+      (item) => item.q.trim() !== "" && item.a.trim() !== "",
+    );
+  }
+  return false;
+}
+
+function productCreatedAt(product: UIProductCard | DemoLikeProduct): string {
+  if ("createdAt" in product && typeof product.createdAt === "string") {
+    return product.createdAt;
+  }
+  return synthCreatedAt(product.slug);
+}
+
+function productTrustScore(product: { integrity?: number | null }): number {
+  return typeof product.integrity === "number" ? product.integrity : -1;
+}
+
+function productViews(product: { activity?: { views?: number } }): number {
+  return product.activity?.views ?? 0;
+}
+
 // Supabase marketplace results are already constrained to published products
 // at the server, so there's no need for a UI "Status" filter — every row
 // here is already public.
@@ -59,6 +130,25 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
   const [selectedTag, setSelectedTag] = useState(() =>
     readOrAll(searchParams.get("tag"), sellerTags),
   );
+  const [hasMedia, setHasMedia] = useState(
+    () => searchParams.get("has_media") === "1",
+  );
+  const [hasFaq, setHasFaq] = useState(
+    () => searchParams.get("has_faq") === "1",
+  );
+  const [sortKey, setSortKey] = useState<SortKey>(() =>
+    readSort(searchParams.get("sort")),
+  );
+
+  const clearAllFilters = () => {
+    setSelectedGame("All");
+    setSelectedCategory("All");
+    setSelectedPayment("All");
+    setSelectedTag("All");
+    setHasMedia(false);
+    setHasFaq(false);
+    setSortKey(DEFAULT_SORT);
+  };
 
   // Write filter changes back to the URL so the resulting state is
   // shareable / bookmarkable. Skip the very first sync since state was
@@ -78,12 +168,18 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
     apply("category", selectedCategory);
     apply("payment", selectedPayment);
     apply("tag", selectedTag);
+    if (hasMedia) params.set("has_media", "1");
+    else params.delete("has_media");
+    if (hasFaq) params.set("has_faq", "1");
+    else params.delete("has_faq");
+    if (sortKey !== DEFAULT_SORT) params.set("sort", sortKey);
+    else params.delete("sort");
     const next = params.toString();
     const current = searchParams.toString();
     if (next === current) return;
     router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGame, selectedCategory, selectedPayment, selectedTag]);
+  }, [selectedGame, selectedCategory, selectedPayment, selectedTag, hasMedia, hasFaq, sortKey]);
 
   useEffect(() => {
     // Only hydrate the demo store when we're not already showing real data.
@@ -106,19 +202,46 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
       selectedCategory === "All" || product.category === selectedCategory;
     const matchesPayment = selectedPayment === "All" || product.verifiedPayments.includes(selectedPayment as never);
     const matchesTag = selectedTag === "All" || product.sellerTag === selectedTag;
-    return matchesGame && matchesCategory && matchesPayment && matchesTag;
+    const matchesMedia = !hasMedia || productHasMedia(product);
+    const matchesFaq = !hasFaq || productHasFaq(product);
+    return matchesGame && matchesCategory && matchesPayment && matchesTag && matchesMedia && matchesFaq;
   });
 
+  const sortFn = (a: typeof filtered[number], b: typeof filtered[number]) => {
+    switch (sortKey) {
+      case "newest": {
+        const aDate = productCreatedAt(a);
+        const bDate = productCreatedAt(b);
+        return bDate.localeCompare(aDate);
+      }
+      case "most_viewed":
+        return productViews(b) - productViews(a);
+      case "most_trusted":
+      default:
+        return productTrustScore(b) - productTrustScore(a);
+    }
+  };
+  const sorted = [...filtered].sort(sortFn);
+
   const activeFeaturedSlots = slots.filter((slot) => slot.status === "Occupied");
-  const featuredProducts = filtered.filter((product) =>
+  const featuredProducts = sorted.filter((product) =>
     activeFeaturedSlots.some(
       (slot) =>
         (slot.productSlug && slot.productSlug === product.slug) ||
         (!slot.productSlug && slot.category === product.game && slot.product === product.name),
     ),
   );
-  const regularProducts = filtered.filter((product) => !featuredProducts.includes(product));
+  const regularProducts = sorted.filter((product) => !featuredProducts.includes(product));
   const orderedProducts = [...featuredProducts, ...regularProducts];
+
+  const filtersActive =
+    selectedGame !== "All" ||
+    selectedCategory !== "All" ||
+    selectedPayment !== "All" ||
+    selectedTag !== "All" ||
+    hasMedia ||
+    hasFaq;
+  const sortActive = sortKey !== DEFAULT_SORT;
 
   return (
     <>
@@ -159,6 +282,44 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
             ))}
           </FilterBlock>
         </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+              <span className="text-slate-300">Sort by</span>
+              <select
+                value={sortKey}
+                onChange={(event) => setSortKey(readSort(event.target.value))}
+                className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-1.5 text-sm text-white outline-none focus:border-orange-400/50"
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FilterToggle
+              label="Has media"
+              active={hasMedia}
+              onChange={() => setHasMedia((v) => !v)}
+            />
+            <FilterToggle
+              label="Has FAQ"
+              active={hasFaq}
+              onChange={() => setHasFaq((v) => !v)}
+            />
+          </div>
+          {(filtersActive || sortActive) && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-100"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
       </Card>
 
       <div className="mt-8 flex items-center justify-between gap-4">
@@ -173,6 +334,14 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
         </div>
       </div>
 
+      {orderedProducts.length === 0 ? (
+        <MarketplaceEmptyState
+          filtersActive={filtersActive}
+          selectedGame={selectedGame}
+          selectedCategory={selectedCategory}
+          onClear={clearAllFilters}
+        />
+      ) : (
       <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {orderedProducts.map((product, index) => {
           const isFeatured = featuredProducts.includes(product);
@@ -265,7 +434,98 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
           );
         })}
       </div>
+      )}
     </>
+  );
+}
+
+function MarketplaceEmptyState({
+  filtersActive,
+  selectedGame,
+  selectedCategory,
+  onClear,
+}: {
+  filtersActive: boolean;
+  selectedGame: string;
+  selectedCategory: string;
+  onClear: () => void;
+}) {
+  const game = selectedGame !== "All" ? selectedGame : null;
+  const category = selectedCategory !== "All" ? selectedCategory : null;
+  const headline = filtersActive
+    ? game && category
+      ? `No products in ${game} · ${category} yet`
+      : game
+        ? `No products in ${game} yet`
+        : category
+          ? `No products in the ${category} category yet`
+          : "No products match your filters"
+    : "No products yet";
+  return (
+    <div className="mt-6 rounded-3xl border border-dashed border-white/15 bg-slate-950/40 p-10 text-center">
+      <h3 className="text-2xl font-black tracking-tight">{headline}</h3>
+      <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
+        {filtersActive
+          ? "Try clearing one or two filters, or browse the full marketplace."
+          : "Once sellers publish products, they'll appear here."}
+      </p>
+      {filtersActive && (
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_8px_24px_-12px_rgba(249,115,22,0.65)] transition hover:bg-orange-400"
+          >
+            Clear filters
+          </button>
+          <Link
+            href="/marketplace"
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+          >
+            View all products
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterToggle({
+  label,
+  active,
+  onChange,
+}: {
+  label: string;
+  active: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition",
+        active
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
+          : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border",
+          active
+            ? "border-orange-300/70 bg-orange-400/30"
+            : "border-white/20 bg-transparent",
+        )}
+      >
+        {active && (
+          <span aria-hidden="true" className="block h-1.5 w-1.5 rounded-full bg-orange-200" />
+        )}
+      </span>
+      {label}
+    </button>
   );
 }
 

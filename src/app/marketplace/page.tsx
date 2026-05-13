@@ -1,6 +1,18 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Nav, SectionHeader, Shell } from "@/components/ui";
 import { MarketplaceClient } from "@/components/marketplace-client";
+
+export const metadata: Metadata = {
+  title: "Marketplace — Standard",
+  description:
+    "Browse gaming tools on Standard. Filter by game, category, verified payment methods, and seller tag. Sort by trust, recency, or popularity.",
+  // Filter / sort state lives in query params; canonical points at the
+  // bare marketplace URL so search engines don't index every filter
+  // combination as a separate page. Per-game / per-category landing
+  // pages already own those entry points.
+  alternates: { canonical: "/marketplace" },
+};
 import { isSupabaseConfigured } from "@/lib/roles";
 import { getPublishedProducts } from "@/lib/repositories/products";
 import { isTimeoutError } from "@/lib/repositories/query-timeout";
