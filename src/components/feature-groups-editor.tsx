@@ -4,13 +4,13 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { FeatureGroup } from "@/lib/product-features";
 
 /**
- * Vertical stack editor for grouped product features.
+ * Vertical-tab editor for grouped product features.
  *
- * Every category is rendered as its own panel, stacked top-to-bottom. Each
- * panel contains: the editable category name, a remove button, the list of
- * features as full-width rows, and an "Add a feature" input. A "+ Add
- * category" button at the bottom of the stack spawns a new empty category
- * and focuses its name input.
+ * Left rail shows each category as a stacked tab + a "+ Add category"
+ * button at the bottom. The right panel renders the active category's
+ * editor: editable name, remove button, vertical list of features as
+ * full-width rows, and an "Add a feature" input. Mirrors a classic
+ * cheat-menu layout.
  */
 export function FeatureGroupsEditor({
   value,
@@ -19,20 +19,24 @@ export function FeatureGroupsEditor({
   value: FeatureGroup[];
   onChange: (next: FeatureGroup[]) => void;
 }) {
+  const [activeIndex, setActiveIndex] = useState(0);
   const [firstName, setFirstName] = useState("");
-  const nameInputsRef = useRef<Map<number, HTMLInputElement | null>>(new Map());
-  const focusIndexRef = useRef<number | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const focusOnNextRender = useRef(false);
 
   useEffect(() => {
-    if (focusIndexRef.current !== null) {
-      const input = nameInputsRef.current.get(focusIndexRef.current);
-      if (input) {
-        input.focus();
-        input.select();
-      }
-      focusIndexRef.current = null;
+    if (focusOnNextRender.current && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+      focusOnNextRender.current = false;
     }
-  }, [value]);
+  }, [activeIndex, value]);
+
+  useEffect(() => {
+    if (activeIndex >= value.length && value.length > 0) {
+      setActiveIndex(value.length - 1);
+    }
+  }, [value.length, activeIndex]);
 
   const update = (next: FeatureGroup[]) => onChange(next);
 
@@ -41,7 +45,13 @@ export function FeatureGroupsEditor({
   };
 
   const removeGroup = (index: number) => {
-    update(value.filter((_, i) => i !== index));
+    const next = value.filter((_, i) => i !== index);
+    update(next);
+    if (next.length === 0) {
+      setActiveIndex(0);
+    } else if (index <= activeIndex) {
+      setActiveIndex(Math.max(0, activeIndex - 1));
+    }
   };
 
   const addFeature = (index: number, feature: string) => {
@@ -72,13 +82,17 @@ export function FeatureGroupsEditor({
   const addCategoryWithName = (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    focusIndexRef.current = value.length;
-    update([...value, { name: trimmed, features: [] }]);
+    const next = [...value, { name: trimmed, features: [] }];
+    update(next);
+    setActiveIndex(next.length - 1);
+    focusOnNextRender.current = true;
   };
 
   const addEmptyCategory = () => {
-    focusIndexRef.current = value.length;
-    update([...value, { name: "New category", features: [] }]);
+    const next = [...value, { name: "New category", features: [] }];
+    update(next);
+    setActiveIndex(next.length - 1);
+    focusOnNextRender.current = true;
   };
 
   const handleFirstCategoryKey = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -89,12 +103,14 @@ export function FeatureGroupsEditor({
     }
   };
 
+  const activeGroup = value[activeIndex] ?? null;
+
   return (
     <fieldset className="grid gap-3">
       <legend className="text-sm font-semibold text-slate-200">Features by category</legend>
       <p className="-mt-1 text-xs text-slate-500">
-        Group features under named categories. Each category becomes its own
-        block on the public product page.
+        Group features under named categories. Pick a category on the left
+        to edit its features.
       </p>
 
       {value.length === 0 ? (
@@ -124,32 +140,66 @@ export function FeatureGroupsEditor({
           </div>
         </div>
       ) : (
-        <div className="grid gap-3">
-          {value.map((group, index) => (
-            <FeatureGroupPanel
-              key={`group-${index}`}
-              group={group}
-              nameInputRef={(el) => {
-                if (el) {
-                  nameInputsRef.current.set(index, el);
-                } else {
-                  nameInputsRef.current.delete(index);
-                }
-              }}
-              onRename={(name) => renameGroup(index, name)}
-              onRemove={() => removeGroup(index)}
-              onAddFeature={(feature) => addFeature(index, feature)}
-              onRemoveFeature={(featureIndex) => removeFeature(index, featureIndex)}
-            />
-          ))}
-          <button
-            type="button"
-            onClick={addEmptyCategory}
-            className="inline-flex items-center justify-center gap-1 rounded-2xl border border-dashed border-white/15 px-3 py-3 text-sm font-semibold text-slate-300 transition hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-100"
+        <div className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/40 p-3 sm:grid-cols-[200px_1fr]">
+          <div
+            role="tablist"
+            aria-label="Feature categories"
+            className="flex flex-col gap-1"
           >
-            <span aria-hidden="true">+</span>
-            Add category
-          </button>
+            {value.map((group, index) => {
+              const isActive = index === activeIndex;
+              const label = group.name.trim() || "Untitled";
+              return (
+                <button
+                  key={`tab-${index}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveIndex(index)}
+                  className={
+                    "flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold transition " +
+                    (isActive
+                      ? "bg-orange-500/15 text-white shadow-[0_4px_18px_-12px_rgba(249,115,22,0.55)]"
+                      : "text-slate-400 hover:bg-white/[0.04] hover:text-white")
+                  }
+                >
+                  <span className="truncate">{label}</span>
+                  <span
+                    className={
+                      "shrink-0 rounded-full px-1.5 text-[10px] font-bold transition " +
+                      (isActive
+                        ? "bg-orange-500/30 text-orange-100"
+                        : "bg-white/[0.06] text-slate-400")
+                    }
+                  >
+                    {group.features.length}
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={addEmptyCategory}
+              className="mt-1 inline-flex items-center justify-center gap-1 rounded-xl border border-dashed border-white/15 px-3 py-2 text-sm font-semibold text-slate-300 transition hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-100"
+            >
+              <span aria-hidden="true">+</span>
+              Add category
+            </button>
+          </div>
+
+          {activeGroup && (
+            <FeatureGroupPanel
+              key={`panel-${activeIndex}`}
+              group={activeGroup}
+              nameInputRef={nameInputRef}
+              onRename={(name) => renameGroup(activeIndex, name)}
+              onRemove={() => removeGroup(activeIndex)}
+              onAddFeature={(feature) => addFeature(activeIndex, feature)}
+              onRemoveFeature={(featureIndex) =>
+                removeFeature(activeIndex, featureIndex)
+              }
+            />
+          )}
         </div>
       )}
     </fieldset>
@@ -165,7 +215,7 @@ function FeatureGroupPanel({
   onRemoveFeature,
 }: {
   group: FeatureGroup;
-  nameInputRef: (el: HTMLInputElement | null) => void;
+  nameInputRef: React.RefObject<HTMLInputElement>;
   onRename: (name: string) => void;
   onRemove: () => void;
   onAddFeature: (feature: string) => void;
@@ -186,7 +236,7 @@ function FeatureGroupPanel({
   };
 
   return (
-    <div className="grid gap-3 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+    <div className="grid gap-3 rounded-xl border border-white/10 bg-black/30 p-4">
       <div className="flex flex-wrap items-end gap-3">
         <label className="grid flex-1 min-w-[12rem] gap-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
           Category name
@@ -195,7 +245,7 @@ function FeatureGroupPanel({
             value={group.name}
             onChange={(event) => onRename(event.target.value)}
             placeholder="Category name"
-            className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-base font-bold text-white outline-none transition focus:border-orange-400/50"
+            className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-base font-bold text-white outline-none transition focus:border-orange-400/50"
             maxLength={60}
           />
         </label>
@@ -215,7 +265,7 @@ function FeatureGroupPanel({
           group.features.map((feature, featureIndex) => (
             <div
               key={`${feature}-${featureIndex}`}
-              className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-200"
+              className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-200"
             >
               <span className="truncate">{feature}</span>
               <button
@@ -237,7 +287,7 @@ function FeatureGroupPanel({
           onChange={(event) => setFeatureDraft(event.target.value)}
           onKeyDown={handleKey}
           placeholder="Add a feature and press Enter"
-          className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-orange-400/50"
+          className="flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none transition focus:border-orange-400/50"
           maxLength={120}
         />
         <button
