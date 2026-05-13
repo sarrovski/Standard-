@@ -59,11 +59,16 @@ export type ProductTrafficStats = {
 export async function getProductTrafficStats(
   sellerId: string,
 ): Promise<Map<string, ProductTrafficStats>> {
-  const supabase = createClient();
-  // The generated Database type knows about this RPC (see supabase/types.ts),
-  // but the supabase-js generic inference often falls through to `undefined`
-  // args. Cast through `as never` to bypass — the runtime shape is verified
-  // by the function definition in migration 010_product_events.sql.
+  // EXECUTE on public.get_product_traffic_stats is revoked from anon /
+  // authenticated by migration 012_security_hardening_round_2.sql to
+  // satisfy the Supabase advisor. The function therefore can only be
+  // called by service_role, so we invoke it through the admin client.
+  // This call site is already server-only and the caller is responsible
+  // for passing the correct sellerId (the dashboard page derives it from
+  // the authenticated user before calling). The admin client is safe to
+  // use here for that reason.
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const supabase = createAdminClient();
   const { data, error } = await supabase.rpc(
     "get_product_traffic_stats" as never,
     { p_seller_id: sellerId } as never,
