@@ -29,7 +29,7 @@ export type Database = {
       subscription_status: SubscriptionStatus;
     };
     Tables: {
-      profiles: Table<{ id: string; email: string | null; display_name: string | null; role: UserRole; created_at: string; updated_at: string }>;
+      profiles: Table<{ id: string; email: string | null; display_name: string | null; avatar_url: string | null; role: UserRole; created_at: string; updated_at: string }>;
       sellers: Table<{ id: string; profile_id: string; seller_name: string; provider_tag_status: ProviderTagStatus; website_url: string | null; discord_handle: string | null; telegram_handle: string | null; created_at: string; updated_at: string }>;
       products: Table<{ id: string; seller_id: string; slug: string; name: string; game: string; category: string; status: ProductStatus; website_url: string | null; summary: string | null; features: string[]; features_grouped: Json; faq: Json; price_points: string[]; trust_score: number | null; created_at: string; updated_at: string }>;
       product_media: Table<{ id: string; product_id: string; storage_path: string | null; public_url: string | null; alt_text: string | null; sort_order: number; media_type: ProductMediaType; external_url: string | null; provider: string | null; video_id: string | null; thumbnail_url: string | null; title: string | null; created_at: string }>;

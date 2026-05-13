@@ -79,12 +79,22 @@ export function AccountMenu({ user }: { user: SessionUser }) {
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] py-1.5 pl-1.5 pr-3 text-sm font-semibold text-white transition hover:border-orange-400/40 hover:bg-orange-500/10"
       >
-        <span
-          aria-hidden="true"
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 text-xs font-black text-white"
-        >
-          {initial}
-        </span>
+        {user.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={user.avatarUrl}
+            alt=""
+            aria-hidden="true"
+            className="h-7 w-7 rounded-lg object-cover"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 text-xs font-black text-white"
+          >
+            {initial}
+          </span>
+        )}
         <span className="hidden max-w-[10rem] truncate sm:inline">{handle}</span>
         <span
           aria-hidden="true"

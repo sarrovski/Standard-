@@ -9,6 +9,7 @@ type AccountProfile = {
   id: string;
   email: string | null;
   display_name: string | null;
+  avatar_url: string | null;
   role: "user" | "seller" | "admin";
 };
 
@@ -22,7 +23,7 @@ async function loadProfile(): Promise<AccountProfile | null> {
   if (!user) return null;
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, email, display_name, role")
+    .select("id, email, display_name, avatar_url, role")
     .eq("id", user.id)
     .maybeSingle<AccountProfile>();
   return profile ?? null;
@@ -120,6 +121,7 @@ export default async function AccountPage({
     id: "demo-buyer",
     email: "demo@standard.example",
     display_name: "Demo Buyer",
+    avatar_url: null,
     role: "user",
   };
   const savedRes = profile

@@ -12,6 +12,7 @@ type AccountProfile = {
   id: string;
   email: string | null;
   display_name: string | null;
+  avatar_url: string | null;
   role: "user" | "seller" | "admin";
 };
 
@@ -66,9 +67,19 @@ export function AccountDashboardClient({
       <aside className="lg:sticky lg:top-6 lg:self-start">
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-sm font-black text-white">
-              {(profile.display_name?.[0] ?? profile.email?.[0] ?? "U").toUpperCase()}
-            </span>
+            {profile.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profile.avatar_url}
+                alt=""
+                aria-hidden="true"
+                className="h-9 w-9 rounded-xl object-cover"
+              />
+            ) : (
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-sm font-black text-white">
+                {(profile.display_name?.[0] ?? profile.email?.[0] ?? "U").toUpperCase()}
+              </span>
+            )}
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-white">
                 {profile.display_name ?? "Your account"}
@@ -362,10 +373,172 @@ function SettingsTab({
 }) {
   return (
     <div className="grid gap-6">
+      <AvatarCard profile={profile} demoMode={demoMode} />
       <ProfileCard profile={profile} demoMode={demoMode} />
       {demoMode ? <SecurityDemoCard /> : <ChangePasswordCard />}
       {demoMode ? <TwoFactorDemoCard /> : <TwoFactorCard />}
     </div>
+  );
+}
+
+function AvatarCard({
+  profile,
+  demoMode = false,
+}: {
+  profile: AccountProfile;
+  demoMode?: boolean;
+}) {
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedOk, setSavedOk] = useState(false);
+
+  const initial = (
+    profile.display_name?.[0] ?? profile.email?.[0] ?? "U"
+  ).toUpperCase();
+
+  const reset = () => {
+    setError(null);
+    setSavedOk(false);
+  };
+
+  const handleSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset so the same file can be re-selected later if needed.
+    event.target.value = "";
+    if (!file) return;
+    reset();
+
+    if (demoMode) {
+      setError("Demo mode — connect Supabase to upload an avatar.");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image must be 2MB or smaller.");
+      return;
+    }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setError("Use a PNG, JPEG, or WebP image.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch("/api/account/avatar", {
+        method: "POST",
+        body,
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        avatar_url?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.avatar_url) {
+        setError(payload.error ?? "Couldn't upload avatar.");
+        return;
+      }
+      setAvatarUrl(payload.avatar_url);
+      setSavedOk(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    reset();
+    if (demoMode) {
+      setError("Demo mode — connect Supabase to remove the avatar.");
+      return;
+    }
+    if (!window.confirm("Remove your profile picture?")) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/account/avatar", { method: "DELETE" });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Couldn't remove avatar.");
+        return;
+      }
+      setAvatarUrl(null);
+      setSavedOk(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <Badge tone="default">Profile picture</Badge>
+      <h2 className="mt-3 text-2xl font-black">Profile picture</h2>
+      <p className="mt-2 text-sm text-slate-400">
+        PNG, JPEG, or WebP. Up to 2MB. Shows up next to your account on
+        Standard.
+      </p>
+
+      <div className="mt-5 flex flex-wrap items-center gap-5">
+        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt="Current profile picture"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="bg-gradient-to-br from-orange-400 to-orange-600 bg-clip-text text-2xl font-black text-transparent">
+              {initial}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            className={`inline-flex cursor-pointer items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+          >
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={handleSelect}
+              disabled={busy}
+            />
+            {avatarUrl ? "Change picture" : "Upload picture"}
+          </label>
+          {avatarUrl && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Remove
+            </button>
+          )}
+          {busy && (
+            <span className="text-xs text-slate-400">Working…</span>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+      {savedOk && !error && (
+        <div className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+          Profile picture saved.
+        </div>
+      )}
+    </Card>
   );
 }
 

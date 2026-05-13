@@ -8,6 +8,7 @@ export type SessionUser = {
   id: string;
   email: string | null;
   displayName: string | null;
+  avatarUrl: string | null;
   role: SessionRole;
 };
 
@@ -36,12 +37,13 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, email, display_name, role")
+    .select("id, email, display_name, avatar_url, role")
     .eq("id", user.id)
     .maybeSingle<{
       id: string;
       email: string | null;
       display_name: string | null;
+      avatar_url: string | null;
       role: SessionRole;
     }>();
   if (!profile) return null;
@@ -50,6 +52,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     id: profile.id,
     email: profile.email,
     displayName: profile.display_name,
+    avatarUrl: profile.avatar_url,
     role: profile.role,
   };
 });
