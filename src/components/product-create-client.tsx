@@ -194,7 +194,7 @@ export function ProductCreateClient({
               value={form.name}
               onChange={(event) => update("name", event.target.value)}
               className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
-              placeholder="Matrix Inter"
+              placeholder="Product name"
               required
             />
           </label>
@@ -237,7 +237,7 @@ export function ProductCreateClient({
             value={form.summary}
             onChange={(event) => update("summary", event.target.value)}
             className="min-h-28 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
-            placeholder="rust most advanced cheat"
+            placeholder="Short description of your product"
           />
         </label>
 
