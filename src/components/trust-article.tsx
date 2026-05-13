@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
+import { getSessionUser } from "@/lib/session";
 
 export type TrustSection = { title: string; body: ReactNode };
 export type TrustFaq = { q: string; a: string };
@@ -12,7 +13,7 @@ export type TrustLink = { href: string; label: string };
  * links, and optional CTAs. The component handles Shell + Nav + Footer
  * (Footer is wired through Shell) so the page files stay as pure data.
  */
-export function TrustArticle({
+export async function TrustArticle({
   eyebrow,
   title,
   intro,
@@ -31,9 +32,10 @@ export function TrustArticle({
   primaryCta?: TrustLink;
   secondaryCta?: TrustLink;
 }) {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-5xl px-6 py-10">
         <nav
           aria-label="Breadcrumb"

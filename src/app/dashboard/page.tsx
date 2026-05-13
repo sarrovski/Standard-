@@ -1,4 +1,5 @@
 import { requireRole, isSupabaseConfigured } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 import { Nav, Shell } from "@/components/ui";
 import { DashboardClient, type DashboardInitialData } from "@/components/dashboard-client";
 import {
@@ -69,11 +70,14 @@ export default async function DashboardPage({
   searchParams?: { tab?: string };
 }) {
   await requireRole(["seller", "admin"]);
-  const initialData = await loadDashboardData();
+  const [initialData, user] = await Promise.all([
+    loadDashboardData(),
+    getSessionUser(),
+  ]);
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-8">
         <DashboardClient
           initialTab={searchParams?.tab}

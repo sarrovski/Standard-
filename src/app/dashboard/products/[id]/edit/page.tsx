@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { Nav, Shell } from "@/components/ui";
 import { ProductEditClient } from "@/components/product-edit-client";
 import { isSupabaseConfigured, requireRole } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 import {
   getSellerByProfileId,
   getVerifiedPaymentMethodCount,
@@ -93,10 +94,11 @@ export default async function ProductEditPage({
   const verifiedPaymentMethodCount = seller
     ? await getVerifiedPaymentMethodCount(seller.id)
     : undefined;
+  const sessionUser = await getSessionUser();
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={sessionUser} />
       <section className="mx-auto max-w-4xl px-6 py-8">
         <ProductEditClient
           product={{

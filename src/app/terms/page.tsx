@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Card, Nav, SectionHeader, Shell } from "@/components/ui";
+import { getSessionUser } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Terms — Standard",
@@ -51,10 +52,11 @@ const sections = [
   },
 ];
 
-export default function TermsPage() {
+export default async function TermsPage() {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-5xl px-6 py-10">
         <SectionHeader
           eyebrow="Terms"

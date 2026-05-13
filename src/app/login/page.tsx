@@ -2,6 +2,7 @@
 import { Badge, ButtonLink, Nav, Shell } from "@/components/ui";
 import { LoginClient } from "@/components/login-client";
 import { isSupabaseConfigured } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 import { getSiteUrl } from "@/lib/site-url";
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
@@ -11,13 +12,14 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
     "Couldn't verify the magic link — it may have expired or already been used. Request a new one.",
 };
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
   searchParams?: { auth?: string };
 }) {
   const supabaseConfigured = isSupabaseConfigured();
   const siteUrl = getSiteUrl();
+  const user = await getSessionUser();
   const authError = searchParams?.auth;
   const authErrorMessage = authError
     ? (AUTH_ERROR_MESSAGES[authError] ?? `Sign-in failed: ${authError}`)
@@ -25,7 +27,7 @@ export default function LoginPage({
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto grid min-h-[calc(100vh-96px)] max-w-7xl items-center gap-10 px-6 py-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
           <Badge tone="orange">Standard account</Badge>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Badge, ButtonLink, Card, Nav, Shell } from "@/components/ui";
+import { getSessionUser } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Creators on Standard",
@@ -64,10 +65,11 @@ const FILTERS = {
   availability: ["All", "Open this week", "2 slots left", "Available next week", "Invite only"],
 };
 
-export default function CreatorsPage() {
+export default async function CreatorsPage() {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-10">
         <div className="grid gap-10 lg:grid-cols-[1fr_0.82fr] lg:items-center">
           <div>

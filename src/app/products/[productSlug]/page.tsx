@@ -17,6 +17,7 @@ import {
   buildProductJsonLd,
   buildProductMetadata,
 } from "@/lib/product-seo";
+import { getSessionUser } from "@/lib/session";
 
 type LoadResult =
   | { product: UIProductDetail; source: "supabase"; state: "ok" }
@@ -87,6 +88,7 @@ export default async function ProductPage({
 }) {
   const result = await loadProduct(params.productSlug);
   const saveState = await loadSaveState(result.product?.id ?? null);
+  const user = await getSessionUser();
 
   const jsonLdBlocks =
     result.state === "ok" && result.product
@@ -95,7 +97,7 @@ export default async function ProductPage({
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-10">
         <Link href="/marketplace" className="text-sm text-slate-400 hover:text-white">← Back to marketplace</Link>
         <ProductPageClient

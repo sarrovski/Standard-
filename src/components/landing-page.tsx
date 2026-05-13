@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import type { LandingFaqItem } from "@/lib/landing-faq";
+import { getSessionUser } from "@/lib/session";
 
 type Crumb = { label: string; href?: string };
 
-export function LandingPage({
+export async function LandingPage({
   eyebrow,
   title,
   intro,
@@ -25,9 +26,10 @@ export function LandingPage({
   faqItems: ReadonlyArray<LandingFaqItem>;
   breadcrumbs?: ReadonlyArray<Crumb>;
 }) {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 pb-16 pt-10">
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav

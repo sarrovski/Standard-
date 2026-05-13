@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Badge, ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import { SellerLaunchChecklist } from "@/components/seller-launch-checklist";
+import { getSessionUser } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Start selling on Standard — seller launch checklist",
@@ -59,10 +60,11 @@ const FAQ = [
   },
 ];
 
-export default function StartSellingPage() {
+export default async function StartSellingPage() {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-5xl px-6 py-10">
         <SectionHeader
           eyebrow="Start selling"

@@ -1,15 +1,17 @@
 import { Badge, Nav, Shell } from "@/components/ui";
 import { SignupClient } from "@/components/signup-client";
 import { isSupabaseConfigured } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 import { getSiteUrl } from "@/lib/site-url";
 
-export default function SignupPage() {
+export default async function SignupPage() {
   const supabaseConfigured = isSupabaseConfigured();
   const siteUrl = getSiteUrl();
+  const user = await getSessionUser();
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto grid min-h-[calc(100vh-96px)] max-w-6xl items-center gap-10 px-6 py-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
           <Badge tone="default">Create account</Badge>

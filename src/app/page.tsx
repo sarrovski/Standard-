@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge, ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import { games, products } from "@/lib/data";
 import { toSlug } from "@/lib/slugs";
+import { getSessionUser } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Standard — verified gaming-tool marketplace",
@@ -11,10 +12,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 pb-16 pt-12">
         <div className="mx-auto max-w-4xl text-center">
           <Badge tone="orange">Third-party seller verification for gaming tools</Badge>

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { Badge, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import { authLogicSteps, getPostLoginRedirect, mockSessions } from "@/lib/auth";
+import { getSessionUser } from "@/lib/session";
 
-export default function AuthRoutingPage({
+export default async function AuthRoutingPage({
   searchParams,
 }: {
   searchParams?: { session?: string };
@@ -11,10 +12,11 @@ export default function AuthRoutingPage({
   if (!fallback) throw new Error("mockSessions is empty");
   const session = mockSessions.find((item) => item.id === searchParams?.session) ?? fallback;
   const redirect = getPostLoginRedirect(session);
+  const user = await getSessionUser();
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-10">
         <SectionHeader
           eyebrow="Auth routing"

@@ -2,6 +2,7 @@ import { Card, Nav, SectionHeader, Shell, Badge, ButtonLink } from "@/components
 import { AccountDashboardClient } from "@/components/account-dashboard-client";
 import { SellerLaunchChecklist } from "@/components/seller-launch-checklist";
 import { isSupabaseConfigured, requireRole } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 import { getSavedProductsForProfile } from "@/lib/repositories/buyer";
 
 type AccountProfile = {
@@ -34,11 +35,12 @@ export default async function AccountPage({
 }) {
   await requireRole(["user", "seller", "admin"]);
   const sellView = searchParams?.view === "sell";
+  const sessionUser = await getSessionUser();
 
   if (sellView) {
     return (
       <Shell>
-        <Nav />
+        <Nav user={sessionUser} />
         <section className="mx-auto max-w-5xl px-6 py-10">
           <SectionHeader
             eyebrow="Seller onboarding"
@@ -94,7 +96,7 @@ export default async function AccountPage({
   if (!profile && isSupabaseConfigured()) {
     return (
       <Shell>
-        <Nav />
+        <Nav user={sessionUser} />
         <section className="mx-auto max-w-3xl px-6 py-12">
           <SectionHeader
             eyebrow="Buyer workspace"
@@ -126,7 +128,7 @@ export default async function AccountPage({
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={sessionUser} />
       <section className="mx-auto max-w-7xl px-6 py-8">
         <AccountDashboardClient
           profile={renderedProfile}

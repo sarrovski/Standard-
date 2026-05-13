@@ -1,4 +1,5 @@
 import { requireRole, isSupabaseConfigured } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 import { Nav, Shell } from "@/components/ui";
 import { AdminClient } from "@/components/admin-client";
 import {
@@ -235,11 +236,11 @@ export default async function AdminPage({
   searchParams?: { tab?: string };
 }) {
   await requireRole(["admin"]);
-  const data = await loadAdminData();
+  const [data, user] = await Promise.all([loadAdminData(), getSessionUser()]);
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-8">
         <AdminClient
           initialPaymentRequests={data.paymentRequests}

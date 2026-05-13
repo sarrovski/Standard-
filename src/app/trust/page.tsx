@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge, ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
+import { getSessionUser } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Trust on Standard — verification, reviews, and seller risk",
@@ -74,10 +75,11 @@ const reviewRules = [
   "Coordinated fake reviews, review bombing, or spam can lead to restrictions.",
 ];
 
-export default function TrustPage() {
+export default async function TrustPage() {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-10">
         <SectionHeader
           eyebrow="Trust"

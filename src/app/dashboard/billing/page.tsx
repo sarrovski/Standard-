@@ -1,4 +1,5 @@
 import { requireRole, isSupabaseConfigured } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 import { Badge, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import { BillingActions } from "@/components/billing-actions";
 import {
@@ -155,7 +156,7 @@ export default async function BillingPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   await requireRole(["seller", "admin"]);
-  const state = await loadBillingData();
+  const [state, user] = await Promise.all([loadBillingData(), getSessionUser()]);
 
   const checkoutResult =
     typeof searchParams?.checkout === "string" ? searchParams.checkout : null;
@@ -164,7 +165,7 @@ export default async function BillingPage({
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-5xl px-6 py-10">
         <SectionHeader
           eyebrow="Billing"

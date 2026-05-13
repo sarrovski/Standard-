@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Badge, Card, Nav, Shell } from "@/components/ui";
 import { PlanCheckoutButton } from "@/components/plan-checkout-button";
+import { getSessionUser } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Seller plans — Standard",
@@ -99,10 +100,11 @@ const FAQ = [
   },
 ];
 
-export default function PlansPage() {
+export default async function PlansPage() {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-16">
         <div className="mx-auto max-w-3xl text-center">
           <Badge tone="orange">Seller subscriptions</Badge>

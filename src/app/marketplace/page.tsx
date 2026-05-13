@@ -14,6 +14,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/marketplace" },
 };
 import { isSupabaseConfigured } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 import { getPublishedProducts } from "@/lib/repositories/products";
 import { isTimeoutError } from "@/lib/repositories/query-timeout";
 import {
@@ -66,11 +67,11 @@ async function loadProducts(): Promise<LoadResult> {
 }
 
 export default async function MarketplacePage() {
-  const result = await loadProducts();
+  const [result, user] = await Promise.all([loadProducts(), getSessionUser()]);
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-10">
         <SectionHeader
           eyebrow="Marketplace"
