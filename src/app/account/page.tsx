@@ -123,9 +123,9 @@ export default async function AccountPage({
   }
 
   const profile = await loadProfile();
-  if (!profile) {
-    // Demo mode (no Supabase env) or unauthenticated — fall back to a
-    // minimal placeholder so /account never errors out.
+
+  // Supabase configured but no user → real sign-in CTA.
+  if (!profile && isSupabaseConfigured()) {
     return (
       <Shell>
         <Nav />
@@ -133,7 +133,7 @@ export default async function AccountPage({
           <SectionHeader
             eyebrow="Buyer workspace"
             title="Sign in to use your account"
-            text="Saved products, recently viewed, and account settings live here once you're signed in. In demo mode (no Supabase env configured) the dashboard is read-only."
+            text="Saved products, recently viewed, and account settings live here once you're signed in."
           />
           <div className="mt-8 flex gap-3">
             <ButtonLink href="/login">Sign in</ButtonLink>
@@ -144,16 +144,29 @@ export default async function AccountPage({
     );
   }
 
-  const savedRes = await getSavedProductsForProfile(profile.id);
+  // Demo mode (no Supabase env): render the dashboard shell with a
+  // placeholder profile + empty saved list so the layout is reviewable
+  // without auth. Forms are inert (see AccountDashboardClient demoMode).
+  const isDemoMode = !profile;
+  const renderedProfile: AccountProfile = profile ?? {
+    id: "demo-buyer",
+    email: "demo@standard.example",
+    display_name: "Demo Buyer",
+    role: "user",
+  };
+  const savedRes = profile
+    ? await getSavedProductsForProfile(profile.id)
+    : { data: [], error: null };
 
   return (
     <Shell>
       <Nav />
       <section className="mx-auto max-w-7xl px-6 py-8">
         <AccountDashboardClient
-          profile={profile}
+          profile={renderedProfile}
           savedProducts={savedRes.data}
           initialTab={searchParams?.tab}
+          demoMode={isDemoMode}
         />
       </section>
     </Shell>

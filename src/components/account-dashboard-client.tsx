@@ -33,10 +33,17 @@ export function AccountDashboardClient({
   profile,
   savedProducts,
   initialTab,
+  demoMode = false,
 }: {
   profile: AccountProfile;
   savedProducts: SavedProductRow[];
   initialTab?: string;
+  /**
+   * Demo / no-Supabase render. Hides forms that would talk directly to
+   * Supabase Auth (password change, 2FA) so the page still demos a clean
+   * dashboard layout instead of crashing on a missing browser client.
+   */
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -133,20 +140,27 @@ export function AccountDashboardClient({
       </aside>
 
       <div className="min-w-0">
-        {tab === "saved" && <SavedTab savedProducts={savedProducts} />}
+        {tab === "saved" && <SavedTab savedProducts={savedProducts} demoMode={demoMode} />}
         {tab === "recent" && <RecentlyViewedTab />}
-        {tab === "settings" && <SettingsTab profile={profile} />}
+        {tab === "settings" && <SettingsTab profile={profile} demoMode={demoMode} />}
       </div>
     </div>
   );
 }
 
-function SavedTab({ savedProducts }: { savedProducts: SavedProductRow[] }) {
+function SavedTab({
+  savedProducts,
+  demoMode = false,
+}: {
+  savedProducts: SavedProductRow[];
+  demoMode?: boolean;
+}) {
   const [items, setItems] = useState(savedProducts);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const removeItem = async (productId: string) => {
+    if (demoMode) return;
     setBusyId(productId);
     setError(null);
     const previous = items;
@@ -339,17 +353,72 @@ function RecentlyViewedTab() {
   );
 }
 
-function SettingsTab({ profile }: { profile: AccountProfile }) {
+function SettingsTab({
+  profile,
+  demoMode = false,
+}: {
+  profile: AccountProfile;
+  demoMode?: boolean;
+}) {
   return (
     <div className="grid gap-6">
-      <ProfileCard profile={profile} />
-      <ChangePasswordCard />
-      <TwoFactorCard />
+      <ProfileCard profile={profile} demoMode={demoMode} />
+      {demoMode ? <SecurityDemoCard /> : <ChangePasswordCard />}
+      {demoMode ? <TwoFactorDemoCard /> : <TwoFactorCard />}
     </div>
   );
 }
 
-function ProfileCard({ profile }: { profile: AccountProfile }) {
+function SecurityDemoCard() {
+  return (
+    <Card className="p-6">
+      <Badge tone="default">Security</Badge>
+      <h2 className="mt-3 text-2xl font-black">Change password</h2>
+      <p className="mt-2 text-sm text-slate-400">
+        Demo mode — connect Supabase Auth to enable password changes here.
+        On the live site this card has two password fields (≥8 chars, must
+        match) and an orange &ldquo;Update password&rdquo; button.
+      </p>
+    </Card>
+  );
+}
+
+function TwoFactorDemoCard() {
+  return (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Badge tone="default">Security</Badge>
+          <h2 className="mt-3 text-2xl font-black">Two-factor authentication</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Demo mode — Supabase Auth MFA is unavailable here. On the live
+            site this flow uses TOTP: Supabase returns a QR code + secret,
+            the user scans with Google Authenticator / 1Password / Authy
+            and enters the 6-digit code to verify.
+          </p>
+        </div>
+        <Badge tone="amber">2FA off</Badge>
+      </div>
+      <div className="mt-5">
+        <button
+          type="button"
+          disabled
+          className="inline-flex cursor-not-allowed rounded-xl border border-orange-400/40 bg-orange-500/15 px-5 py-3 text-sm font-semibold text-orange-100 opacity-60"
+        >
+          Enable two-factor authentication
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+function ProfileCard({
+  profile,
+  demoMode = false,
+}: {
+  profile: AccountProfile;
+  demoMode?: boolean;
+}) {
   const [displayName, setDisplayName] = useState(profile.display_name ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -363,6 +432,10 @@ function ProfileCard({ profile }: { profile: AccountProfile }) {
     event.preventDefault();
     setError(null);
     setSavedOk(false);
+    if (demoMode) {
+      setError("Demo mode — connect Supabase to save profile changes.");
+      return;
+    }
     if (!displayName.trim()) {
       setError("Display name is required.");
       return;
