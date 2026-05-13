@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge, ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import { games, products } from "@/lib/data";
+import { toSlug } from "@/lib/slugs";
 
 export default function HomePage() {
   return (
@@ -54,7 +55,7 @@ export default function HomePage() {
             {games.map((game) => (
               <Link
                 key={game}
-                href={`/marketplace?game=${encodeURIComponent(game)}`}
+                href={`/games/${toSlug(game)}`}
                 className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:border-orange-400/40"
               >
                 <div className="font-bold">{game}</div>
