@@ -461,7 +461,7 @@ function FeaturesPanel({
             <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
               {group.name || "Features"}
             </div>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="mt-2 grid gap-2">
               {group.features.map((feature, featureIndex) => (
                 <div
                   key={`${feature}-${featureIndex}`}
