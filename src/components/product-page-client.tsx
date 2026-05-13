@@ -254,15 +254,21 @@ export function ProductPageClient({
   const discord = product.discord ?? "";
   const telegram = product.telegram ?? "";
 
+  const featureGroupsToRender =
+    product.featureGroups && product.featureGroups.length > 0
+      ? product.featureGroups
+      : product.features.length > 0
+        ? [{ name: "Features", features: product.features }]
+        : [];
+
   return (
-    <>
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+    <div className="mx-auto max-w-5xl">
+      {/* 1. Hero ---------------------------------------------------------- */}
+      <section className="mt-6">
         <Card className="overflow-hidden border-orange-400/30">
-          <div className={`bg-gradient-to-br ${product.accent} p-8`}>
+          <div className={`bg-gradient-to-br ${product.accent} p-7 md:p-10`}>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
-              <Badge tone={product.sellerTag === "Provider / Developer" ? "cyan" : product.sellerTag === "Verified Seller" ? "green" : "default"}>{product.sellerTag}</Badge>
-              <Badge>
+              <Badge tone="default">
                 <span className="inline-flex items-center gap-1.5">
                   <GameLogo
                     game={product.game}
@@ -272,16 +278,53 @@ export function ProductPageClient({
                   {product.game}
                 </span>
               </Badge>
-              <Badge>{product.architecture}</Badge>
+              <Badge>{product.category}</Badge>
+              <Badge
+                tone={
+                  product.sellerTag === "Provider / Developer"
+                    ? "cyan"
+                    : product.sellerTag === "Verified Seller"
+                      ? "green"
+                      : "default"
+                }
+              >
+                {product.sellerTag}
+              </Badge>
+              <RankingPill result={ranking} />
             </div>
-            <h1 className="mt-6 text-4xl font-black md:text-5xl">{product.name}</h1>
-            <p className="mt-4 max-w-3xl text-white/85">{product.summary}</p>
-            <div className="mt-6 flex flex-wrap gap-3">
+
+            <h1 className="mt-6 text-4xl font-black md:text-5xl">
+              {product.name}
+            </h1>
+            {product.summary && (
+              <p className="mt-4 max-w-3xl text-base leading-7 text-white/85 md:text-lg">
+                {product.summary}
+              </p>
+            )}
+
+            {product.pricePoints.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {product.pricePoints.map((price) => (
+                  <span
+                    key={price}
+                    className="rounded-full border border-white/20 bg-black/30 px-3 py-1 text-xs font-bold text-white"
+                  >
+                    {price}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               {websiteUrl ? (
                 <ButtonLink href={websiteUrl} onClick={trackOutboundClick}>
                   {websiteLabel}
                 </ButtonLink>
-              ) : null}
+              ) : (
+                <span className="inline-flex items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-slate-300">
+                  Official website not added yet
+                </span>
+              )}
               {product.id ? (
                 <SaveProductButton
                   productId={product.id}
@@ -293,136 +336,152 @@ export function ProductPageClient({
             </div>
           </div>
         </Card>
-
-        <Card className="p-6">
-          <Badge tone="orange">Seller conversion panel</Badge>
-          <h2 className="mt-4 text-2xl font-black">Continue to seller website</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-400">
-            Standard gives the buyer context. The next step is to continue on the seller’s official website.
-          </p>
-          <div className="mt-5 grid gap-3">
-            <Fact label="Seller" value={product.seller} />
-            <Fact label="Official website" value={websiteUrl || "—"} />
-            <Fact label="Discord" value={discord || "—"} />
-            <Fact label="Telegram" value={telegram || "—"} />
-          </div>
-
-          <div className="mt-5">
-            <TrustBox
-              paymentProfiles={product.paymentProfiles ?? []}
-              websiteUrl={websiteUrl || undefined}
-              discord={discord || undefined}
-              telegram={telegram || undefined}
-              sellerTag={product.sellerTag}
-            />
-          </div>
-
-          {websiteUrl ? (
-            <a
-              href={websiteUrl}
-              onClick={trackOutboundClick}
-              className="mt-5 inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white"
-            >
-              Go to official website
-            </a>
-          ) : null}
-        </Card>
       </section>
 
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_320px]">
-        <div className="space-y-6">
-          <MediaCarousel
-            accent={product.accent}
-            activeIndex={activeMediaIndex}
-            activeMedia={activeMedia}
-            mediaItems={mediaItems}
-            onSelect={setActiveMediaIndex}
-          />
+      {/* 2. Showcase media ----------------------------------------------- */}
+      <section className="mt-10">
+        <MediaCarousel
+          accent={product.accent}
+          activeIndex={activeMediaIndex}
+          activeMedia={activeMedia}
+          mediaItems={mediaItems}
+          onSelect={setActiveMediaIndex}
+        />
+      </section>
 
-          <FeaturesPanel
-            groups={
-              product.featureGroups && product.featureGroups.length > 0
-                ? product.featureGroups
-                : product.features.length > 0
-                  ? [{ name: "Features", features: product.features }]
-                  : []
-            }
-          />
-
-          {faq.length > 0 && (
-            <Panel title="FAQ">
-              <div className="space-y-3">
-                {faq.map((item) => (
-                  <div key={item.q} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="font-semibold">{item.q}</div>
-                    <div className="mt-2 text-sm leading-6 text-slate-400">{item.a}</div>
-                  </div>
-                ))}
+      {/* 3. Trust + seller ----------------------------------------------- */}
+      <section className="mt-10">
+        <Panel title="Trust &amp; seller">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
+                Seller
               </div>
-            </Panel>
-          )}
-        </div>
-
-        <aside className="space-y-6">
-          <Panel title="Trust signals">
-            <div className="space-y-4">
-              <RankingPill result={ranking} />
-              {ranking.publicSignals.length > 0 ? (
-                <TrustSignalsList signals={ranking.publicSignals} />
-              ) : null}
-              {trustSignals.length > 0 && (
-                <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
-                  {trustSignals.map((signal) => (
-                    <Badge
-                      key={signal}
-                      tone={
-                        signal.includes("Verified") || signal.includes("Provider")
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-base font-bold text-white">
+                    {product.seller}
+                  </span>
+                  <Badge
+                    tone={
+                      product.sellerTag === "Provider / Developer"
+                        ? "cyan"
+                        : product.sellerTag === "Verified Seller"
                           ? "green"
                           : "default"
-                      }
-                    >
-                      {signal}
-                    </Badge>
-                  ))}
+                    }
+                  >
+                    {product.sellerTag}
+                  </Badge>
                 </div>
-              )}
-              {ranking.publicSignals.length === 0 && trustSignals.length === 0 && (
-                <p className="text-sm text-slate-500">
-                  No trust signals yet — the seller is still completing this
-                  listing.
-                </p>
-              )}
-            </div>
-          </Panel>
-
-          <Panel title="Verified payment methods">
-            <div className="flex flex-wrap gap-2">
-              {product.verifiedPayments.length ? (
-                product.verifiedPayments.map((payment) => <PaymentPill key={payment} method={payment} />)
-              ) : (
-                <NoVerifiedPayments />
-              )}
-            </div>
-          </Panel>
-
-          <Panel title="Price points">
-            <div className="space-y-2">
-              {product.pricePoints.map((price) => (
-                <div key={price} className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm font-medium">
-                  {price}
+                <div className="mt-3 grid gap-2 text-xs text-slate-400">
+                  <Fact label="Official website" value={websiteUrl || "—"} />
+                  <Fact label="Discord" value={discord || "—"} />
+                  <Fact label="Telegram" value={telegram || "—"} />
                 </div>
-              ))}
-            </div>
-          </Panel>
+              </div>
 
-          {product.id && supabaseSourced && (
-            <div className="flex justify-end">
-              <ReportListingButton productId={product.id} />
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
+                Verified payment methods
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex flex-wrap gap-2">
+                  {product.verifiedPayments.length ? (
+                    product.verifiedPayments.map((payment) => (
+                      <PaymentPill key={payment} method={payment} />
+                    ))
+                  ) : (
+                    <NoVerifiedPayments />
+                  )}
+                </div>
+              </div>
             </div>
-          )}
-        </aside>
+
+            <div className="space-y-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
+                Trust signals
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <RankingPill result={ranking} />
+                {ranking.publicSignals.length > 0 ? (
+                  <div className="mt-4">
+                    <TrustSignalsList signals={ranking.publicSignals} />
+                  </div>
+                ) : null}
+                {trustSignals.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                    {trustSignals.map((signal) => (
+                      <Badge
+                        key={signal}
+                        tone={
+                          signal.includes("Verified") ||
+                          signal.includes("Provider")
+                            ? "green"
+                            : "default"
+                        }
+                      >
+                        {signal}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {ranking.publicSignals.length === 0 &&
+                  trustSignals.length === 0 && (
+                    <p className="mt-3 text-sm text-slate-500">
+                      No trust signals yet — the seller is still completing
+                      this listing.
+                    </p>
+                  )}
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <TrustBox
+                  paymentProfiles={product.paymentProfiles ?? []}
+                  websiteUrl={websiteUrl || undefined}
+                  discord={discord || undefined}
+                  telegram={telegram || undefined}
+                  sellerTag={product.sellerTag}
+                />
+              </div>
+            </div>
+          </div>
+        </Panel>
       </section>
-    </>
+
+      {/* 4. Reviews / reputation ----------------------------------------- */}
+      <section className="mt-10">
+        <ReviewsSection />
+      </section>
+
+      {/* 5. Features ----------------------------------------------------- */}
+      {featureGroupsToRender.length > 0 && (
+        <section className="mt-10">
+          <FeaturesPanel groups={featureGroupsToRender} />
+        </section>
+      )}
+
+      {/* 6. FAQ ---------------------------------------------------------- */}
+      {faq.length > 0 && (
+        <section className="mt-10">
+          <FaqAccordion items={faq} />
+        </section>
+      )}
+
+      {/* 7. Final CTA ---------------------------------------------------- */}
+      <section className="mt-10">
+        <FinalCta
+          websiteUrl={websiteUrl || null}
+          websiteLabel={websiteLabel}
+          onOutboundClick={trackOutboundClick}
+        />
+      </section>
+
+      {product.id && supabaseSourced && (
+        <div className="mt-6 mb-2 flex justify-end">
+          <ReportListingButton productId={product.id} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -576,5 +635,144 @@ function FeaturesPanel({
         ))}
       </div>
     </Panel>
+  );
+}
+
+/**
+ * Reviews / reputation section. Reviews aren't modelled in Supabase yet
+ * (no public.reviews table — see the post-PR notes). Until then this
+ * surface is honest about its state instead of inventing fake content.
+ *
+ * Future shape (sketch for when the table lands):
+ *   type Review = {
+ *     id: string;
+ *     productId: string;
+ *     reviewerDisplayName: string | null;
+ *     rating: 1 | 2 | 3 | 4 | 5;
+ *     body: string;
+ *     createdAt: string;
+ *   };
+ * The component already accepts an optional `reviews` array so wiring
+ * the real data later is a one-line prop change in the parent.
+ */
+function ReviewsSection({
+  reviews,
+}: {
+  reviews?: ReadonlyArray<{
+    id: string;
+    reviewerDisplayName: string | null;
+    rating: number;
+    body: string;
+    createdAt: string;
+  }>;
+}) {
+  return (
+    <Panel title="Reviews">
+      {reviews && reviews.length > 0 ? (
+        <ul className="space-y-3">
+          {reviews.map((review) => (
+            <li
+              key={review.id}
+              className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-white">
+                  {review.reviewerDisplayName ?? "Buyer"}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {new Date(review.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+              <div className="mt-1 text-xs font-semibold text-orange-200/80">
+                {review.rating} / 5
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                {review.body}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-5 text-sm text-slate-400">
+          Verified buyer reviews are coming soon. Once buyers can leave
+          reviews on Standard, they&apos;ll appear here.
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * Native-details accordion for FAQ. Keyboard-accessible, no JS hydration
+ * required — also schema.org/FAQPage-friendly because each Q/A is its
+ * own structured node.
+ */
+function FaqAccordion({
+  items,
+}: {
+  items: ReadonlyArray<{ q: string; a: string }>;
+}) {
+  return (
+    <Panel title="FAQ">
+      <div className="space-y-2">
+        {items.map((item, index) => (
+          <details
+            key={`${item.q}-${index}`}
+            className="group rounded-2xl border border-white/10 bg-slate-950/40 p-4 transition open:border-orange-400/30 open:bg-orange-500/[0.04]"
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-white">
+              <span>{item.q}</span>
+              <span
+                aria-hidden="true"
+                className="text-orange-300 transition group-open:rotate-180"
+              >
+                ▾
+              </span>
+            </summary>
+            <p className="mt-3 text-sm leading-6 text-slate-300">{item.a}</p>
+          </details>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function FinalCta({
+  websiteUrl,
+  websiteLabel,
+  onOutboundClick,
+}: {
+  websiteUrl: string | null;
+  websiteLabel: string;
+  onOutboundClick: () => void;
+}) {
+  return (
+    <Card className="border-orange-400/30 bg-gradient-to-br from-orange-500/15 via-slate-950 to-slate-950 p-8 text-center">
+      <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+        Ready to continue?
+      </h2>
+      <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+        Standard helps you compare trust signals before you leave for the
+        seller&apos;s official site. When you&apos;re ready, the seller
+        handles checkout, delivery, and support on their own site.
+      </p>
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        {websiteUrl ? (
+          <a
+            href={websiteUrl}
+            onClick={onOutboundClick}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400"
+          >
+            {websiteLabel}
+          </a>
+        ) : (
+          <span className="inline-flex items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-slate-300">
+            Official website not added yet
+          </span>
+        )}
+      </div>
+    </Card>
   );
 }
