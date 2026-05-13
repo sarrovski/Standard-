@@ -130,6 +130,7 @@ function accentForSlug(slug: string): string {
 // ---------- Product card adapter (used by marketplace) ----------------------
 
 export type UIProductCard = {
+  id: string;
   slug: string;
   name: string;
   seller: string;
@@ -173,6 +174,7 @@ export function adaptProductCard(
   const firstVideo = sortedMedia.find((item) => item.type === "youtube");
   const coverImageUrl = firstImage?.imageUrl ?? firstVideo?.thumbnailUrl ?? null;
   return {
+    id: row.id,
     slug: row.slug,
     name: row.name,
     seller: seller?.seller_name ?? "Unknown seller",

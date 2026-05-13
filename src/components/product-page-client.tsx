@@ -9,11 +9,14 @@ import { getLocalProducts } from "@/lib/product-store";
 import type { UIProductDetail, UIProductMedia } from "@/lib/adapters";
 import type { PaymentMethod } from "@/lib/data";
 import { NoVerifiedPayments, PaymentPill } from "@/components/payment-pill";
+import { SaveProductButton } from "@/components/save-product-button";
+import { recordRecentlyViewed } from "@/lib/recently-viewed";
 
 // Shape the page actually renders. UIProductDetail (Supabase-sourced) and the
 // demo products (data.ts) both satisfy this. Fields the UI uses but neither
 // source guarantees are made optional.
 type RenderableProduct = {
+  id?: string;
   slug: string;
   name: string;
   seller: string;
@@ -51,6 +54,8 @@ type ProductPageClientProps = {
   initialProduct: UIProductDetail | null;
   loadState?: ProductLoadState;
   loadMessage?: string;
+  initialSaved?: boolean;
+  loggedIn?: boolean;
 };
 
 function normalizeGallery(
@@ -82,6 +87,8 @@ export function ProductPageClient({
   initialProduct,
   loadState = "ok",
   loadMessage,
+  initialSaved = false,
+  loggedIn = false,
 }: ProductPageClientProps) {
   const supabaseSourced = initialProduct !== null;
 
@@ -107,6 +114,32 @@ export function ProductPageClient({
   useEffect(() => {
     setActiveMediaIndex(0);
   }, [product?.slug]);
+
+  // Record the view for the localStorage-backed "Recently viewed" list on
+  // the buyer dashboard. Skip until we have a product so we don't pollute
+  // the list with not-found visits.
+  useEffect(() => {
+    if (!product) return;
+    const firstMedia = product.gallery?.find(
+      (item): item is UIProductMedia =>
+        "type" in item && (item.imageUrl !== null || item.thumbnailUrl !== null),
+    );
+    const demoMedia = product.gallery?.find(
+      (item): item is { title: string; accent: string; imageUrl?: string | null } =>
+        !("type" in item),
+    );
+    const thumbnailUrl =
+      firstMedia?.imageUrl ??
+      firstMedia?.thumbnailUrl ??
+      demoMedia?.imageUrl ??
+      null;
+    recordRecentlyViewed({
+      slug: product.slug,
+      name: product.name,
+      game: product.game,
+      thumbnailUrl,
+    });
+  }, [product]);
 
   if (!product) {
     // Tailor the empty state to what actually happened. Previously this
@@ -175,7 +208,14 @@ export function ProductPageClient({
             <p className="mt-4 max-w-3xl text-white/85">{product.summary}</p>
             <div className="mt-6 flex flex-wrap gap-3">
               {websiteUrl ? <ButtonLink href={websiteUrl}>{websiteLabel}</ButtonLink> : null}
-              <ButtonLink href="/login" variant="secondary">Follow seller</ButtonLink>
+              {product.id ? (
+                <SaveProductButton
+                  productId={product.id}
+                  productSlug={product.slug}
+                  initialSaved={initialSaved}
+                  loggedIn={loggedIn}
+                />
+              ) : null}
             </div>
           </div>
         </Card>

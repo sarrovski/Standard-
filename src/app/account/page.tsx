@@ -1,25 +1,50 @@
-import { Card, MiniStat, Nav, SectionHeader, Shell, Badge, ButtonLink } from "@/components/ui";
-import { requireRole } from "@/lib/roles";
+import { Card, Nav, SectionHeader, Shell, Badge, ButtonLink } from "@/components/ui";
+import { AccountDashboardClient } from "@/components/account-dashboard-client";
+import { isSupabaseConfigured, requireRole } from "@/lib/roles";
+import { getSavedProductsForProfile } from "@/lib/repositories/buyer";
+
+type AccountProfile = {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  role: "user" | "seller" | "admin";
+};
+
+async function loadProfile(): Promise<AccountProfile | null> {
+  if (!isSupabaseConfigured()) return null;
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, email, display_name, role")
+    .eq("id", user.id)
+    .maybeSingle<AccountProfile>();
+  return profile ?? null;
+}
 
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams?: { view?: string };
+  searchParams?: { view?: string; tab?: string };
 }) {
   await requireRole(["user", "seller", "admin"]);
   const sellView = searchParams?.view === "sell";
 
-  return (
-    <Shell>
-      <Nav />
-      <section className="mx-auto max-w-7xl px-6 py-10">
-        <SectionHeader
-          eyebrow={sellView ? "Seller onboarding" : "User account"}
-          title={sellView ? "Become a seller on Standard" : "Buyer workspace"}
-          text={sellView ? "If you do not have an active seller subscription yet, start here. Choose a plan, then unlock the seller dashboard." : "Normal users get a simple account area for saved products, reviews, alerts, and payment preferences."}
-        />
+  if (sellView) {
+    return (
+      <Shell>
+        <Nav />
+        <section className="mx-auto max-w-7xl px-6 py-10">
+          <SectionHeader
+            eyebrow="Seller onboarding"
+            title="Become a seller on Standard"
+            text="If you do not have an active seller subscription yet, start here. Choose a plan, then unlock the seller dashboard."
+          />
 
-        {sellView ? (
           <div className="mt-8 space-y-8">
             <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <Card className="p-6">
@@ -92,43 +117,44 @@ export default async function AccountPage({
               </Card>
             </section>
           </div>
-        ) : (
-          <>
-            <section className="mt-8 grid gap-4 md:grid-cols-4">
-              <MiniStat label="Saved products" value="12" detail="3 updated recently" />
-              <MiniStat label="Reviews posted" value="8" detail="2 verified" />
-              <MiniStat label="Payment preferences" value="3" detail="Crypto, Card, PayPal" />
-              <MiniStat label="Alerts" value="4" detail="Product changes" />
-            </section>
+        </section>
+      </Shell>
+    );
+  }
 
-            <section className="mt-8 grid gap-6 lg:grid-cols-2">
-              <Card className="p-6">
-                <Badge tone="orange">Saved</Badge>
-                <h2 className="mt-4 text-2xl font-black">Watchlist</h2>
-                <div className="mt-5 space-y-3">
-                  {["PhantomX Tracker", "Shadow Overlay", "NovaKeys Offer"].map((item) => (
-                    <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                      <div className="font-semibold">{item}</div>
-                      <div className="mt-1 text-xs text-slate-500">Notify me when verified facts change.</div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+  const profile = await loadProfile();
+  if (!profile) {
+    // Demo mode (no Supabase env) or unauthenticated — fall back to a
+    // minimal placeholder so /account never errors out.
+    return (
+      <Shell>
+        <Nav />
+        <section className="mx-auto max-w-3xl px-6 py-12">
+          <SectionHeader
+            eyebrow="Buyer workspace"
+            title="Sign in to use your account"
+            text="Saved products, recently viewed, and account settings live here once you're signed in. In demo mode (no Supabase env configured) the dashboard is read-only."
+          />
+          <div className="mt-8 flex gap-3">
+            <ButtonLink href="/login">Sign in</ButtonLink>
+            <ButtonLink href="/marketplace" variant="secondary">Browse marketplace</ButtonLink>
+          </div>
+        </section>
+      </Shell>
+    );
+  }
 
-              <Card className="p-6">
-                <Badge tone="default">Payments</Badge>
-                <h2 className="mt-4 text-2xl font-black">Payment preferences</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Users can filter marketplace results by payment methods they can actually use.
-                </p>
-                <div className="mt-5 flex gap-3">
-                  <ButtonLink href="/marketplace">Browse marketplace</ButtonLink>
-                  <ButtonLink href="/account?view=sell" variant="secondary">Become a seller</ButtonLink>
-                </div>
-              </Card>
-            </section>
-          </>
-        )}
+  const savedRes = await getSavedProductsForProfile(profile.id);
+
+  return (
+    <Shell>
+      <Nav />
+      <section className="mx-auto max-w-7xl px-6 py-8">
+        <AccountDashboardClient
+          profile={profile}
+          savedProducts={savedRes.data}
+          initialTab={searchParams?.tab}
+        />
       </section>
     </Shell>
   );

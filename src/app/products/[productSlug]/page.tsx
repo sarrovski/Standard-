@@ -4,6 +4,7 @@ import { ProductPageClient } from "@/components/product-page-client";
 import { isSupabaseConfigured } from "@/lib/roles";
 import { getPublishedProductBySlug } from "@/lib/repositories/products";
 import { isTimeoutError } from "@/lib/repositories/query-timeout";
+import { isProductSavedByProfile } from "@/lib/repositories/buyer";
 import {
   adaptProductDetail,
   type ProductFullJoins,
@@ -42,12 +43,31 @@ async function loadProduct(slug: string): Promise<LoadResult> {
   return { product: adaptProductDetail(row), source: "supabase", state: "ok" };
 }
 
+/**
+ * Pull current user + initial saved state from Supabase, when configured.
+ * Returns nulls in demo mode or when the visitor isn't authenticated.
+ */
+async function loadSaveState(productId: string | null) {
+  if (!isSupabaseConfigured() || !productId) {
+    return { loggedIn: false, saved: false };
+  }
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { loggedIn: false, saved: false };
+  const saved = await isProductSavedByProfile(user.id, productId);
+  return { loggedIn: true, saved };
+}
+
 export default async function ProductPage({
   params,
 }: {
   params: { productSlug: string };
 }) {
   const result = await loadProduct(params.productSlug);
+  const saveState = await loadSaveState(result.product?.id ?? null);
 
   return (
     <Shell>
@@ -59,6 +79,8 @@ export default async function ProductPage({
           initialProduct={result.product}
           loadState={result.state}
           loadMessage={"message" in result ? result.message : undefined}
+          initialSaved={saveState.saved}
+          loggedIn={saveState.loggedIn}
         />
       </section>
     </Shell>

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { GameLogo } from "@/components/game-logo";
 import { Badge, Card } from "@/components/ui";
-import { featuredSlots as defaultSlots, games, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
+import { featuredSlots as defaultSlots, games, productCategories, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
 import { cn } from "@/lib/helpers";
 import { getPaymentVisualIdentity } from "@/lib/payment-identities";
 import { getCategoryVisualIdentity, getGameVisualIdentity } from "@/lib/visual-identities";
@@ -34,6 +34,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
   const [localProducts, setLocalProducts] = useState<LocalProduct[]>([]);
   const [slots, setSlots] = useState<LocalFeaturedSlot[]>([]);
   const [selectedGame, setSelectedGame] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedPayment, setSelectedPayment] = useState("All");
   const [selectedTag, setSelectedTag] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
@@ -55,10 +56,12 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
 
   const filtered = allProducts.filter((product) => {
     const matchesGame = selectedGame === "All" || product.game === selectedGame;
+    const matchesCategory =
+      selectedCategory === "All" || product.category === selectedCategory;
     const matchesPayment = selectedPayment === "All" || product.verifiedPayments.includes(selectedPayment as never);
     const matchesTag = selectedTag === "All" || product.sellerTag === selectedTag;
     const matchesStatus = selectedStatus === "All" || product.productStatus === selectedStatus;
-    return matchesGame && matchesPayment && matchesTag && matchesStatus;
+    return matchesGame && matchesCategory && matchesPayment && matchesTag && matchesStatus;
   });
 
   const activeFeaturedSlots = slots.filter((slot) => slot.status === "Occupied");
@@ -75,12 +78,24 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
   return (
     <>
       <Card className="mt-8 p-5">
-        <div className="grid gap-6 xl:grid-cols-4">
+        <div className="grid gap-6 xl:grid-cols-2">
           <FilterBlock title="Games">
             {(["All", ...games] as const).map((game) => (
               <GameFilterButton key={game} game={game} active={selectedGame === game} onClick={() => setSelectedGame(game)} />
             ))}
           </FilterBlock>
+          <FilterBlock title="Category">
+            {(["All", ...productCategories] as const).map((category) => (
+              <CategoryFilterButton
+                key={category}
+                category={category}
+                active={selectedCategory === category}
+                onClick={() => setSelectedCategory(category)}
+              />
+            ))}
+          </FilterBlock>
+        </div>
+        <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_1fr_1fr]">
           <FilterBlock title="Payments">
             {(["All", ...paymentMethods] as const).map((payment) => (
               <PaymentFilterButton
@@ -241,7 +256,7 @@ function GameFilterButton({ game, active, onClick }: { game: string; active: boo
       className={cn(
         "group inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition",
         active
-          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-orange-950/30"
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >
@@ -265,7 +280,7 @@ function FilterButton({ active, onClick, children }: { active: boolean; onClick:
       className={cn(
         "rounded-full border px-3 py-1.5 text-sm transition",
         active
-          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-orange-950/30"
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >
@@ -291,7 +306,7 @@ function PaymentFilterButton({ payment, active, onClick }: { payment: string; ac
       className={cn(
         "inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition",
         active
-          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-orange-950/30"
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >
@@ -356,4 +371,104 @@ function StatTile({ value, label }: { value: string; label: string }) {
       <div className="mt-1 text-[11px] text-slate-500">{label}</div>
     </div>
   );
+}
+
+function CategoryFilterButton({
+  category,
+  active,
+  onClick,
+}: {
+  category: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition",
+        active
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
+          : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
+      )}
+    >
+      <CategoryIcon name={category} />
+      <span>{category}</span>
+    </button>
+  );
+}
+
+function CategoryIcon({ name }: { name: string }) {
+  const stroke = {
+    fill: "none" as const,
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  switch (name) {
+    case "All":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      );
+    case "Aim Assist":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <circle cx="12" cy="12" r="8" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+        </svg>
+      );
+    case "ESP / Visuals":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      );
+    case "Stat Tracker / Analytics":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+        </svg>
+      );
+    case "Overlay / HUD":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M3 9h18M9 21V9" />
+        </svg>
+      );
+    case "Coaching":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <path d="M22 10L12 5 2 10l10 5 10-5z" />
+          <path d="M6 12v5c3 2 9 2 12 0v-5" />
+        </svg>
+      );
+    case "Macros / Scripts":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 4l-4 16" />
+        </svg>
+      );
+    case "Utility":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <path d="M14.7 6.3a4 4 0 1 1 3 3l-8 8a2.5 2.5 0 1 1-3.5-3.5l8-8z" />
+        </svg>
+      );
+    default:
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+        </svg>
+      );
+  }
 }
