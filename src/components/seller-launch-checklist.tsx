@@ -60,10 +60,10 @@ const STEPS = [
   },
   {
     n: 8,
-    title: "Improve listing strength",
-    body: "Open any product to see its listing-strength score and the exact items left to improve. Higher-strength listings get better product discovery and stronger buyer confidence.",
+    title: "Improve visibility",
+    body: "Open any product to see its Visibility level and the suggested next steps. Higher-trust listings get better product discovery and stronger buyer confidence.",
     href: "/dashboard?tab=products",
-    cta: "Check your scores",
+    cta: "Check your products",
   },
 ];
 

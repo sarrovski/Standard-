@@ -9,6 +9,8 @@ import { featuredSlots as defaultSlots, games, productCategories, products as de
 import { cn } from "@/lib/helpers";
 import { getPaymentVisualIdentity } from "@/lib/payment-identities";
 import { getCategoryVisualIdentity, getGameVisualIdentity } from "@/lib/visual-identities";
+import { evaluateProductRanking, isNewListing, type RankingInput } from "@/lib/product-ranking";
+import { RankingPill } from "@/components/product-ranking-ui";
 
 function readOrAll(
   value: string | null,
@@ -19,12 +21,13 @@ function readOrAll(
 }
 
 const SORT_OPTIONS = [
-  { value: "most_trusted", label: "Most trusted" },
+  { value: "recommended", label: "Recommended" },
   { value: "newest", label: "Newest" },
+  { value: "most_trusted", label: "Most trusted" },
   { value: "most_viewed", label: "Most viewed" },
 ] as const;
 type SortKey = (typeof SORT_OPTIONS)[number]["value"];
-const DEFAULT_SORT: SortKey = "most_trusted";
+const DEFAULT_SORT: SortKey = "recommended";
 const SORT_VALUES = new Set<SortKey>(SORT_OPTIONS.map((option) => option.value));
 
 function readSort(value: string | null): SortKey {
@@ -87,6 +90,56 @@ function productTrustScore(product: { integrity?: number | null }): number {
 
 function productViews(product: { activity?: { views?: number } }): number {
   return product.activity?.views ?? 0;
+}
+
+type RankableProduct = UIProductCard | (DemoLikeProduct & {
+  productStatus?: string;
+  sellerTag?: string;
+  verifiedPayments?: ReadonlyArray<unknown>;
+  summary?: string;
+  features?: ReadonlyArray<string>;
+  featureGroups?: ReadonlyArray<{ features: ReadonlyArray<string> }>;
+  faqCount?: number;
+});
+
+function productToRankingInput(product: RankableProduct): RankingInput {
+  const productStatus =
+    "productStatus" in product && typeof product.productStatus === "string"
+      ? product.productStatus
+      : "";
+  const summary =
+    "summary" in product && typeof product.summary === "string"
+      ? product.summary
+      : "";
+  const features = Array.isArray((product as { features?: unknown }).features)
+    ? ((product as { features: ReadonlyArray<string> }).features)
+    : [];
+  const groups = Array.isArray((product as { featureGroups?: unknown }).featureGroups)
+    ? ((product as { featureGroups: ReadonlyArray<{ features: ReadonlyArray<string> }> }).featureGroups)
+    : [];
+  const verifiedPaymentCount = Array.isArray(
+    (product as { verifiedPayments?: unknown }).verifiedPayments,
+  )
+    ? ((product as { verifiedPayments: ReadonlyArray<unknown> }).verifiedPayments).length
+    : 0;
+  const faqCountRaw =
+    "faqCount" in product && typeof product.faqCount === "number"
+      ? product.faqCount
+      : "faq" in product && Array.isArray((product as { faq?: unknown }).faq)
+        ? ((product as { faq: ReadonlyArray<{ q?: string; a?: string }> }).faq).filter(
+            (item) => (item.q ?? "").trim() !== "" && (item.a ?? "").trim() !== "",
+          ).length
+        : 0;
+  return {
+    published: productStatus === "Published" || productStatus === "published",
+    sellerTag: (product as { sellerTag?: string }).sellerTag ?? "",
+    verifiedPaymentCount,
+    hasMedia: productHasMedia(product),
+    summary,
+    featureGroupCount: groups.length,
+    flatFeatureCount: features.length,
+    faqCount: faqCountRaw,
+  };
 }
 
 // Supabase marketplace results are already constrained to published products
@@ -207,6 +260,12 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
     return matchesGame && matchesCategory && matchesPayment && matchesTag && matchesMedia && matchesFaq;
   });
 
+  // Memoise per-product ranking so the sort + pill share one computation.
+  const rankings = new Map<string, ReturnType<typeof evaluateProductRanking>>();
+  for (const product of filtered) {
+    rankings.set(product.slug, evaluateProductRanking(productToRankingInput(product)));
+  }
+
   const sortFn = (a: typeof filtered[number], b: typeof filtered[number]) => {
     switch (sortKey) {
       case "newest": {
@@ -217,8 +276,15 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
       case "most_viewed":
         return productViews(b) - productViews(a);
       case "most_trusted":
-      default:
         return productTrustScore(b) - productTrustScore(a);
+      case "recommended":
+      default: {
+        const aScore = rankings.get(a.slug)?.score ?? 0;
+        const bScore = rankings.get(b.slug)?.score ?? 0;
+        if (aScore !== bScore) return bScore - aScore;
+        // Tiebreak: newer products surface higher within the same level.
+        return productCreatedAt(b).localeCompare(productCreatedAt(a));
+      }
     }
   };
   const sorted = [...filtered].sort(sortFn);
@@ -373,6 +439,17 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                     <div className="flex flex-wrap justify-end gap-2">
                       <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
                       {isFeatured && <Badge tone="orange">Featured</Badge>}
+                      {(() => {
+                        const ranking = rankings.get(product.slug);
+                        if (!ranking) return null;
+                        const isNew = isNewListing(productCreatedAt(product));
+                        // Skip the "Low trust" pill on cards (we don't want
+                        // to publicly badge a low-trust listing); only show
+                        // the warmer "New listing" override for fresh
+                        // low-level products. Medium + high always render.
+                        if (ranking.level === "low" && !isNew) return null;
+                        return <RankingPill result={ranking} isNew={isNew} />;
+                      })()}
                     </div>
                   </div>
                   <div className="mt-7">

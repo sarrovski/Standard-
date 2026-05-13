@@ -199,7 +199,11 @@ async function loadAdminData(): Promise<{
     ),
   );
   const products = productRows.map((row) =>
-    adaptAdminProduct(row, pendingByProduct.get(row.id) ?? 0),
+    adaptAdminProduct(
+      row,
+      pendingByProduct.get(row.id) ?? 0,
+      paymentCounts.get(row.seller_id) ?? 0,
+    ),
   );
   const featuredSlots = featuredRows.map(adaptAdminFeaturedSlot);
   const reports = reportRows.map((row) =>

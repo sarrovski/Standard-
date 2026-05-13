@@ -8,8 +8,8 @@ import { CategoryPicker } from "@/components/category-picker";
 import { FeatureGroupsEditor } from "@/components/feature-groups-editor";
 import { FaqEditor } from "@/components/faq-editor";
 import { ProductMediaPanel } from "@/components/product-media-panel";
-import { ListingStrengthCard } from "@/components/listing-strength";
-import { evaluateListingStrength } from "@/lib/listing-strength";
+import { VisibilityPanel } from "@/components/product-ranking-ui";
+import { evaluateProductRanking } from "@/lib/product-ranking";
 import { games, productCategories } from "@/lib/data";
 import { type FeatureGroup } from "@/lib/product-features";
 import { type FaqItem } from "@/lib/product-faq";
@@ -65,29 +65,35 @@ export function ProductEditClient({
     feature_groups: product.featureGroups,
     faq: product.faq,
   });
-  // Mirror of the media panel's state so the listing-strength score can
+  // Mirror of the media panel's state so the visibility score can
   // recompute live as the seller adds/removes images and videos.
   const [media, setMedia] = useState<UIProductMedia[]>(initialMedia);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const isPublished = product.status === "published";
-
-  const strength = useMemo(
+  // Heuristic: a Provider / Developer tag is granted by admin and is
+  // independent of the edit form. The edit-page Visibility panel is
+  // sellers' main feedback loop, so we can't know their actual tag from
+  // here — assume "Seller" and let the marketplace/dashboard recompute
+  // with full data. The other 6 rules are 100% driven by form state.
+  const ranking = useMemo(
     () =>
-      evaluateListingStrength({
-        name: form.name,
-        game: form.game,
-        category: form.category,
-        websiteUrl: form.website_url,
+      evaluateProductRanking({
+        published: isPublished,
+        sellerTag: "Seller",
+        verifiedPaymentCount: verifiedPaymentMethodCount ?? 0,
+        hasMedia: media.length > 0,
         summary: form.summary,
-        featureGroups: form.feature_groups,
-        faq: form.faq,
-        imageCount: media.filter((m) => m.type === "image").length,
-        videoCount: media.filter((m) => m.type === "youtube").length,
-        verifiedPaymentMethodCount,
-        status: product.status,
+        featureGroupCount: form.feature_groups.length,
+        flatFeatureCount: form.feature_groups.reduce(
+          (sum, group) => sum + group.features.length,
+          0,
+        ),
+        faqCount: form.faq.filter(
+          (item) => item.q.trim() !== "" && item.a.trim() !== "",
+        ).length,
       }),
-    [form, media, verifiedPaymentMethodCount, product.status],
+    [form, media, verifiedPaymentMethodCount, isPublished],
   );
 
   // Closed picker list for game. If a product was created before the closed
@@ -189,7 +195,7 @@ export function ProductEditClient({
       </div>
 
       <div className="mt-6">
-        <ListingStrengthCard result={strength} />
+        <VisibilityPanel result={ranking} />
       </div>
 
       <form onSubmit={submit} className="mt-6 grid gap-5">

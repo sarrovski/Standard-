@@ -13,6 +13,11 @@ import { SaveProductButton } from "@/components/save-product-button";
 import { TrustBox } from "@/components/trust-box";
 import { ReportListingButton } from "@/components/report-listing-button";
 import { recordRecentlyViewed } from "@/lib/recently-viewed";
+import {
+  evaluateProductRanking,
+  type RankingInput,
+} from "@/lib/product-ranking";
+import { RankingPill, TrustSignalsList } from "@/components/product-ranking-ui";
 
 /**
  * Best-effort beacon to the product-events API. Uses sendBeacon so the
@@ -227,6 +232,23 @@ export function ProductPageClient({
   const activeMedia = mediaItems[activeMediaIndex] ?? mediaItems[0] ?? null;
   const faq = product.faq ?? [];
   const trustSignals = product.trustSignals ?? [];
+  // Compute the ranking from the same data we render — keeps the
+  // marketplace pill, dashboard pill, and this product page in sync.
+  const productGallery = product.gallery ?? [];
+  const validFaqCount = (product.faq ?? []).filter(
+    (item) => item.q.trim() !== "" && item.a.trim() !== "",
+  ).length;
+  const rankingInput: RankingInput = {
+    published: product.productStatus === "Published",
+    sellerTag: product.sellerTag ?? "",
+    verifiedPaymentCount: product.verifiedPayments?.length ?? 0,
+    hasMedia: productGallery.length > 0,
+    summary: product.summary ?? "",
+    featureGroupCount: product.featureGroups?.length ?? 0,
+    flatFeatureCount: product.features?.length ?? 0,
+    faqCount: validFaqCount,
+  };
+  const ranking = evaluateProductRanking(rankingInput);
   const websiteUrl = product.websiteUrl ?? "";
   const websiteLabel = product.websiteLabel ?? "Visit official website";
   const discord = product.discord ?? "";
@@ -343,15 +365,32 @@ export function ProductPageClient({
 
         <aside className="space-y-6">
           <Panel title="Trust signals">
-            <div className="flex flex-wrap gap-2">
-              {trustSignals.length > 0 ? (
-                trustSignals.map((signal) => (
-                  <Badge key={signal} tone={signal.includes("Verified") || signal.includes("Provider") ? "green" : "default"}>
-                    {signal}
-                  </Badge>
-                ))
-              ) : (
-                <p className="text-sm text-slate-500">No trust signals yet.</p>
+            <div className="space-y-4">
+              <RankingPill result={ranking} />
+              {ranking.publicSignals.length > 0 ? (
+                <TrustSignalsList signals={ranking.publicSignals} />
+              ) : null}
+              {trustSignals.length > 0 && (
+                <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
+                  {trustSignals.map((signal) => (
+                    <Badge
+                      key={signal}
+                      tone={
+                        signal.includes("Verified") || signal.includes("Provider")
+                          ? "green"
+                          : "default"
+                      }
+                    >
+                      {signal}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {ranking.publicSignals.length === 0 && trustSignals.length === 0 && (
+                <p className="text-sm text-slate-500">
+                  No trust signals yet — the seller is still completing this
+                  listing.
+                </p>
               )}
             </div>
           </Panel>

@@ -172,6 +172,9 @@ export type UIProductCard = {
   // Used by marketplace filter ("Has FAQ"). True when the product has at
   // least one well-formed FAQ entry.
   hasFaq: boolean;
+  // Used by product-ranking ("FAQ: 3+ items rule"). Count of well-formed
+  // FAQ entries (q + a both non-empty). Always >= 0.
+  faqCount: number;
 };
 
 function resolveFeatureGroups(
@@ -225,6 +228,7 @@ export function adaptProductCard(
     coverImageUrl,
     createdAt: row.created_at,
     hasFaq: parseFaq(row.faq).length > 0,
+    faqCount: parseFaq(row.faq).length,
   };
 }
 
@@ -499,20 +503,31 @@ export type UIAdminProduct = {
   statusLabel: "Draft" | "Published" | "Private";
   sellerId: string;
   sellerName: string;
+  sellerTag: string;
   websiteUrl: string | null;
   pendingVerifications: number;
+  verifiedPaymentCount: number;
   coverImageUrl: string | null;
   createdAt: string;
+  summary: string;
+  featureGroupCount: number;
+  flatFeatureCount: number;
+  faqCount: number;
+  hasMedia: boolean;
 };
 
 type AdminProductRow = Row<"products"> & {
-  sellers?: Pick<Row<"sellers">, "id" | "seller_name" | "profile_id"> | null;
+  sellers?: Pick<
+    Row<"sellers">,
+    "id" | "seller_name" | "profile_id" | "provider_tag_status"
+  > | null;
   product_media?: Row<"product_media">[] | null;
 };
 
 export function adaptAdminProduct(
   row: AdminProductRow,
   pendingVerifications: number,
+  verifiedPaymentCount: number,
 ): UIAdminProduct {
   const statusLabel =
     row.status === "published"
@@ -525,6 +540,8 @@ export function adaptAdminProduct(
   const firstVideo = sortedMedia.find((item) => item.type === "youtube");
   const coverImageUrl =
     firstImage?.imageUrl ?? firstVideo?.thumbnailUrl ?? null;
+  const featureGroups = parseFeatureGroups(row.features_grouped);
+  const faq = parseFaq(row.faq);
   return {
     id: row.id,
     slug: row.slug,
@@ -535,10 +552,17 @@ export function adaptAdminProduct(
     statusLabel,
     sellerId: row.sellers?.id ?? row.seller_id,
     sellerName: row.sellers?.seller_name ?? "Unknown seller",
+    sellerTag: tagFromProviderStatus(row.sellers?.provider_tag_status),
     websiteUrl: row.website_url,
     pendingVerifications,
+    verifiedPaymentCount,
     coverImageUrl,
     createdAt: row.created_at,
+    summary: row.summary ?? "",
+    featureGroupCount: featureGroups.length,
+    flatFeatureCount: (row.features ?? []).length,
+    faqCount: faq.length,
+    hasMedia: sortedMedia.length > 0,
   };
 }
 

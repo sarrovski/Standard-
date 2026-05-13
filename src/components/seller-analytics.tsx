@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { Badge, Card, MiniStat } from "@/components/ui";
-import { ListingStrengthBadge } from "@/components/listing-strength";
-import { evaluateListingStrength } from "@/lib/listing-strength";
+import { RankingPill } from "@/components/product-ranking-ui";
+import { evaluateProductRanking } from "@/lib/product-ranking";
 import type { UISellerProductCard } from "@/lib/adapters";
 
 const SUMMARY_MIN_CHARS = 120;
@@ -367,21 +367,19 @@ export function SellerAnalytics({
         ) : (
           <ul className="mt-5 grid gap-3">
             {visibleRecommendations.map(({ product, recs }) => {
-              const strength = evaluateListingStrength({
-                name: product.name,
-                game: product.game,
-                category: product.category,
-                websiteUrl: product.websiteUrl,
+              const ranking = evaluateProductRanking({
+                published: product.rawStatus === "published",
+                sellerTag: "Seller",
+                verifiedPaymentCount: supabaseSourced
+                  ? verifiedPaymentMethodCount ?? 0
+                  : 0,
+                hasMedia: product.media.length > 0,
                 summary: product.summary,
-                featureGroups: product.featureGroups,
-                flatFeatures: product.features,
-                faq: product.faq,
-                imageCount: product.media.filter((m) => m.type === "image").length,
-                videoCount: product.media.filter((m) => m.type === "youtube").length,
-                verifiedPaymentMethodCount: supabaseSourced
-                  ? verifiedPaymentMethodCount
-                  : undefined,
-                status: product.rawStatus,
+                featureGroupCount: product.featureGroups.length,
+                flatFeatureCount: product.features.length,
+                faqCount: product.faq.filter(
+                  (item) => item.q.trim() !== "" && item.a.trim() !== "",
+                ).length,
               });
               return (
                 <li
@@ -395,10 +393,7 @@ export function SellerAnalytics({
                     >
                       {product.name}
                     </Link>
-                    <ListingStrengthBadge
-                      score={strength.score}
-                      missingCount={strength.missing.length}
-                    />
+                    <RankingPill result={ranking} />
                   </div>
                   <ul className="mt-3 grid gap-1.5 text-sm text-slate-200">
                     {recs.map((rec) => (

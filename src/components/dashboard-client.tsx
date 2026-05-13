@@ -28,11 +28,11 @@ import type {
   UISellerSubscription,
 } from "@/lib/adapters";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
-import { ListingStrengthBadge } from "@/components/listing-strength";
+import { RankingPill } from "@/components/product-ranking-ui";
 import {
-  evaluateListingStrength,
-  type ListingStrengthInput,
-} from "@/lib/listing-strength";
+  evaluateProductRanking,
+  type RankingInput,
+} from "@/lib/product-ranking";
 import { groupsFromFlatFeatures } from "@/lib/product-features";
 import { SellerAnalytics } from "@/components/seller-analytics";
 
@@ -571,23 +571,26 @@ function Products({
               thumbnail?.imageUrl ?? thumbnail?.thumbnailUrl ?? null;
             const isMenuOpen = openMenuId === product.id;
             const isBusy = busyProductId === product.id;
-            const strengthInput: ListingStrengthInput = {
-              name: product.name,
-              game: product.game,
-              category: product.category,
-              websiteUrl: product.websiteUrl,
+            const rankingInput: RankingInput = {
+              published: product.rawStatus === "published",
+              // Seller dashboard rows belong to the current seller; we don't
+              // know their tag from this view (it lives on profiles via the
+              // session), so this is the conservative "Seller" baseline.
+              // Once the dashboard plumbs the session's tag in, this can
+              // surface "Verified Seller" / "Provider / Developer" too.
+              sellerTag: "Seller",
+              verifiedPaymentCount: supabaseSourced
+                ? verifiedPaymentMethodCount ?? 0
+                : 0,
+              hasMedia: product.media.length > 0,
               summary: product.summary,
-              featureGroups: product.featureGroups,
-              flatFeatures: product.features,
-              faq: product.faq,
-              imageCount: product.media.filter((m) => m.type === "image").length,
-              videoCount: product.media.filter((m) => m.type === "youtube").length,
-              verifiedPaymentMethodCount: supabaseSourced
-                ? verifiedPaymentMethodCount
-                : undefined,
-              status: product.rawStatus,
+              featureGroupCount: product.featureGroups.length,
+              flatFeatureCount: product.features.length,
+              faqCount: product.faq.filter(
+                (item) => item.q.trim() !== "" && item.a.trim() !== "",
+              ).length,
             };
-            const strength = evaluateListingStrength(strengthInput);
+            const ranking = evaluateProductRanking(rankingInput);
             // Drop the kebab menu upward for rows near the bottom of the
             // list so it doesn't overflow the card / viewport.
             const dropUp =
@@ -632,10 +635,7 @@ function Products({
                       <Badge tone={product.rawStatus === "published" ? "green" : "default"}>
                         {product.rawStatus === "published" ? "Published" : "Private"}
                       </Badge>
-                      <ListingStrengthBadge
-                        score={strength.score}
-                        missingCount={strength.missing.length}
-                      />
+                      <RankingPill result={ranking} />
                     </div>
                     <p className="mt-1 truncate text-xs text-slate-400">
                       {product.game}

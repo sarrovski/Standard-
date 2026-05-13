@@ -20,6 +20,8 @@ import type {
 } from "@/lib/adapters";
 import type { RealRiskSignal } from "@/app/admin/page";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
+import { RankingPill } from "@/components/product-ranking-ui";
+import { evaluateProductRanking } from "@/lib/product-ranking";
 
 type AdminClientProps = {
   initialPaymentRequests: UIAdminPaymentRequest[] | null;
@@ -1116,11 +1118,23 @@ function ProductsTab({
                 <th className="px-4 py-3">Game</th>
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Trust</th>
                 <th className="px-4 py-3"> </th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((product) => (
+              {filtered.map((product) => {
+                const ranking = evaluateProductRanking({
+                  published: product.status === "published",
+                  sellerTag: product.sellerTag,
+                  verifiedPaymentCount: product.verifiedPaymentCount,
+                  hasMedia: product.hasMedia,
+                  summary: product.summary,
+                  featureGroupCount: product.featureGroupCount,
+                  flatFeatureCount: product.flatFeatureCount,
+                  faqCount: product.faqCount,
+                });
+                return (
                 <tr
                   key={product.id}
                   className="border-b border-white/5 align-top last:border-0"
@@ -1154,6 +1168,9 @@ function ProductsTab({
                       )}
                     </div>
                   </td>
+                  <td className="px-4 py-4">
+                    <RankingPill result={ranking} showAdminScore />
+                  </td>
                   <td className="px-4 py-4 text-right">
                     <Link
                       href={`/products/${product.slug}`}
@@ -1165,7 +1182,8 @@ function ProductsTab({
                     </Link>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

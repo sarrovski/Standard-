@@ -86,7 +86,9 @@ export async function getAllProductsForAdmin() {
   const supabase = createClient();
   return supabase
     .from("products")
-    .select("*, sellers(id, seller_name, profile_id), product_media(*)")
+    .select(
+      "*, sellers(id, seller_name, profile_id, provider_tag_status), product_media(*)",
+    )
     .order("created_at", { ascending: false });
 }
 
