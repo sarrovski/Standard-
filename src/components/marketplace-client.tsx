@@ -437,7 +437,6 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                       <GameMark game={product.game} />
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
-                      <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
                       {isFeatured && <Badge tone="orange">Featured</Badge>}
                       {(() => {
                         const ranking = rankings.get(product.slug);
