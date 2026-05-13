@@ -339,7 +339,7 @@ export function ProductPageClient({
       </section>
 
       {/* 2. Showcase media ----------------------------------------------- */}
-      <section className="mt-10">
+      <section className="mx-auto mt-10 max-w-3xl">
         <MediaCarousel
           accent={product.accent}
           activeIndex={activeMediaIndex}
@@ -558,7 +558,7 @@ function MediaCarousel({
                   key={item.id}
                   type="button"
                   onClick={() => onSelect(index)}
-                  className={`relative h-20 w-28 flex-none overflow-hidden rounded-2xl border text-left transition ${
+                  className={`relative h-16 w-24 flex-none overflow-hidden rounded-xl border text-left transition ${
                     active ? "border-orange-300" : "border-white/10 hover:border-white/30"
                   }`}
                   aria-pressed={active}
