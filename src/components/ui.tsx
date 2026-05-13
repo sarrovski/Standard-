@@ -169,7 +169,7 @@ export function Tabs({
 export function Footer() {
   return (
     <footer className="mx-auto mt-16 max-w-7xl border-t border-white/10 px-6 py-10">
-      <div className="grid gap-8 md:grid-cols-[1.2fr_0.8fr_0.8fr]">
+      <div className="grid gap-8 md:grid-cols-[1.2fr_0.7fr_0.8fr_0.7fr]">
         <div>
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white">
@@ -188,8 +188,19 @@ export function Footer() {
             <Link href="/marketplace" className="hover:text-white">Marketplace</Link>
             <Link href="/creators" className="hover:text-white">Creators</Link>
             <Link href="/plans" className="hover:text-white">Plans</Link>
-            <Link href="/trust" className="hover:text-white">Trust</Link>
             <Link href="/start-selling" className="hover:text-white">Start Selling</Link>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-bold text-white">Trust</h3>
+          <div className="mt-4 grid gap-3 text-sm text-slate-400">
+            <Link href="/trust" className="hover:text-white">Trust overview</Link>
+            <Link href="/trust/payment-verification" className="hover:text-white">Payment-method verification</Link>
+            <Link href="/trust/provider-tags" className="hover:text-white">Provider / Developer tags</Link>
+            <Link href="/trust/reviews" className="hover:text-white">How reviews work</Link>
+            <Link href="/trust/seller-risk" className="hover:text-white">Seller risk</Link>
+            <Link href="/trust/report-a-seller" className="hover:text-white">Report a seller</Link>
           </div>
         </div>
 
