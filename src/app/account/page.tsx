@@ -21,12 +21,23 @@ async function loadProfile(): Promise<AccountProfile | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: profile } = await supabase
+  // Try with avatar_url; fall back to the legacy column set if the
+  // migration 014 hasn't been applied yet (otherwise the unknown-column
+  // error makes the page render as if no profile exists).
+  const withAvatar = await supabase
     .from("profiles")
     .select("id, email, display_name, avatar_url, role")
     .eq("id", user.id)
     .maybeSingle<AccountProfile>();
-  return profile ?? null;
+  if (!withAvatar.error && withAvatar.data) return withAvatar.data;
+
+  const { data: legacy } = await supabase
+    .from("profiles")
+    .select("id, email, display_name, role")
+    .eq("id", user.id)
+    .maybeSingle<Omit<AccountProfile, "avatar_url">>();
+  if (!legacy) return null;
+  return { ...legacy, avatar_url: null };
 }
 
 export default async function AccountPage({

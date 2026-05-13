@@ -35,7 +35,11 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  // First try with avatar_url. If the migration 014 hasn't been applied
+  // yet, PostgREST errors on the unknown column. Falling back to the
+  // original column set keeps sign-in / nav working until the migration
+  // lands — `avatarUrl` is just null until then.
+  const withAvatar = await supabase
     .from("profiles")
     .select("id, email, display_name, avatar_url, role")
     .eq("id", user.id)
@@ -46,13 +50,35 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
       avatar_url: string | null;
       role: SessionRole;
     }>();
-  if (!profile) return null;
 
+  if (!withAvatar.error && withAvatar.data) {
+    return {
+      id: withAvatar.data.id,
+      email: withAvatar.data.email,
+      displayName: withAvatar.data.display_name,
+      avatarUrl: withAvatar.data.avatar_url,
+      role: withAvatar.data.role,
+    };
+  }
+
+  // Either the row doesn't exist or the column is missing. Try the
+  // legacy column set so we still return a session.
+  const { data: legacy } = await supabase
+    .from("profiles")
+    .select("id, email, display_name, role")
+    .eq("id", user.id)
+    .maybeSingle<{
+      id: string;
+      email: string | null;
+      display_name: string | null;
+      role: SessionRole;
+    }>();
+  if (!legacy) return null;
   return {
-    id: profile.id,
-    email: profile.email,
-    displayName: profile.display_name,
-    avatarUrl: profile.avatar_url,
-    role: profile.role,
+    id: legacy.id,
+    email: legacy.email,
+    displayName: legacy.display_name,
+    avatarUrl: null,
+    role: legacy.role,
   };
 });
