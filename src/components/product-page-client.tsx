@@ -349,7 +349,14 @@ export function ProductPageClient({
         />
       </section>
 
-      {/* 3. Trust + seller ----------------------------------------------- */}
+      {/* 3. Features ----------------------------------------------------- */}
+      {featureGroupsToRender.length > 0 && (
+        <section className="mt-10">
+          <FeaturesPanel groups={featureGroupsToRender} />
+        </section>
+      )}
+
+      {/* 4. Trust + seller ----------------------------------------------- */}
       <section className="mt-10">
         <Panel title="Trust &amp; seller">
           <div className="grid gap-6 md:grid-cols-2">
@@ -448,17 +455,10 @@ export function ProductPageClient({
         </Panel>
       </section>
 
-      {/* 4. Reviews / reputation ----------------------------------------- */}
+      {/* 5. Reviews / reputation ----------------------------------------- */}
       <section className="mt-10">
         <ReviewsSection />
       </section>
-
-      {/* 5. Features ----------------------------------------------------- */}
-      {featureGroupsToRender.length > 0 && (
-        <section className="mt-10">
-          <FeaturesPanel groups={featureGroupsToRender} />
-        </section>
-      )}
 
       {/* 6. FAQ ---------------------------------------------------------- */}
       {faq.length > 0 && (
@@ -610,27 +610,30 @@ function FeaturesPanel({
   groups: Array<{ name: string; features: string[] }>;
 }) {
   if (groups.length === 0) return null;
+  // Compact + organised: groups laid out 2-up on md+, features rendered
+  // as small chips inside each group so even long lists stay scannable.
   return (
     <Panel title="Features">
-      <div className="grid gap-5">
+      <div className="grid gap-x-6 gap-y-5 md:grid-cols-2">
         {groups.map((group, groupIndex) => (
           <div key={`${group.name}-${groupIndex}`}>
             <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
               {group.name || "Features"}
             </div>
-            <div className="mt-2 grid gap-2">
-              {group.features.map((feature, featureIndex) => (
-                <div
-                  key={`${feature}-${featureIndex}`}
-                  className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
-                >
-                  {feature}
-                </div>
-              ))}
-              {group.features.length === 0 && (
-                <p className="text-xs text-slate-500">No items yet.</p>
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {group.features.length === 0 ? (
+                <li className="text-xs text-slate-500">No items yet.</li>
+              ) : (
+                group.features.map((feature, featureIndex) => (
+                  <li
+                    key={`${feature}-${featureIndex}`}
+                    className="rounded-lg border border-white/10 bg-slate-950/40 px-2.5 py-1 text-xs text-slate-200"
+                  >
+                    {feature}
+                  </li>
+                ))
               )}
-            </div>
+            </ul>
           </div>
         ))}
       </div>
