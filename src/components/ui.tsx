@@ -86,14 +86,17 @@ export function ButtonLink({
   href,
   children,
   variant = "primary",
+  onClick,
 }: {
   href: string;
   children: ReactNode;
   variant?: "primary" | "secondary";
+  onClick?: () => void;
 }) {
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={
         variant === "primary"
           ? "inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400"

@@ -45,6 +45,49 @@ export async function getSellerProducts(sellerId: string) {
 }
 
 /**
+ * Per-product traffic totals (views + outbound clicks) for a seller.
+ *
+ * Backed by the public.get_product_traffic_stats(uuid) RPC defined in
+ * migration 010_product_events.sql. Returns an empty Map on error so
+ * callers can fall back to "no traffic yet" without crashing.
+ */
+export type ProductTrafficStats = {
+  views: number;
+  outboundClicks: number;
+};
+
+export async function getProductTrafficStats(
+  sellerId: string,
+): Promise<Map<string, ProductTrafficStats>> {
+  const supabase = createClient();
+  // The generated Database type knows about this RPC (see supabase/types.ts),
+  // but the supabase-js generic inference often falls through to `undefined`
+  // args. Cast through `as never` to bypass — the runtime shape is verified
+  // by the function definition in migration 010_product_events.sql.
+  const { data, error } = await supabase.rpc(
+    "get_product_traffic_stats" as never,
+    { p_seller_id: sellerId } as never,
+  );
+  if (error) {
+    console.error("[seller-repo] traffic stats RPC failed:", error.message);
+    return new Map();
+  }
+  const rows = (data ?? []) as Array<{
+    product_id: string;
+    views: number | string | null;
+    outbound_clicks: number | string | null;
+  }>;
+  const stats = new Map<string, ProductTrafficStats>();
+  for (const row of rows) {
+    stats.set(row.product_id, {
+      views: Number(row.views ?? 0) || 0,
+      outboundClicks: Number(row.outbound_clicks ?? 0) || 0,
+    });
+  }
+  return stats;
+}
+
+/**
  * Count the verified seller_payment_methods rows for a seller. Used by the
  * seller-facing "Listing strength" score so we can credit the seller once
  * they've gone through payment-method verification at least once.

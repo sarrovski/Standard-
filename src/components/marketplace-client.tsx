@@ -1,13 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GameLogo } from "@/components/game-logo";
 import { Badge, Card } from "@/components/ui";
 import { featuredSlots as defaultSlots, games, productCategories, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
 import { cn } from "@/lib/helpers";
 import { getPaymentVisualIdentity } from "@/lib/payment-identities";
 import { getCategoryVisualIdentity, getGameVisualIdentity } from "@/lib/visual-identities";
+
+function readOrAll(
+  value: string | null,
+  allowed: ReadonlyArray<string>,
+): string {
+  if (value && allowed.includes(value)) return value;
+  return "All";
+}
 
 // Supabase marketplace results are already constrained to published products
 // at the server, so there's no need for a UI "Status" filter — every row
@@ -30,13 +39,51 @@ type MarketplaceClientProps = {
 
 export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
   const supabaseSourced = initialProducts !== null;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [localProducts, setLocalProducts] = useState<LocalProduct[]>([]);
   const [slots, setSlots] = useState<LocalFeaturedSlot[]>([]);
-  const [selectedGame, setSelectedGame] = useState("All");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [selectedPayment, setSelectedPayment] = useState("All");
-  const [selectedTag, setSelectedTag] = useState("All");
+  // Seed filters from URL params on first render so the landing-page CTAs
+  // (/marketplace?game=Valorant&category=Internal) actually pre-filter.
+  const [selectedGame, setSelectedGame] = useState(() =>
+    readOrAll(searchParams.get("game"), games),
+  );
+  const [selectedCategory, setSelectedCategory] = useState(() =>
+    readOrAll(searchParams.get("category"), productCategories),
+  );
+  const [selectedPayment, setSelectedPayment] = useState(() =>
+    readOrAll(searchParams.get("payment"), paymentMethods),
+  );
+  const [selectedTag, setSelectedTag] = useState(() =>
+    readOrAll(searchParams.get("tag"), sellerTags),
+  );
+
+  // Write filter changes back to the URL so the resulting state is
+  // shareable / bookmarkable. Skip the very first sync since state was
+  // seeded from the URL we already have.
+  const firstSync = useRef(true);
+  useEffect(() => {
+    if (firstSync.current) {
+      firstSync.current = false;
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    const apply = (key: string, value: string) => {
+      if (value === "All") params.delete(key);
+      else params.set(key, value);
+    };
+    apply("game", selectedGame);
+    apply("category", selectedCategory);
+    apply("payment", selectedPayment);
+    apply("tag", selectedTag);
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next === current) return;
+    router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGame, selectedCategory, selectedPayment, selectedTag]);
 
   useEffect(() => {
     // Only hydrate the demo store when we're not already showing real data.

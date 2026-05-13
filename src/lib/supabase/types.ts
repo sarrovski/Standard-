@@ -35,9 +35,15 @@ export type Database = {
       subscriptions: Table<{ id: string; seller_id: string; stripe_subscription_id: string | null; status: SubscriptionStatus; current_period_end: string | null; created_at: string; updated_at: string }>;
       admin_actions: Table<{ id: string; admin_profile_id: string; action_type: string; target_table: string; target_id: string | null; notes: string | null; metadata: Json; created_at: string }>;
       saved_products: Table<{ id: string; profile_id: string; product_id: string; created_at: string }>;
+      product_events: Table<{ id: string; product_id: string; kind: "view" | "outbound_click"; visitor_hash: string | null; ts: string }>;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      get_product_traffic_stats: {
+        Args: { p_seller_id: string };
+        Returns: Array<{ product_id: string; views: number; outbound_clicks: number }>;
+      };
+    };
     CompositeTypes: Record<string, never>;
   };
 };

@@ -516,6 +516,7 @@ export type UISellerProductCard = {
 
 export function adaptSellerProductCard(
   row: ProductRow & { product_media?: ProductMediaRow[] | null },
+  traffic?: { views: number; outboundClicks: number },
 ): UISellerProductCard {
   const websiteHost = row.website_url
     ? row.website_url.replace(/^https?:\/\//, "")
@@ -532,6 +533,10 @@ export function adaptSellerProductCard(
     parsedGroups.length > 0
       ? parsedGroups
       : groupsFromFlatFeatures(row.features ?? []);
+  const views = traffic?.views ?? 0;
+  const outboundClicks = traffic?.outboundClicks ?? 0;
+  const outboundCtr =
+    views > 0 ? `${((outboundClicks / views) * 100).toFixed(2)}%` : "0%";
   return {
     id: row.id,
     slug: row.slug,
@@ -542,9 +547,9 @@ export function adaptSellerProductCard(
     game: row.game,
     category: row.category,
     features: row.features ?? [],
-    views: 0,
-    outboundClicks: 0,
-    outboundCtr: "0%",
+    views,
+    outboundClicks,
+    outboundCtr,
     integrity: row.trust_score != null ? String(row.trust_score) : "Pending",
     pageTemplate: "Hero Spotlight",
     mediaAssets: media.length,

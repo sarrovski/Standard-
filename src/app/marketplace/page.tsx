@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Nav, SectionHeader, Shell } from "@/components/ui";
 import { MarketplaceClient } from "@/components/marketplace-client";
 import { isSupabaseConfigured } from "@/lib/roles";
@@ -81,7 +82,9 @@ export default async function MarketplacePage() {
             product, it&apos;ll appear here.
           </div>
         )}
-        <MarketplaceClient initialProducts={result.products} />
+        <Suspense fallback={null}>
+          <MarketplaceClient initialProducts={result.products} />
+        </Suspense>
       </section>
     </Shell>
   );

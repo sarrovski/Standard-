@@ -2,6 +2,7 @@ import { requireRole, isSupabaseConfigured } from "@/lib/roles";
 import { Nav, Shell } from "@/components/ui";
 import { DashboardClient, type DashboardInitialData } from "@/components/dashboard-client";
 import {
+  getProductTrafficStats,
   getSellerDashboardData,
   getVerifiedPaymentMethodCount,
 } from "@/lib/repositories/seller";
@@ -42,12 +43,15 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
     };
   }
 
-  const verifiedPaymentMethodCount = await getVerifiedPaymentMethodCount(
-    data.seller.id,
-  );
+  const [verifiedPaymentMethodCount, trafficStats] = await Promise.all([
+    getVerifiedPaymentMethodCount(data.seller.id),
+    getProductTrafficStats(data.seller.id),
+  ]);
 
   return {
-    products: data.products.map(adaptSellerProductCard),
+    products: data.products.map((row) =>
+      adaptSellerProductCard(row, trafficStats.get(row.id)),
+    ),
     paymentRequests: data.paymentRequests.map((row) =>
       adaptSellerPaymentRequest(row),
     ),

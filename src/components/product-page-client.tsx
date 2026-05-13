@@ -13,6 +13,36 @@ import { SaveProductButton } from "@/components/save-product-button";
 import { TrustBox } from "@/components/trust-box";
 import { recordRecentlyViewed } from "@/lib/recently-viewed";
 
+/**
+ * Best-effort beacon to the product-events API. Uses sendBeacon so the
+ * request survives navigation (outbound CTA clicks), falls back to a
+ * keepalive fetch when sendBeacon isn't available. Failures are swallowed
+ * — tracking is never allowed to block the buyer.
+ */
+function trackProductEvent(
+  productId: string,
+  kind: "view" | "outbound_click",
+): void {
+  try {
+    const payload = JSON.stringify({ product_id: productId, kind });
+    if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
+      const blob = new Blob([payload], { type: "application/json" });
+      const sent = navigator.sendBeacon("/api/product-events", blob);
+      if (sent) return;
+    }
+    fetch("/api/product-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {
+      // ignore — beacons are best-effort
+    });
+  } catch {
+    // ignore
+  }
+}
+
 // Shape the page actually renders. UIProductDetail (Supabase-sourced) and the
 // demo products (data.ts) both satisfy this. Fields the UI uses but neither
 // source guarantees are made optional.
@@ -144,6 +174,20 @@ export function ProductPageClient({
     });
   }, [product]);
 
+  // Fire a 'view' beacon once per mount per product. We only have a real
+  // product_id from Supabase; demo products use slug-as-id and don't
+  // correspond to a row, so we skip recording for them.
+  useEffect(() => {
+    if (!product || !supabaseSourced) return;
+    if (!product.id) return;
+    trackProductEvent(product.id, "view");
+  }, [product, supabaseSourced]);
+
+  const trackOutboundClick = () => {
+    if (!supabaseSourced || !product?.id) return;
+    trackProductEvent(product.id, "outbound_click");
+  };
+
   if (!product) {
     // Tailor the empty state to what actually happened. Previously this
     // always said "not available in the demo fallback", which was misleading
@@ -210,7 +254,11 @@ export function ProductPageClient({
             <h1 className="mt-6 text-4xl font-black md:text-5xl">{product.name}</h1>
             <p className="mt-4 max-w-3xl text-white/85">{product.summary}</p>
             <div className="mt-6 flex flex-wrap gap-3">
-              {websiteUrl ? <ButtonLink href={websiteUrl}>{websiteLabel}</ButtonLink> : null}
+              {websiteUrl ? (
+                <ButtonLink href={websiteUrl} onClick={trackOutboundClick}>
+                  {websiteLabel}
+                </ButtonLink>
+              ) : null}
               {product.id ? (
                 <SaveProductButton
                   productId={product.id}
@@ -247,7 +295,11 @@ export function ProductPageClient({
           </div>
 
           {websiteUrl ? (
-            <a href={websiteUrl} className="mt-5 inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white">
+            <a
+              href={websiteUrl}
+              onClick={trackOutboundClick}
+              className="mt-5 inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white"
+            >
               Go to official website
             </a>
           ) : null}
