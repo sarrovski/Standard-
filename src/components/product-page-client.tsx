@@ -11,6 +11,7 @@ import type { PaymentMethod, PaymentProfile } from "@/lib/data";
 import { NoVerifiedPayments, PaymentPill } from "@/components/payment-pill";
 import { SaveProductButton } from "@/components/save-product-button";
 import { TrustBox } from "@/components/trust-box";
+import { ReportListingButton } from "@/components/report-listing-button";
 import { recordRecentlyViewed } from "@/lib/recently-viewed";
 
 /**
@@ -374,6 +375,12 @@ export function ProductPageClient({
               ))}
             </div>
           </Panel>
+
+          {product.id && supabaseSourced && (
+            <div className="flex justify-end">
+              <ReportListingButton productId={product.id} />
+            </div>
+          )}
         </aside>
       </section>
     </>

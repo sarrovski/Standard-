@@ -572,6 +572,77 @@ export function adaptAdminFeaturedSlot(
   };
 }
 
+// ---------- Admin product reports adapter ---------------------------------
+
+export type UIAdminProductReport = {
+  id: string;
+  productId: string;
+  productName: string;
+  productSlug: string | null;
+  sellerId: string | null;
+  sellerName: string | null;
+  /** display_name only — admin views never receive reporter email. */
+  reporterDisplayName: string | null;
+  reason:
+    | "misleading_information"
+    | "payment_issue"
+    | "impersonation"
+    | "broken_official_link"
+    | "unsafe_or_prohibited"
+    | "other";
+  reasonLabel: string;
+  details: string | null;
+  status: "open" | "reviewed" | "resolved";
+  statusLabel: "Open" | "Reviewed" | "Resolved";
+  reviewedAt: string | null;
+  createdAt: string;
+};
+
+const REPORT_REASON_LABELS: Record<UIAdminProductReport["reason"], string> = {
+  misleading_information: "Misleading information",
+  payment_issue: "Payment issue",
+  impersonation: "Impersonation",
+  broken_official_link: "Broken official link",
+  unsafe_or_prohibited: "Unsafe or prohibited",
+  other: "Other",
+};
+
+const REPORT_STATUS_LABELS: Record<
+  UIAdminProductReport["status"],
+  UIAdminProductReport["statusLabel"]
+> = {
+  open: "Open",
+  reviewed: "Reviewed",
+  resolved: "Resolved",
+};
+
+type AdminProductReportRow = Row<"product_reports"> & {
+  products?: Pick<Row<"products">, "name" | "slug"> | null;
+  sellers?: Pick<Row<"sellers">, "seller_name"> | null;
+};
+
+export function adaptAdminProductReport(
+  row: AdminProductReportRow,
+  reporterDisplayName: string | null,
+): UIAdminProductReport {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    productName: row.products?.name ?? "Unknown product",
+    productSlug: row.products?.slug ?? null,
+    sellerId: row.seller_id,
+    sellerName: row.sellers?.seller_name ?? null,
+    reporterDisplayName,
+    reason: row.reason,
+    reasonLabel: REPORT_REASON_LABELS[row.reason],
+    details: row.details,
+    status: row.status,
+    statusLabel: REPORT_STATUS_LABELS[row.status],
+    reviewedAt: row.reviewed_at,
+    createdAt: row.created_at,
+  };
+}
+
 // ---------- Seller dashboard adapters --------------------------------------
 
 /**

@@ -9,12 +9,15 @@ import {
   getPendingProviderTagRequests,
   getPendingVerificationCountByProduct,
   getProductCountBySeller,
+  getProductReportsForAdmin,
+  getReporterDisplayNames,
   getVerifiedPaymentMethodCountBySeller,
 } from "@/lib/repositories/admin";
 import {
   adaptAdminFeaturedSlot,
   adaptAdminPaymentRequest,
   adaptAdminProduct,
+  adaptAdminProductReport,
   adaptAdminProviderTagRequest,
   adaptAdminSeller,
   type PaymentVerificationRequestWithJoins,
@@ -22,6 +25,7 @@ import {
   type UIAdminFeaturedSlot,
   type UIAdminPaymentRequest,
   type UIAdminProduct,
+  type UIAdminProductReport,
   type UIAdminProviderTagRequest,
   type UIAdminSeller,
 } from "@/lib/adapters";
@@ -106,6 +110,7 @@ async function loadAdminData(): Promise<{
   sellers: UIAdminSeller[] | null;
   products: UIAdminProduct[] | null;
   featuredSlots: UIAdminFeaturedSlot[] | null;
+  reports: UIAdminProductReport[] | null;
   realSignals: RealRiskSignal[];
 }> {
   if (!isSupabaseConfigured()) {
@@ -115,6 +120,7 @@ async function loadAdminData(): Promise<{
       sellers: null,
       products: null,
       featuredSlots: null,
+      reports: null,
       realSignals: [],
     };
   }
@@ -128,6 +134,7 @@ async function loadAdminData(): Promise<{
     productsRes,
     pendingByProduct,
     featuredRes,
+    reportsRes,
   ] = await Promise.all([
     getPendingPaymentVerificationRequests(),
     getPendingProviderTagRequests(),
@@ -137,6 +144,7 @@ async function loadAdminData(): Promise<{
     getAllProductsForAdmin(),
     getPendingVerificationCountByProduct(),
     getAllFeaturedSlotsForAdmin(),
+    getProductReportsForAdmin(),
   ]);
 
   if (paymentRes.error) {
@@ -154,6 +162,9 @@ async function loadAdminData(): Promise<{
   if (featuredRes.error) {
     console.error("[admin] featured slots fetch failed:", featuredRes.error.message);
   }
+  if (reportsRes.error) {
+    console.error("[admin] reports fetch failed:", reportsRes.error.message);
+  }
 
   const paymentRows = (paymentRes.data ?? []) as unknown as PaymentVerificationRequestWithJoins[];
   const tagRows = (tagRes.data ?? []) as unknown as ProviderTagRequestWithJoins[];
@@ -166,6 +177,16 @@ async function loadAdminData(): Promise<{
   const featuredRows = (featuredRes.data ?? []) as unknown as Parameters<
     typeof adaptAdminFeaturedSlot
   >[0][];
+  const reportRows = (reportsRes.data ?? []) as unknown as Array<
+    Parameters<typeof adaptAdminProductReport>[0] & {
+      reporter_profile_id: string | null;
+    }
+  >;
+
+  const reporterIds = reportRows
+    .map((row) => row.reporter_profile_id)
+    .filter((id): id is string => Boolean(id));
+  const displayNames = await getReporterDisplayNames(reporterIds);
 
   const paymentRequests = paymentRows.map(adaptAdminPaymentRequest);
   const providerTagRequests = tagRows.map(adaptAdminProviderTagRequest);
@@ -180,6 +201,14 @@ async function loadAdminData(): Promise<{
     adaptAdminProduct(row, pendingByProduct.get(row.id) ?? 0),
   );
   const featuredSlots = featuredRows.map(adaptAdminFeaturedSlot);
+  const reports = reportRows.map((row) =>
+    adaptAdminProductReport(
+      row,
+      row.reporter_profile_id
+        ? displayNames.get(row.reporter_profile_id) ?? null
+        : null,
+    ),
+  );
 
   const realSignals = deriveSignals({
     sellers,
@@ -195,6 +224,7 @@ async function loadAdminData(): Promise<{
     sellers,
     products,
     featuredSlots,
+    reports,
     realSignals,
   };
 }
@@ -217,6 +247,7 @@ export default async function AdminPage({
           initialSellers={data.sellers}
           initialProducts={data.products}
           initialFeaturedSlots={data.featuredSlots}
+          initialReports={data.reports}
           realSignals={data.realSignals}
           initialTab={searchParams?.tab}
         />

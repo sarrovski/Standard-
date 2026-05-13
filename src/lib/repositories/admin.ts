@@ -121,3 +121,44 @@ export async function getAllFeaturedSlotsForAdmin() {
     .select("*, products(name, slug), sellers(seller_name)")
     .order("starts_at", { ascending: false, nullsFirst: false });
 }
+
+/**
+ * All product reports + product + seller joins. Reporter identity is
+ * resolved separately (see getReporterDisplayNames) so we never join the
+ * profiles table here — the admin UI only ever shows display_name, never
+ * email.
+ *
+ * Order: open reports first (alphabetical: open < reviewed < resolved),
+ * then by most recent creation.
+ */
+export async function getProductReportsForAdmin() {
+  const supabase = createClient();
+  return supabase
+    .from("product_reports")
+    .select("*, products(name, slug), sellers(seller_name)")
+    .order("status", { ascending: true })
+    .order("created_at", { ascending: false });
+}
+
+/**
+ * Resolve reporter display_name for a set of profile ids. Used by the
+ * admin Reports tab. We never expose email — display_name only.
+ */
+export async function getReporterDisplayNames(
+  profileIds: ReadonlyArray<string>,
+): Promise<Map<string, string | null>> {
+  const ids = Array.from(
+    new Set(profileIds.filter((id): id is string => Boolean(id))),
+  );
+  const out = new Map<string, string | null>();
+  if (ids.length === 0) return out;
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, display_name")
+    .in("id", ids);
+  for (const row of (data ?? []) as Array<{ id: string; display_name: string | null }>) {
+    out.set(row.id, row.display_name);
+  }
+  return out;
+}

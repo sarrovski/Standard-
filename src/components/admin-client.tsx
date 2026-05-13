@@ -14,6 +14,7 @@ import type {
   UIAdminFeaturedSlot,
   UIAdminPaymentRequest,
   UIAdminProduct,
+  UIAdminProductReport,
   UIAdminProviderTagRequest,
   UIAdminSeller,
 } from "@/lib/adapters";
@@ -26,6 +27,7 @@ type AdminClientProps = {
   initialSellers: UIAdminSeller[] | null;
   initialProducts: UIAdminProduct[] | null;
   initialFeaturedSlots: UIAdminFeaturedSlot[] | null;
+  initialReports: UIAdminProductReport[] | null;
   realSignals: RealRiskSignal[];
   initialTab?: string;
 };
@@ -38,6 +40,7 @@ const TABS = [
   { key: "tags", label: "Provider tags" },
   { key: "sellers", label: "Sellers" },
   { key: "products", label: "Products" },
+  { key: "reports", label: "Reports" },
   { key: "featured", label: "Featured slots" },
   { key: "signals", label: "Signals" },
 ] as const;
@@ -56,6 +59,7 @@ export function AdminClient({
   initialSellers,
   initialProducts,
   initialFeaturedSlots,
+  initialReports,
   realSignals,
   initialTab,
 }: AdminClientProps) {
@@ -87,6 +91,10 @@ export function AdminClient({
   const [featuredSlots] = useState<UIAdminFeaturedSlot[]>(
     initialFeaturedSlots ?? [],
   );
+  const [reports, setReports] = useState<UIAdminProductReport[]>(
+    initialReports ?? [],
+  );
+  const openReportsCount = reports.filter((r) => r.status === "open").length;
 
   // Sellers tab can request the Products tab pre-filtered by seller via a
   // URL query param (?seller=<id>). Read it and pass into ProductsTab.
@@ -134,7 +142,9 @@ export function AdminClient({
                 ? pendingPaymentCount
                 : item.key === "tags" && pendingTagCount > 0
                   ? pendingTagCount
-                  : null;
+                  : item.key === "reports" && openReportsCount > 0
+                    ? openReportsCount
+                    : null;
             return (
               <button
                 key={item.key}
@@ -226,6 +236,32 @@ export function AdminClient({
             sellers={sellers}
             supabaseSourced={supabaseSourced}
             initialSellerFilter={sellerFilterFromUrl}
+          />
+        )}
+        {tab === "reports" && (
+          <ReportsTab
+            reports={reports}
+            supabaseSourced={supabaseSourced}
+            onStatusChange={(id, nextStatus) =>
+              setReports((prev) =>
+                prev.map((r) =>
+                  r.id === id
+                    ? {
+                        ...r,
+                        status: nextStatus,
+                        statusLabel:
+                          nextStatus === "open"
+                            ? "Open"
+                            : nextStatus === "reviewed"
+                              ? "Reviewed"
+                              : "Resolved",
+                        reviewedAt:
+                          nextStatus === "open" ? null : new Date().toISOString(),
+                      }
+                    : r,
+                ),
+              )
+            }
           />
         )}
         {tab === "featured" && (
@@ -1132,6 +1168,170 @@ function ProductsTab({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// =========================================================================
+// Reports tab — open / reviewed / resolved, with admin action buttons
+// =========================================================================
+
+function ReportsTab({
+  reports,
+  supabaseSourced,
+  onStatusChange,
+}: {
+  reports: UIAdminProductReport[];
+  supabaseSourced: boolean;
+  onStatusChange: (
+    id: string,
+    nextStatus: "open" | "reviewed" | "resolved",
+  ) => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const setStatus = async (
+    id: string,
+    nextStatus: "open" | "reviewed" | "resolved",
+  ) => {
+    if (!supabaseSourced) return;
+    setError(null);
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/admin/product-reports/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Couldn't update report.");
+        return;
+      }
+      onStatusChange(id, nextStatus);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 p-5">
+        <div>
+          <h2 className="text-xl font-bold">Buyer reports</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            {supabaseSourced
+              ? "Reports submitted from public product pages. Mark each one as you review."
+              : "Demo mode — connect Supabase to load real reports."}
+          </p>
+        </div>
+        <Badge tone={supabaseSourced ? "green" : "amber"}>
+          {supabaseSourced ? `Live · ${reports.length} report${reports.length === 1 ? "" : "s"}` : "Demo only"}
+        </Badge>
+      </div>
+
+      {error && (
+        <div className="m-5 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
+      {reports.length === 0 ? (
+        <div className="p-6 text-sm text-slate-500">
+          {supabaseSourced
+            ? "No reports yet. They'll appear here as buyers submit them."
+            : "Demo mode: no reports to show."}
+        </div>
+      ) : (
+        <div className="divide-y divide-white/10">
+          {reports.map((report) => {
+            const isBusy = busyId === report.id;
+            const tone =
+              report.status === "open"
+                ? "amber"
+                : report.status === "reviewed"
+                  ? "default"
+                  : "green";
+            return (
+              <div key={report.id} className="grid gap-3 p-5 lg:grid-cols-[1.4fr_0.6fr]">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={tone}>{report.statusLabel}</Badge>
+                    <Badge tone="orange">{report.reasonLabel}</Badge>
+                    {report.productSlug ? (
+                      <Link
+                        href={`/products/${report.productSlug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="truncate text-sm font-semibold text-white transition hover:text-orange-200"
+                      >
+                        {report.productName} ↗
+                      </Link>
+                    ) : (
+                      <span className="truncate text-sm font-semibold text-white">
+                        {report.productName}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {report.sellerName ? `${report.sellerName} · ` : ""}
+                    {report.reporterDisplayName
+                      ? `Reported by ${report.reporterDisplayName}`
+                      : "Reported anonymously"}
+                    {" · "}
+                    {new Date(report.createdAt).toLocaleString()}
+                    {report.reviewedAt
+                      ? ` · reviewed ${new Date(report.reviewedAt).toLocaleString()}`
+                      : ""}
+                  </p>
+                  {report.details && (
+                    <p className="mt-3 whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm leading-6 text-slate-200">
+                      {report.details}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-start justify-end gap-2">
+                  {report.status !== "reviewed" && (
+                    <button
+                      type="button"
+                      onClick={() => setStatus(report.id, "reviewed")}
+                      disabled={isBusy}
+                      className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Mark reviewed
+                    </button>
+                  )}
+                  {report.status !== "resolved" && (
+                    <button
+                      type="button"
+                      onClick={() => setStatus(report.id, "resolved")}
+                      disabled={isBusy}
+                      className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Resolve
+                    </button>
+                  )}
+                  {report.status !== "open" && (
+                    <button
+                      type="button"
+                      onClick={() => setStatus(report.id, "open")}
+                      disabled={isBusy}
+                      className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Reopen
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </Card>
