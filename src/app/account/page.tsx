@@ -1,5 +1,6 @@
 import { Card, Nav, SectionHeader, Shell, Badge, ButtonLink } from "@/components/ui";
 import { AccountDashboardClient } from "@/components/account-dashboard-client";
+import { SellerLaunchChecklist } from "@/components/seller-launch-checklist";
 import { isSupabaseConfigured, requireRole } from "@/lib/roles";
 import { getSavedProductsForProfile } from "@/lib/repositories/buyer";
 
@@ -38,85 +39,50 @@ export default async function AccountPage({
     return (
       <Shell>
         <Nav />
-        <section className="mx-auto max-w-7xl px-6 py-10">
+        <section className="mx-auto max-w-5xl px-6 py-10">
           <SectionHeader
             eyebrow="Seller onboarding"
             title="Become a seller on Standard"
-            text="If you do not have an active seller subscription yet, start here. Choose a plan, then unlock the seller dashboard."
+            text="Standard is a discovery and verification layer for gaming-tool sellers. Pick a plan, build your seller profile, verify your payment methods, and start receiving qualified traffic to your official site."
           />
 
-          <div className="mt-8 space-y-8">
-            <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-              <Card className="p-6">
-                <Badge tone="orange">Start Selling</Badge>
-                <h2 className="mt-4 text-2xl font-black">How selling on Standard works</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Standard helps sellers create trusted product announcements, verify payment methods, and send qualified users to their own website.
-                </p>
-
-                <div className="mt-6 grid gap-3 md:grid-cols-2">
-                  {[
-                    ["1. Create your seller account", "Start from one Standard account and enable seller access."],
-                    ["2. Choose a seller plan", "Unlock product announcements, builder access, payment verification, and analytics."],
-                    ["3. Build your product page", "Use the builder to add product details, media, pricing, features, FAQ, and website CTA."],
-                    ["4. Verify payment methods", "Submit proof before a payment method appears publicly as accepted."],
-                    ["5. Request Provider / Developer tag", "Official developers can submit website, Discord, Telegram, and proof for admin review."],
-                    ["6. Drive traffic to your site", "Your Standard page builds trust, then pushes buyers to your official website or offer page."],
-                  ].map(([title, text]) => (
-                    <div key={title} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                      <div className="font-bold">{title}</div>
-                      <div className="mt-2 text-sm leading-6 text-slate-400">{text}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-6">
-                  <ButtonLink href="/plans">View seller plan</ButtonLink>
-                </div>
-              </Card>
-
-              <Card className="p-6">
-                <Badge tone="default">Seller tools</Badge>
-                <h2 className="mt-4 text-2xl font-black">What you unlock</h2>
-                <div className="mt-5 grid gap-3">
-                  {[
-                    "Product announcements",
-                    "Advanced product page builder",
-                    "Image upload and media gallery",
-                    "Verified payment method workflow",
-                    "Outbound click analytics",
-                    "Featured category placement (sold separately)",
-                    "Provider / Developer tag request",
-                  ].map((item) => (
-                    <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </section>
-
-            <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-              <Card className="p-6">
-                <Badge tone="green">Featured slots</Badge>
-                <h2 className="mt-4 text-2xl font-black">Pay to appear higher</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Once you have an active subscription, featured placements are
-                  reserved from <code className="text-slate-300">/dashboard/billing</code>.
-                  One active slot per game/category, paid up-front per slot.
-                </p>
-              </Card>
-
-              <Card className="p-6">
-                <Badge tone="amber">Verification still matters</Badge>
-                <h2 className="mt-4 text-2xl font-black">Trust isn&apos;t bought</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Featured boosts visibility, but it does not replace verification.
-                  Payments, provider tag, and trust signals are reviewed separately.
-                </p>
-              </Card>
-            </section>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <ButtonLink href="/plans">View seller plans</ButtonLink>
+            <ButtonLink href="/start-selling" variant="secondary">
+              Read the full guide
+            </ButtonLink>
           </div>
+
+          <div className="mt-10 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              ["Qualified traffic", "Buyers reach your product page from game and category landing pages, the marketplace, and search."],
+              ["Buyer confidence", "Verification badges and verified payment methods reduce hesitation before a buyer clicks through to your site."],
+              ["Trust signals", "Seller verification, payment proof, and review history are surfaced on every product page."],
+              ["Product discovery", "Each product appears across multiple indexed entry points — better organic-search coverage."],
+              ["Seller profile", "Your seller profile carries across every product you publish. Verify once, applied everywhere."],
+              ["Verified payment methods", "Verified payment methods are one of the strongest trust signals buyers see on a product page."],
+            ].map(([title, text]) => (
+              <Card key={title} className="p-5">
+                <h3 className="text-base font-bold">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{text}</p>
+              </Card>
+            ))}
+          </div>
+
+          <div className="mt-12">
+            <SellerLaunchChecklist intro="Eight steps from new seller to a published product with verified payment methods. The dashboard unlocks once your subscription is active." />
+          </div>
+
+          <Card className="mt-10 border-amber-400/20 bg-amber-500/10 p-6">
+            <Badge tone="amber">Verification still matters</Badge>
+            <p className="mt-3 text-sm leading-6 text-amber-100/90">
+              A subscription gives you access to the seller dashboard. It does
+              not auto-verify your payment methods or grant the Provider /
+              Developer tag — both are reviewed independently. Featured slots
+              improve placement only; they never change verification status
+              or trust signals.
+            </p>
+          </Card>
         </section>
       </Shell>
     );
