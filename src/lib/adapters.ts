@@ -385,6 +385,79 @@ export function adaptAdminProviderTagRequest(
   };
 }
 
+// ---------- Admin sellers list adapter ------------------------------------
+
+export type UIAdminSeller = {
+  id: string;
+  sellerName: string;
+  profileEmail: string | null;
+  profileDisplayName: string | null;
+  role: "user" | "seller" | "admin";
+  providerTag: "Pending" | "Approved" | "Rejected" | "Not requested";
+  subscriptionStatus:
+    | "inactive"
+    | "trialing"
+    | "active"
+    | "past_due"
+    | "canceled"
+    | "unknown";
+  currentPeriodEnd: string | null;
+  productsCount: number;
+  verifiedPaymentMethodsCount: number;
+  websiteUrl: string | null;
+  createdAt: string;
+};
+
+type AdminSellerRow = Row<"sellers"> & {
+  profiles?:
+    | Pick<Row<"profiles">, "id" | "email" | "display_name" | "role">
+    | null;
+  subscriptions?: Array<
+    Pick<Row<"subscriptions">, "status" | "current_period_end">
+  > | null;
+};
+
+export function adaptAdminSeller(
+  row: AdminSellerRow,
+  productsCount: number,
+  verifiedPaymentMethodsCount: number,
+): UIAdminSeller {
+  const providerStatusMap: Record<
+    Database["public"]["Enums"]["provider_tag_status"],
+    UIAdminSeller["providerTag"]
+  > = {
+    none: "Not requested",
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+  };
+  // sellers.subscriptions can come back as an array (one-to-many) or a
+  // single object depending on the relation Supabase infers — pick the
+  // most recently created entry for the badge.
+  const sub = Array.isArray(row.subscriptions)
+    ? row.subscriptions[0]
+    : ((row.subscriptions ?? null) as
+        | {
+            status: Database["public"]["Enums"]["subscription_status"];
+            current_period_end: string | null;
+          }
+        | null);
+  return {
+    id: row.id,
+    sellerName: row.seller_name,
+    profileEmail: row.profiles?.email ?? null,
+    profileDisplayName: row.profiles?.display_name ?? null,
+    role: (row.profiles?.role ?? "seller") as UIAdminSeller["role"],
+    providerTag: providerStatusMap[row.provider_tag_status],
+    subscriptionStatus: (sub?.status ?? "unknown") as UIAdminSeller["subscriptionStatus"],
+    currentPeriodEnd: sub?.current_period_end ?? null,
+    productsCount,
+    verifiedPaymentMethodsCount,
+    websiteUrl: row.website_url,
+    createdAt: row.created_at,
+  };
+}
+
 // ---------- Seller dashboard adapters --------------------------------------
 
 /**
