@@ -50,17 +50,23 @@ export function AccountMenu({ user }: { user: SessionUser }) {
     };
   }, [open]);
 
+  const hasDisplayName = Boolean(
+    user.displayName && user.displayName.trim().length > 0,
+  );
   const fallbackHandle =
     user.email && user.email.length > 0
       ? user.email.split("@")[0] ?? "Account"
       : "Account";
-  const handle =
-    user.displayName && user.displayName.trim().length > 0
-      ? user.displayName.trim()
-      : fallbackHandle;
+  const handle = hasDisplayName
+    ? (user.displayName as string).trim()
+    : fallbackHandle;
   const initial = (handle[0] ?? "?").toUpperCase();
   const roleLabel = ROLE_LABEL[user.role];
   const roleTone = ROLE_TONE[user.role];
+  // Privacy: only surface the email in the dropdown when we have no
+  // display name to identify the user. If display_name exists, the
+  // handle + role badge are enough — never reveal the full email.
+  const showEmailInHeader = !hasDisplayName && Boolean(user.email);
 
   const close = () => setOpen(false);
 
@@ -116,7 +122,7 @@ export function AccountMenu({ user }: { user: SessionUser }) {
               >
                 {roleLabel}
               </span>
-              {user.email && (
+              {showEmailInHeader && (
                 <span className="truncate text-[11px] text-slate-500">
                   {user.email}
                 </span>
