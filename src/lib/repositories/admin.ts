@@ -76,3 +76,48 @@ export async function getVerifiedPaymentMethodCountBySeller() {
   }
   return counts;
 }
+
+/**
+ * All products across every seller. Used by the admin Products tab.
+ * Includes seller + product_media so the row can show seller name and a
+ * preview thumbnail without extra round-trips.
+ */
+export async function getAllProductsForAdmin() {
+  const supabase = createClient();
+  return supabase
+    .from("products")
+    .select("*, sellers(id, seller_name, profile_id), product_media(*)")
+    .order("created_at", { ascending: false });
+}
+
+/**
+ * Map product_id -> count of pending or needs-recheck payment verification
+ * requests. Drives the "Verification pending" badge on the admin Products
+ * tab so admins can spot products that are blocked behind moderation.
+ */
+export async function getPendingVerificationCountByProduct() {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("payment_verification_requests")
+    .select("product_id")
+    .in("status", ["pending_verification", "needs_recheck"]);
+  const counts = new Map<string, number>();
+  for (const row of (data ?? []) as Array<{ product_id: string | null }>) {
+    if (!row.product_id) continue;
+    counts.set(row.product_id, (counts.get(row.product_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * All featured slots, with optional product + seller joins so the admin
+ * Featured-slots tab can render real listings. Empty list in production is
+ * a normal state (no slots configured yet).
+ */
+export async function getAllFeaturedSlotsForAdmin() {
+  const supabase = createClient();
+  return supabase
+    .from("featured_slots")
+    .select("*, products(name, slug), sellers(seller_name)")
+    .order("starts_at", { ascending: false, nullsFirst: false });
+}

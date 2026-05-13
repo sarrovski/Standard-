@@ -6,20 +6,27 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Card, MiniStat } from "@/components/ui";
 import {
   adminSignals,
-  products as demoProducts,
-  featuredSlots,
+  featuredSlots as demoFeaturedSlots,
+  games as gamesList,
+  productCategories as categoriesList,
 } from "@/lib/data";
 import type {
+  UIAdminFeaturedSlot,
   UIAdminPaymentRequest,
+  UIAdminProduct,
   UIAdminProviderTagRequest,
   UIAdminSeller,
 } from "@/lib/adapters";
+import type { RealRiskSignal } from "@/app/admin/page";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 
 type AdminClientProps = {
   initialPaymentRequests: UIAdminPaymentRequest[] | null;
   initialProviderTagRequests: UIAdminProviderTagRequest[] | null;
   initialSellers: UIAdminSeller[] | null;
+  initialProducts: UIAdminProduct[] | null;
+  initialFeaturedSlots: UIAdminFeaturedSlot[] | null;
+  realSignals: RealRiskSignal[];
   initialTab?: string;
 };
 
@@ -47,6 +54,9 @@ export function AdminClient({
   initialPaymentRequests,
   initialProviderTagRequests,
   initialSellers,
+  initialProducts,
+  initialFeaturedSlots,
+  realSignals,
   initialTab,
 }: AdminClientProps) {
   const supabaseSourced = initialPaymentRequests !== null;
@@ -73,6 +83,22 @@ export function AdminClient({
     UIAdminProviderTagRequest[]
   >(initialProviderTagRequests ?? []);
   const [sellers] = useState<UIAdminSeller[]>(initialSellers ?? []);
+  const [products] = useState<UIAdminProduct[]>(initialProducts ?? []);
+  const [featuredSlots] = useState<UIAdminFeaturedSlot[]>(
+    initialFeaturedSlots ?? [],
+  );
+
+  // Sellers tab can request the Products tab pre-filtered by seller via a
+  // URL query param (?seller=<id>). Read it and pass into ProductsTab.
+  const sellerFilterFromUrl = searchParams.get("seller");
+
+  const navigateToProductsForSeller = (sellerId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "products");
+    params.set("seller", sellerId);
+    router.replace(`/admin?${params.toString()}`, { scroll: false });
+    setTab("products");
+  };
 
   const pendingPaymentCount = supabasePayments.filter(
     (item) => item.status === "Pending verification" || item.status === "Needs re-check",
@@ -187,10 +213,33 @@ export function AdminClient({
             }
           />
         )}
-        {tab === "sellers" && <SellersTab sellers={sellers} supabaseSourced={supabaseSourced} />}
-        {tab === "products" && <ProductsTab />}
-        {tab === "featured" && <FeaturedSlotsTab />}
-        {tab === "signals" && <SignalsTab />}
+        {tab === "sellers" && (
+          <SellersTab
+            sellers={sellers}
+            supabaseSourced={supabaseSourced}
+            onViewProducts={navigateToProductsForSeller}
+          />
+        )}
+        {tab === "products" && (
+          <ProductsTab
+            products={products}
+            sellers={sellers}
+            supabaseSourced={supabaseSourced}
+            initialSellerFilter={sellerFilterFromUrl}
+          />
+        )}
+        {tab === "featured" && (
+          <FeaturedSlotsTab
+            slots={featuredSlots}
+            supabaseSourced={supabaseSourced}
+          />
+        )}
+        {tab === "signals" && (
+          <SignalsTab
+            realSignals={realSignals}
+            supabaseSourced={supabaseSourced}
+          />
+        )}
       </div>
     </div>
   );
@@ -714,9 +763,11 @@ function ProviderTagTab({
 function SellersTab({
   sellers,
   supabaseSourced,
+  onViewProducts,
 }: {
   sellers: UIAdminSeller[];
   supabaseSourced: boolean;
+  onViewProducts: (sellerId: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
@@ -833,6 +884,24 @@ function SellersTab({
                 <span className="text-slate-500">Verified pmts</span>{" "}
                 {seller.verifiedPaymentMethodsCount}
               </span>
+              <button
+                type="button"
+                onClick={() => onViewProducts(seller.id)}
+                disabled={seller.productsCount === 0}
+                className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                View products
+              </button>
+              {seller.websiteUrl ? (
+                <a
+                  href={seller.websiteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-100"
+                >
+                  Visit website ↗
+                </a>
+              ) : null}
             </div>
           </div>
         ))}
@@ -845,52 +914,226 @@ function SellersTab({
 // Products — read-only moderation table for now (kept from previous version)
 // =========================================================================
 
-function ProductsTab() {
+function ProductsTab({
+  products,
+  sellers,
+  supabaseSourced,
+  initialSellerFilter,
+}: {
+  products: UIAdminProduct[];
+  sellers: UIAdminSeller[];
+  supabaseSourced: boolean;
+  initialSellerFilter: string | null;
+}) {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "draft" | "published" | "archived"
+  >("all");
+  const [gameFilter, setGameFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [sellerFilter, setSellerFilter] = useState<string>(
+    initialSellerFilter ?? "all",
+  );
+
+  // If the seller filter param arrives later (deep-link from Sellers tab),
+  // sync state to match.
+  useEffect(() => {
+    if (initialSellerFilter) setSellerFilter(initialSellerFilter);
+  }, [initialSellerFilter]);
+
+  const sellerOptions = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of products) ids.add(p.sellerId);
+    const known = sellers.filter((s) => ids.has(s.id));
+    return known.length > 0 ? known : sellers;
+  }, [products, sellers]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products.filter((product) => {
+      if (statusFilter !== "all" && product.status !== statusFilter) return false;
+      if (gameFilter !== "all" && product.game !== gameFilter) return false;
+      if (categoryFilter !== "all" && product.category !== categoryFilter) return false;
+      if (sellerFilter !== "all" && product.sellerId !== sellerFilter) return false;
+      if (q) {
+        const haystack = `${product.name} ${product.sellerName} ${product.game} ${product.category}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [products, search, statusFilter, gameFilter, categoryFilter, sellerFilter]);
+
+  const filtersActive =
+    search.trim() !== "" ||
+    statusFilter !== "all" ||
+    gameFilter !== "all" ||
+    categoryFilter !== "all" ||
+    sellerFilter !== "all";
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setGameFilter("all");
+    setCategoryFilter("all");
+    setSellerFilter("all");
+  };
+
   return (
-    <Card className="p-6">
-      <h2 className="text-xl font-bold">Product moderation</h2>
-      <p className="mt-1 text-sm text-slate-400">
-        Read-only roster. Force-unpublish / delete actions land in a follow-up.
-      </p>
-      <div className="mt-5 overflow-x-auto">
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Product</th>
-              <th className="px-4 py-3">Seller</th>
-              <th className="px-4 py-3">Tag</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Payments</th>
-            </tr>
-          </thead>
-          <tbody>
-            {demoProducts.map((product) => (
-              <tr
-                key={product.slug}
-                className="border-b border-white/5 last:border-0"
-              >
-                <td className="px-4 py-4 font-semibold">{product.name}</td>
-                <td className="px-4 py-4 text-slate-400">{product.seller}</td>
-                <td className="px-4 py-4">
-                  <Badge>{product.sellerTag}</Badge>
-                </td>
-                <td className="px-4 py-4">
-                  <Badge
-                    tone={
-                      product.productStatus === "Verified" ? "green" : "amber"
-                    }
-                  >
-                    {product.productStatus}
-                  </Badge>
-                </td>
-                <td className="px-4 py-4 text-slate-400">
-                  {product.verifiedPayments.length || "None"}
-                </td>
-              </tr>
+    <Card className="overflow-hidden">
+      <div className="flex flex-col gap-2 border-b border-white/10 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold">Product moderation</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              {supabaseSourced
+                ? "Read-only roster of every product. Filter by status / game / category / seller."
+                : "Demo mode — connect Supabase to load real products."}
+            </p>
+          </div>
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-100"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search name, seller, game, category"
+            className="lg:col-span-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-orange-400/50"
+          />
+          <select
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(
+                event.target.value as "all" | "draft" | "published" | "archived",
+              )
+            }
+            className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-orange-400/50"
+          >
+            <option value="all">All statuses</option>
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+            <option value="archived">Private (archived)</option>
+          </select>
+          <select
+            value={gameFilter}
+            onChange={(event) => setGameFilter(event.target.value)}
+            className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-orange-400/50"
+          >
+            <option value="all">All games</option>
+            {gamesList.map((game) => (
+              <option key={game} value={game}>
+                {game}
+              </option>
             ))}
-          </tbody>
-        </table>
+          </select>
+          <select
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-orange-400/50"
+          >
+            <option value="all">All categories</option>
+            {categoriesList.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sellerFilter}
+            onChange={(event) => setSellerFilter(event.target.value)}
+            className="lg:col-span-5 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none focus:border-orange-400/50"
+          >
+            <option value="all">All sellers</option>
+            {sellerOptions.map((seller) => (
+              <option key={seller.id} value={seller.id}>
+                {seller.sellerName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Showing {filtered.length} of {products.length} product
+          {products.length === 1 ? "" : "s"}
+        </p>
       </div>
+
+      {products.length === 0 ? (
+        <p className="p-6 text-sm text-slate-500">
+          {supabaseSourced
+            ? "No products in the database yet."
+            : "Demo mode: no products to show."}
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left text-sm">
+            <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-5 py-3">Product</th>
+                <th className="px-4 py-3">Seller</th>
+                <th className="px-4 py-3">Game</th>
+                <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3"> </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((product) => (
+                <tr
+                  key={product.id}
+                  className="border-b border-white/5 align-top last:border-0"
+                >
+                  <td className="px-5 py-4">
+                    <div className="font-semibold text-white">{product.name}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      {new Date(product.createdAt).toLocaleDateString()}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 text-slate-300">{product.sellerName}</td>
+                  <td className="px-4 py-4 text-slate-400">{product.game}</td>
+                  <td className="px-4 py-4 text-slate-400">{product.category}</td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge
+                        tone={
+                          product.status === "published"
+                            ? "green"
+                            : product.status === "draft"
+                              ? "amber"
+                              : "default"
+                        }
+                      >
+                        {product.statusLabel}
+                      </Badge>
+                      {product.pendingVerifications > 0 && (
+                        <Badge tone="orange">
+                          Verification pending · {product.pendingVerifications}
+                        </Badge>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <Link
+                      href={`/products/${product.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-semibold text-slate-200 transition hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-100"
+                    >
+                      Open public page ↗
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 }
@@ -899,60 +1142,204 @@ function ProductsTab() {
 // Featured slots + Signals — display only (kept from previous version)
 // =========================================================================
 
-function FeaturedSlotsTab() {
+function FeaturedSlotsTab({
+  slots,
+  supabaseSourced,
+}: {
+  slots: UIAdminFeaturedSlot[];
+  supabaseSourced: boolean;
+}) {
+  const showingReal = supabaseSourced && slots.length > 0;
+
   return (
     <Card className="p-6">
-      <h2 className="text-xl font-bold">Featured slots</h2>
-      <p className="mt-1 text-sm text-slate-400">
-        One active slot per game/category. Admin allocation flow lands in a
-        follow-up.
-      </p>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        {featuredSlots.map((slot) => (
-          <div
-            key={slot.category}
-            className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <Link
-                href="#"
-                className="font-semibold text-white"
-              >
-                {slot.category}
-              </Link>
-              <Badge tone={slot.status === "Available" ? "green" : "amber"}>
-                {slot.status}
-              </Badge>
-            </div>
-            <div className="mt-2 text-xs text-slate-500">
-              {slot.product ?? "No product reserved"}
-            </div>
-          </div>
-        ))}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">Featured slots</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            One active slot per game / category. Admin allocation flow lands in
+            a follow-up.
+          </p>
+        </div>
+        <Badge tone={showingReal ? "green" : "amber"}>
+          {showingReal
+            ? `Live · ${slots.length} slot${slots.length === 1 ? "" : "s"}`
+            : supabaseSourced
+              ? "Live · no slots yet"
+              : "Demo data"}
+        </Badge>
       </div>
+
+      {showingReal ? (
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {slots.map((slot) => (
+            <div
+              key={slot.id}
+              className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-white">
+                  {slot.game} · {slot.category}
+                </span>
+                <Badge
+                  tone={
+                    slot.status === "active"
+                      ? "green"
+                      : slot.status === "available"
+                        ? "default"
+                        : slot.status === "expired"
+                          ? "amber"
+                          : "red"
+                  }
+                >
+                  {slot.statusLabel}
+                </Badge>
+              </div>
+              <div className="mt-2 text-sm text-slate-300">
+                {slot.productName ? (
+                  <Link
+                    href={`/products/${slot.productSlug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold underline-offset-2 hover:text-orange-200 hover:underline"
+                  >
+                    {slot.productName}
+                  </Link>
+                ) : (
+                  <span className="text-slate-500">No product reserved</span>
+                )}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {slot.sellerName ?? "—"}
+                {slot.startsAt && slot.endsAt
+                  ? ` · ${new Date(slot.startsAt).toLocaleDateString()} → ${new Date(slot.endsAt).toLocaleDateString()}`
+                  : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : supabaseSourced ? (
+        <div className="mt-5 rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-5 text-sm text-slate-400">
+          No featured slots configured yet. Once an admin (or Stripe checkout)
+          allocates a slot, it&apos;ll appear here.
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+            Demo placeholder slots from <code>data.ts</code> — connect Supabase
+            to load real allocations.
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {demoFeaturedSlots.map((slot) => (
+              <div
+                key={slot.category}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-white">{slot.category}</span>
+                  <Badge tone={slot.status === "Available" ? "green" : "amber"}>
+                    {slot.status}
+                  </Badge>
+                </div>
+                <div className="mt-2 text-xs text-slate-500">
+                  {slot.product ?? "No product reserved"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Card>
   );
 }
 
-function SignalsTab() {
+function SignalsTab({
+  realSignals,
+  supabaseSourced,
+}: {
+  realSignals: RealRiskSignal[];
+  supabaseSourced: boolean;
+}) {
+  const severityTone = (
+    severity: RealRiskSignal["severity"],
+  ): "red" | "amber" | "default" =>
+    severity === "high" ? "red" : severity === "medium" ? "amber" : "default";
+
   return (
     <Card className="p-6">
-      <h2 className="text-xl font-bold">Signal center</h2>
-      <p className="mt-1 text-sm text-slate-400">
-        Heuristics surfaced for admin review. Hardcoded demo data — replace
-        with real signal queries in a follow-up.
-      </p>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        {adminSignals.map((signal) => (
-          <div
-            key={signal.title}
-            className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-          >
-            <div className="font-semibold">{signal.title}</div>
-            <div className="mt-1 text-xs text-slate-500">{signal.meta}</div>
-          </div>
-        ))}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">Signal center</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Risk signals split between live data and example heuristics.
+          </p>
+        </div>
+        <Badge tone={supabaseSourced ? "green" : "amber"}>
+          {supabaseSourced ? "Live · real signals on top" : "Demo only"}
+        </Badge>
       </div>
+
+      <section className="mt-5">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-orange-200/80">
+          Live signals
+        </h3>
+        {supabaseSourced ? (
+          realSignals.length === 0 ? (
+            <div className="mt-3 rounded-2xl border border-dashed border-emerald-400/30 bg-emerald-500/10 p-5 text-sm text-emerald-200">
+              Nothing flagged right now. Live signals appear here when payment
+              or provider-tag requests stale out, or when sellers publish
+              without verified payment methods.
+            </div>
+          ) : (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {realSignals.map((signal) => (
+                <div
+                  key={signal.key}
+                  className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="font-semibold text-white">{signal.title}</div>
+                    <Badge tone={severityTone(signal.severity)}>
+                      {signal.severity === "high"
+                        ? "High"
+                        : signal.severity === "medium"
+                          ? "Medium"
+                          : "Low"}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400">{signal.detail}</div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <div className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+            Demo mode — connect Supabase to derive real signals from open
+            requests and seller data.
+          </div>
+        )}
+      </section>
+
+      <section className="mt-6">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
+          Example heuristics
+        </h3>
+        <p className="mt-1 text-xs text-slate-500">
+          Static placeholders from <code>data.ts</code>. Useful as a reference
+          for what kinds of signals we may compute in the future.
+        </p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {adminSignals.map((signal) => (
+            <div
+              key={signal.title}
+              className="rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-4"
+            >
+              <div className="font-semibold text-slate-200">{signal.title}</div>
+              <div className="mt-1 text-xs text-slate-500">{signal.meta}</div>
+            </div>
+          ))}
+        </div>
+      </section>
     </Card>
   );
 }

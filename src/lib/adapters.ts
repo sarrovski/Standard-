@@ -479,6 +479,99 @@ export function adaptAdminSeller(
   };
 }
 
+// ---------- Admin products list adapter -----------------------------------
+
+export type UIAdminProduct = {
+  id: string;
+  slug: string;
+  name: string;
+  game: string;
+  category: string;
+  status: "draft" | "published" | "archived";
+  statusLabel: "Draft" | "Published" | "Private";
+  sellerId: string;
+  sellerName: string;
+  websiteUrl: string | null;
+  pendingVerifications: number;
+  coverImageUrl: string | null;
+  createdAt: string;
+};
+
+type AdminProductRow = Row<"products"> & {
+  sellers?: Pick<Row<"sellers">, "id" | "seller_name" | "profile_id"> | null;
+  product_media?: Row<"product_media">[] | null;
+};
+
+export function adaptAdminProduct(
+  row: AdminProductRow,
+  pendingVerifications: number,
+): UIAdminProduct {
+  const statusLabel =
+    row.status === "published"
+      ? "Published"
+      : row.status === "draft"
+        ? "Draft"
+        : "Private";
+  const sortedMedia = sortedProductMedia(row.product_media);
+  const firstImage = sortedMedia.find((item) => item.type === "image");
+  const firstVideo = sortedMedia.find((item) => item.type === "youtube");
+  const coverImageUrl =
+    firstImage?.imageUrl ?? firstVideo?.thumbnailUrl ?? null;
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    game: row.game,
+    category: row.category,
+    status: row.status,
+    statusLabel,
+    sellerId: row.sellers?.id ?? row.seller_id,
+    sellerName: row.sellers?.seller_name ?? "Unknown seller",
+    websiteUrl: row.website_url,
+    pendingVerifications,
+    coverImageUrl,
+    createdAt: row.created_at,
+  };
+}
+
+// ---------- Admin featured-slots adapter ----------------------------------
+
+export type UIAdminFeaturedSlot = {
+  id: string;
+  game: string;
+  category: string;
+  status: "available" | "active" | "expired" | "cancelled";
+  statusLabel: "Available" | "Active" | "Expired" | "Cancelled";
+  productSlug: string | null;
+  productName: string | null;
+  sellerName: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+};
+
+type AdminFeaturedSlotRow = Row<"featured_slots"> & {
+  products?: Pick<Row<"products">, "name" | "slug"> | null;
+  sellers?: Pick<Row<"sellers">, "seller_name"> | null;
+};
+
+export function adaptAdminFeaturedSlot(
+  row: AdminFeaturedSlotRow,
+): UIAdminFeaturedSlot {
+  const statusLabel = (row.status[0]?.toUpperCase() ?? "") + row.status.slice(1);
+  return {
+    id: row.id,
+    game: row.game,
+    category: row.category,
+    status: row.status,
+    statusLabel: statusLabel as UIAdminFeaturedSlot["statusLabel"],
+    productSlug: row.products?.slug ?? null,
+    productName: row.products?.name ?? null,
+    sellerName: row.sellers?.seller_name ?? null,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+  };
+}
+
 // ---------- Seller dashboard adapters --------------------------------------
 
 /**
