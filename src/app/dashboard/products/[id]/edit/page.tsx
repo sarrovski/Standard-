@@ -3,6 +3,8 @@ import { Nav, Shell } from "@/components/ui";
 import { ProductEditClient } from "@/components/product-edit-client";
 import { isSupabaseConfigured, requireRole } from "@/lib/roles";
 import { getSellerByProfileId } from "@/lib/repositories/seller";
+import { sortedProductMedia } from "@/lib/adapters";
+import type { Database } from "@/lib/supabase/types";
 
 /**
  * Per-product edit page. Reached from the kebab menu on the dashboard
@@ -40,7 +42,7 @@ export default async function ProductEditPage({
   let query = supabase
     .from("products")
     .select(
-      "id, slug, name, game, category, website_url, summary, features, status",
+      "id, slug, name, game, category, website_url, summary, features, status, product_media(*)",
     )
     .eq("id", params.id);
   if (!isAdmin && seller) {
@@ -56,16 +58,21 @@ export default async function ProductEditPage({
     summary: string | null;
     features: string[] | null;
     status: "draft" | "published" | "archived";
+    product_media:
+      | Database["public"]["Tables"]["product_media"]["Row"][]
+      | null;
   }>();
 
   if (!product) {
     notFound();
   }
 
+  const initialMedia = sortedProductMedia(product.product_media);
+
   return (
     <Shell>
       <Nav />
-      <section className="mx-auto max-w-3xl px-6 py-8">
+      <section className="mx-auto max-w-4xl px-6 py-8">
         <ProductEditClient
           product={{
             id: product.id,
@@ -78,6 +85,7 @@ export default async function ProductEditPage({
             features: product.features ?? [],
             status: product.status,
           }}
+          initialMedia={initialMedia}
         />
       </section>
     </Shell>

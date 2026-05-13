@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { CategoryPicker } from "@/components/category-picker";
+import { ProductMediaPanel } from "@/components/product-media-panel";
 import { games, productCategories } from "@/lib/data";
+import type { UIProductMedia } from "@/lib/adapters";
 
 type EditableProduct = {
   id: string;
@@ -37,7 +39,13 @@ function formatEditError(status: number | null, payload: ProductEditError) {
   return `${prefix}${message}${details}`;
 }
 
-export function ProductEditClient({ product }: { product: EditableProduct }) {
+export function ProductEditClient({
+  product,
+  initialMedia,
+}: {
+  product: EditableProduct;
+  initialMedia: UIProductMedia[];
+}) {
   const router = useRouter();
   const [form, setForm] = useState({
     name: product.name,
@@ -117,7 +125,8 @@ export function ProductEditClient({ product }: { product: EditableProduct }) {
   };
 
   return (
-    <Card className="p-6">
+    <div className="grid gap-6">
+      <Card className="p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <Badge tone={isPublished ? "green" : "default"}>
@@ -125,8 +134,9 @@ export function ProductEditClient({ product }: { product: EditableProduct }) {
           </Badge>
           <h2 className="mt-4 text-2xl font-black">Edit product</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            Update the product details. Status changes (publish / make
-            private / delete) live in the Produits tab kebab menu.
+            Update product details and manage media. Status changes
+            (publish / make private / delete) live in the Produits tab
+            kebab menu.
           </p>
         </div>
         <Link
@@ -230,6 +240,22 @@ export function ProductEditClient({ product }: { product: EditableProduct }) {
           </Link>
         </div>
       </form>
-    </Card>
+      </Card>
+
+      <Card className="p-6">
+        <Badge tone="default">Media</Badge>
+        <h2 className="mt-3 text-2xl font-black">Product images & videos</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+          Uploads save immediately. YouTube links use the video ID and embed
+          safely on the public product page.
+        </p>
+        <div className="mt-4">
+          <ProductMediaPanel
+            productId={product.id}
+            initialMedia={initialMedia}
+          />
+        </div>
+      </Card>
+    </div>
   );
 }

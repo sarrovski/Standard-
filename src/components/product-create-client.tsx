@@ -47,14 +47,17 @@ function createDemoProduct(form: ProductCreateForm): LocalProduct {
     confidence: "Pending",
     verifiedPayments: [],
     paymentProfiles: [],
-    features: [],
+    features: form.features
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0),
     pricePoints: [],
     delivery: "Pending verification",
     refundPolicy: "Pending verification",
     accent: "from-orange-500/70 to-cyan-400/40",
     summary: form.summary,
-    websiteUrl: "",
-    websiteLabel: "Visit website",
+    websiteUrl: form.website_url,
+    websiteLabel: form.website_url ? "Visit website" : "Visit website",
     discord: "",
     telegram: "",
     trustSignals: ["Seller-submitted product"],
@@ -63,7 +66,7 @@ function createDemoProduct(form: ProductCreateForm): LocalProduct {
     faq: [
       {
         q: "What happens next?",
-        a: "Add media from Produits, verify payment methods, then publish when ready.",
+        a: "Add media on the edit page, verify payment methods, then publish when ready.",
       },
     ],
     activity: { vouches: 0, views: 0, replies: 0, lastSeen: "Just created" },
@@ -74,7 +77,9 @@ type ProductCreateForm = {
   name: string;
   game: string;
   category: string;
+  website_url: string;
   summary: string;
+  features: string;
 };
 
 export function ProductCreateClient({
@@ -87,7 +92,9 @@ export function ProductCreateClient({
     name: "",
     game: games[0] ?? "",
     category: productCategories[0] ?? "",
+    website_url: "",
     summary: "",
+    features: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -105,6 +112,11 @@ export function ProductCreateClient({
       return;
     }
 
+    const features = form.features
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+
     if (!supabaseConfigured) {
       addLocalProduct(createDemoProduct(form));
       router.push("/dashboard?tab=products");
@@ -120,7 +132,9 @@ export function ProductCreateClient({
           name: form.name,
           game: form.game,
           category: form.category,
-          summary: form.summary,
+          website_url: form.website_url || null,
+          summary: form.summary || null,
+          features,
         }),
       });
       const payload = (await response.json()) as ProductCreateResponse;
@@ -128,7 +142,14 @@ export function ProductCreateClient({
         setError(formatCreateError(response.status, payload as ProductCreateError));
         return;
       }
-      router.push("/dashboard?tab=products");
+      // Send the seller straight to the per-product edit page so they
+      // can add images / YouTube links inline. Same form fields, plus
+      // the media panel below.
+      if ("product" in payload && payload.product?.id) {
+        router.push(`/dashboard/products/${payload.product.id}/edit`);
+      } else {
+        router.push("/dashboard?tab=products");
+      }
     } catch (err) {
       setError(
         formatCreateError(null, {
@@ -143,14 +164,14 @@ export function ProductCreateClient({
   };
 
   return (
-    <Card className="mt-8 p-6">
+    <Card className="p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <Badge tone="orange">Draft product</Badge>
+          <Badge tone="default">Private</Badge>
           <h2 className="mt-4 text-2xl font-black">Create product</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            Products start as drafts. Add media from Produits after creation,
-            then publish when payment and trust details are ready.
+            Same fields as the edit page. Save once and you'll land on the
+            edit page, where you can add product images and YouTube videos.
           </p>
         </div>
         <Link
@@ -196,6 +217,17 @@ export function ProductCreateClient({
         />
 
         <label className="grid gap-2 text-sm font-semibold text-slate-200">
+          Website URL
+          <input
+            value={form.website_url}
+            onChange={(event) => update("website_url", event.target.value)}
+            placeholder="https://example.com"
+            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+            type="url"
+          />
+        </label>
+
+        <label className="grid gap-2 text-sm font-semibold text-slate-200">
           Short summary
           <textarea
             value={form.summary}
@@ -203,6 +235,19 @@ export function ProductCreateClient({
             className="min-h-28 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
             placeholder="rust most advanced cheat"
           />
+        </label>
+
+        <label className="grid gap-2 text-sm font-semibold text-slate-200">
+          Features
+          <input
+            value={form.features}
+            onChange={(event) => update("features", event.target.value)}
+            placeholder="Comma-separated, e.g. Anti-cheat, ESP, Aimbot"
+            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+          />
+          <span className="text-xs font-normal text-slate-500">
+            Separate features with commas. Optional — you can add later.
+          </span>
         </label>
 
         {error ? (
@@ -215,12 +260,12 @@ export function ProductCreateClient({
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? "Creating..." : "Create product"}
+            {submitting ? "Creating…" : "Create and add media"}
           </button>
           <p className="text-xs text-slate-500">
-            Drafts use status = draft and stay private until published.
+            Drafts stay private until you publish them from Produits.
           </p>
         </div>
       </form>

@@ -251,7 +251,7 @@ function adaptProductMedia(row: ProductMediaRow): UIProductMedia | null {
   };
 }
 
-function sortedProductMedia(
+export function sortedProductMedia(
   rows: ProductMediaRow[] | null | undefined,
 ): UIProductMedia[] {
   return (rows ?? [])
