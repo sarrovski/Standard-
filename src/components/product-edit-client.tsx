@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { CategoryPicker } from "@/components/category-picker";
+import { FeatureGroupsEditor } from "@/components/feature-groups-editor";
 import { ProductMediaPanel } from "@/components/product-media-panel";
 import { games, productCategories } from "@/lib/data";
+import { type FeatureGroup } from "@/lib/product-features";
 import type { UIProductMedia } from "@/lib/adapters";
 
 type EditableProduct = {
@@ -17,7 +19,7 @@ type EditableProduct = {
   category: string;
   website_url: string;
   summary: string;
-  features: string[];
+  featureGroups: FeatureGroup[];
   status: "draft" | "published" | "archived";
 };
 
@@ -53,7 +55,7 @@ export function ProductEditClient({
     category: product.category,
     website_url: product.website_url,
     summary: product.summary,
-    features: product.features.join(", "),
+    feature_groups: product.featureGroups,
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -70,7 +72,10 @@ export function ProductEditClient({
     return games;
   }, [form.game]);
 
-  const update = (key: keyof typeof form, value: string) => {
+  const update = <K extends keyof typeof form>(
+    key: K,
+    value: (typeof form)[K],
+  ) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
@@ -83,10 +88,12 @@ export function ProductEditClient({
       return;
     }
 
-    const features = form.features
-      .split(",")
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0);
+    const featureGroups = form.feature_groups
+      .map((group) => ({
+        name: group.name.trim(),
+        features: group.features.map((f) => f.trim()).filter(Boolean),
+      }))
+      .filter((group) => group.name || group.features.length > 0);
 
     setSaving(true);
     try {
@@ -100,7 +107,7 @@ export function ProductEditClient({
           category: form.category,
           website_url: form.website_url || null,
           summary: form.summary || null,
-          features,
+          features_grouped: featureGroups,
         }),
       });
       const payload = (await response.json()) as
@@ -205,18 +212,10 @@ export function ProductEditClient({
           />
         </label>
 
-        <label className="grid gap-2 text-sm font-semibold text-slate-200">
-          Features
-          <input
-            value={form.features}
-            onChange={(event) => update("features", event.target.value)}
-            placeholder="Comma-separated, e.g. Anti-cheat, ESP, Aimbot"
-            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
-          />
-          <span className="text-xs font-normal text-slate-500">
-            Separate features with commas. Leave empty to clear.
-          </span>
-        </label>
+        <FeatureGroupsEditor
+          value={form.feature_groups}
+          onChange={(next) => update("feature_groups", next)}
+        />
 
         {error ? (
           <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">

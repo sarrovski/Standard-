@@ -21,6 +21,11 @@ import type {
 } from "@/lib/data";
 import type { Database } from "@/lib/supabase/types";
 import { youtubeEmbedUrl } from "@/lib/youtube";
+import {
+  groupsFromFlatFeatures,
+  parseFeatureGroups,
+  type FeatureGroup,
+} from "@/lib/product-features";
 
 // ---------- DB row aliases ---------------------------------------------------
 
@@ -144,6 +149,11 @@ export type UIProductCard = {
   activity: { vouches: number; views: number; replies: number; lastSeen: string };
   verifiedPayments: PaymentMethod[];
   features: string[];
+  /**
+   * Grouped features (canonical since migration 008). Empty when the
+   * product has only legacy flat features.
+   */
+  featureGroups: FeatureGroup[];
   pricePoints: string[];
   delivery: string;
   accent: string;
@@ -156,6 +166,15 @@ export type UIProductCard = {
   // thumbnail. Falls back to the gradient accent when null.
   coverImageUrl: string | null;
 };
+
+function resolveFeatureGroups(
+  groupedRaw: unknown,
+  flat: string[] | null | undefined,
+): FeatureGroup[] {
+  const parsed = parseFeatureGroups(groupedRaw);
+  if (parsed.length > 0) return parsed;
+  return groupsFromFlatFeatures(flat ?? []);
+}
 
 function tagFromProviderStatus(
   status: Database["public"]["Enums"]["provider_tag_status"] | null | undefined,
@@ -188,6 +207,7 @@ export function adaptProductCard(
     activity: { vouches: 0, views: 0, replies: 0, lastSeen: "Recently active" },
     verifiedPayments: verifiedMethodNames.map(coercePaymentMethod),
     features: row.features ?? [],
+    featureGroups: resolveFeatureGroups(row.features_grouped, row.features),
     pricePoints: row.price_points ?? [],
     delivery: "Instant",
     accent: accentForSlug(row.slug),

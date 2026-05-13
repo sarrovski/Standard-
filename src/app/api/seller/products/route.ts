@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/roles";
 import { getSellerByProfileId } from "@/lib/repositories/seller";
+import {
+  flattenFeatureGroups,
+  parseFeatureGroups,
+} from "@/lib/product-features";
 import type { Database } from "@/lib/supabase/types";
 
 /**
@@ -47,6 +51,7 @@ type CreateProductBody = {
   website_url?: unknown;
   summary?: unknown;
   features?: unknown;
+  features_grouped?: unknown;
   price_points?: unknown;
 };
 
@@ -203,6 +208,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Grouped features are the canonical source of truth (since migration
+  // 008). The flat `features` column is kept in sync for legacy renderers
+  // (marketplace card chips, etc.).
+  const featureGroups = parseFeatureGroups(raw.features_grouped);
+  const flatFeatures =
+    featureGroups.length > 0
+      ? flattenFeatureGroups(featureGroups)
+      : readStringArray(raw.features);
+
   const insertRow: ProductInsert = {
     seller_id: auth.seller.id,
     slug: slugResult.slug,
@@ -212,7 +226,8 @@ export async function POST(request: NextRequest) {
     status: "draft",
     website_url: readString(raw.website_url),
     summary: readString(raw.summary),
-    features: readStringArray(raw.features),
+    features: flatFeatures,
+    features_grouped: featureGroups as never,
     price_points: readStringArray(raw.price_points),
     trust_score: null,
   };
@@ -295,7 +310,15 @@ export async function PATCH(request: NextRequest) {
   if (raw.website_url !== undefined) update.website_url = websiteUrl;
   const summary = readString(raw.summary);
   if (raw.summary !== undefined) update.summary = summary;
-  if (raw.features !== undefined) update.features = readStringArray(raw.features);
+  if (raw.features_grouped !== undefined) {
+    const groups = parseFeatureGroups(raw.features_grouped);
+    update.features_grouped = groups as never;
+    // Keep the flat features column in sync so legacy renderers stay
+    // truthful.
+    update.features = flattenFeatureGroups(groups);
+  } else if (raw.features !== undefined) {
+    update.features = readStringArray(raw.features);
+  }
   if (raw.price_points !== undefined) {
     update.price_points = readStringArray(raw.price_points);
   }

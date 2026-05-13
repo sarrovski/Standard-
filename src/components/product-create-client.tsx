@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
 import { CategoryPicker } from "@/components/category-picker";
+import { FeatureGroupsEditor } from "@/components/feature-groups-editor";
 import { addLocalProduct, slugify } from "@/lib/product-store";
 import { games, productCategories } from "@/lib/data";
+import { flattenFeatureGroups, type FeatureGroup } from "@/lib/product-features";
 import type { LocalProduct } from "@/lib/product-types";
 
 type ProductCreateError = {
@@ -47,10 +49,7 @@ function createDemoProduct(form: ProductCreateForm): LocalProduct {
     confidence: "Pending",
     verifiedPayments: [],
     paymentProfiles: [],
-    features: form.features
-      .split(",")
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0),
+    features: flattenFeatureGroups(form.feature_groups),
     pricePoints: [],
     delivery: "Pending verification",
     refundPolicy: "Pending verification",
@@ -79,7 +78,7 @@ type ProductCreateForm = {
   category: string;
   website_url: string;
   summary: string;
-  features: string;
+  feature_groups: FeatureGroup[];
 };
 
 export function ProductCreateClient({
@@ -94,12 +93,15 @@ export function ProductCreateClient({
     category: productCategories[0] ?? "",
     website_url: "",
     summary: "",
-    features: "",
+    feature_groups: [],
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const update = (key: keyof ProductCreateForm, value: string) => {
+  const update = <K extends keyof ProductCreateForm>(
+    key: K,
+    value: ProductCreateForm[K],
+  ) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
@@ -112,10 +114,12 @@ export function ProductCreateClient({
       return;
     }
 
-    const features = form.features
-      .split(",")
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0);
+    const featureGroups = form.feature_groups
+      .map((group) => ({
+        name: group.name.trim(),
+        features: group.features.map((f) => f.trim()).filter(Boolean),
+      }))
+      .filter((group) => group.name || group.features.length > 0);
 
     if (!supabaseConfigured) {
       addLocalProduct(createDemoProduct(form));
@@ -134,7 +138,7 @@ export function ProductCreateClient({
           category: form.category,
           website_url: form.website_url || null,
           summary: form.summary || null,
-          features,
+          features_grouped: featureGroups,
         }),
       });
       const payload = (await response.json()) as ProductCreateResponse;
@@ -237,18 +241,10 @@ export function ProductCreateClient({
           />
         </label>
 
-        <label className="grid gap-2 text-sm font-semibold text-slate-200">
-          Features
-          <input
-            value={form.features}
-            onChange={(event) => update("features", event.target.value)}
-            placeholder="Comma-separated, e.g. Anti-cheat, ESP, Aimbot"
-            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
-          />
-          <span className="text-xs font-normal text-slate-500">
-            Separate features with commas. Optional — you can add later.
-          </span>
-        </label>
+        <FeatureGroupsEditor
+          value={form.feature_groups}
+          onChange={(next) => update("feature_groups", next)}
+        />
 
         {error ? (
           <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">

@@ -32,6 +32,7 @@ type RenderableProduct = {
   discord?: string;
   telegram?: string;
   features: string[];
+  featureGroups?: Array<{ name: string; features: string[] }>;
   pricePoints: string[];
   verifiedPayments: PaymentMethod[];
   trustSignals?: string[];
@@ -250,15 +251,15 @@ export function ProductPageClient({
             onSelect={setActiveMediaIndex}
           />
 
-          <Panel title="Features">
-            <div className="grid gap-3 md:grid-cols-2">
-              {product.features.map((feature) => (
-                <div key={feature} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm">
-                  {feature}
-                </div>
-              ))}
-            </div>
-          </Panel>
+          <FeaturesPanel
+            groups={
+              product.featureGroups && product.featureGroups.length > 0
+                ? product.featureGroups
+                : product.features.length > 0
+                  ? [{ name: "Features", features: product.features }]
+                  : []
+            }
+          />
 
           {faq.length > 0 && (
             <Panel title="FAQ">
@@ -430,5 +431,39 @@ function Fact({ label, value }: { label: string; value: string }) {
       <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-semibold">{value}</div>
     </div>
+  );
+}
+
+function FeaturesPanel({
+  groups,
+}: {
+  groups: Array<{ name: string; features: string[] }>;
+}) {
+  if (groups.length === 0) return null;
+  return (
+    <Panel title="Features">
+      <div className="grid gap-5">
+        {groups.map((group, groupIndex) => (
+          <div key={`${group.name}-${groupIndex}`}>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
+              {group.name || "Features"}
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {group.features.map((feature, featureIndex) => (
+                <div
+                  key={`${feature}-${featureIndex}`}
+                  className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm"
+                >
+                  {feature}
+                </div>
+              ))}
+              {group.features.length === 0 && (
+                <p className="text-xs text-slate-500">No items yet.</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
   );
 }

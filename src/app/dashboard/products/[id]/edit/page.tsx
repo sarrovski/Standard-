@@ -4,6 +4,10 @@ import { ProductEditClient } from "@/components/product-edit-client";
 import { isSupabaseConfigured, requireRole } from "@/lib/roles";
 import { getSellerByProfileId } from "@/lib/repositories/seller";
 import { sortedProductMedia } from "@/lib/adapters";
+import {
+  groupsFromFlatFeatures,
+  parseFeatureGroups,
+} from "@/lib/product-features";
 import type { Database } from "@/lib/supabase/types";
 
 /**
@@ -42,7 +46,7 @@ export default async function ProductEditPage({
   let query = supabase
     .from("products")
     .select(
-      "id, slug, name, game, category, website_url, summary, features, status, product_media(*)",
+      "id, slug, name, game, category, website_url, summary, features, features_grouped, status, product_media(*)",
     )
     .eq("id", params.id);
   if (!isAdmin && seller) {
@@ -57,6 +61,7 @@ export default async function ProductEditPage({
     website_url: string | null;
     summary: string | null;
     features: string[] | null;
+    features_grouped: unknown;
     status: "draft" | "published" | "archived";
     product_media:
       | Database["public"]["Tables"]["product_media"]["Row"][]
@@ -68,6 +73,14 @@ export default async function ProductEditPage({
   }
 
   const initialMedia = sortedProductMedia(product.product_media);
+  // Prefer the canonical grouped value (migration 008 backfills it from
+  // the legacy flat array); fall back to the flat array if grouped is
+  // somehow empty.
+  const parsedGroups = parseFeatureGroups(product.features_grouped);
+  const featureGroups =
+    parsedGroups.length > 0
+      ? parsedGroups
+      : groupsFromFlatFeatures(product.features ?? []);
 
   return (
     <Shell>
@@ -82,7 +95,7 @@ export default async function ProductEditPage({
             category: product.category,
             website_url: product.website_url ?? "",
             summary: product.summary ?? "",
-            features: product.features ?? [],
+            featureGroups,
             status: product.status,
           }}
           initialMedia={initialMedia}
