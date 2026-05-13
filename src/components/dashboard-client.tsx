@@ -5,12 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Card, MiniStat } from "@/components/ui";
 import {
-  analytics,
   paymentMethods as paymentMethodsList,
   paymentVerificationQueue,
   providerTagRequests as demoProviderTagRequests,
   sellerProducts as demoSellerProducts,
-  trafficSources,
 } from "@/lib/data";
 import {
   addPaymentRequest,
@@ -36,6 +34,7 @@ import {
   type ListingStrengthInput,
 } from "@/lib/listing-strength";
 import { groupsFromFlatFeatures } from "@/lib/product-features";
+import { SellerAnalytics } from "@/components/seller-analytics";
 
 const tabs = [
   { key: "products", label: "Produits" },
@@ -207,6 +206,65 @@ export function DashboardClient({
   const supabaseSourced = initialData !== null;
   const hasProducts = (initialData?.products?.length ?? 0) > 0;
 
+  // Shared merged product list — fed to the Produits tab and the Analytics
+  // tab so they always agree on which products exist. In Supabase mode this
+  // is just the server-loaded list; in demo mode we merge data.ts demos with
+  // the localStorage-backed product builder.
+  const [demoLocalProducts, setDemoLocalProducts] = useState<LocalProduct[]>([]);
+  useEffect(() => {
+    if (supabaseSourced) return;
+    setDemoLocalProducts(getLocalProducts());
+  }, [supabaseSourced]);
+
+  const analyticsProducts = useMemo<UISellerProductCard[]>(() => {
+    if (supabaseSourced) return initialData?.products ?? [];
+    const localCards: UISellerProductCard[] = demoLocalProducts.map((product) => ({
+      id: product.slug,
+      slug: product.slug,
+      name: product.name,
+      status: product.productStatus,
+      rawStatus: "draft" as const,
+      toolStatus: "Draft / database-ready",
+      game: product.game,
+      category: product.category,
+      features: product.features,
+      views: product.activity.views,
+      outboundClicks: 0,
+      outboundCtr: "0%",
+      integrity: String(product.integrity ?? "Pending"),
+      pageTemplate: "Hero Spotlight",
+      mediaAssets: product.gallery.length,
+      website: product.websiteUrl.replace("https://", ""),
+      nextAction: "Submit for review and verify payment methods",
+      media: [],
+      summary: product.summary,
+      featureGroups: groupsFromFlatFeatures(product.features),
+      faq: product.faq.map((item) => ({ q: item.q, a: item.a })),
+      websiteUrl: product.websiteUrl,
+    }));
+    const fromSellerProducts: UISellerProductCard[] = demoSellerProducts.map(
+      (item) => {
+        const slug = item.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+        return {
+          ...item,
+          id: slug,
+          slug,
+          category: "Analytics / Overlay",
+          rawStatus: "published" as const,
+          media: [],
+          summary: "",
+          featureGroups: groupsFromFlatFeatures(item.features),
+          faq: [],
+          websiteUrl: `https://${item.website}`,
+        };
+      },
+    );
+    return [...localCards, ...fromSellerProducts];
+  }, [supabaseSourced, initialData, demoLocalProducts]);
+
   return (
     <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
       <DashboardSidebar
@@ -234,7 +292,17 @@ export function DashboardClient({
             paymentMethods={initialData?.paymentMethods ?? []}
           />
         )}
-        {tab === "analytics" && <Analytics />}
+        {tab === "analytics" && (
+          <SellerAnalytics
+            supabaseSourced={supabaseSourced}
+            products={analyticsProducts}
+            verifiedPaymentMethodCount={
+              supabaseSourced
+                ? initialData?.verifiedPaymentMethodCount
+                : undefined
+            }
+          />
+        )}
         {tab === "verification" && (
           <Verification
             supabaseSourced={supabaseSourced}
@@ -975,44 +1043,6 @@ function Payments({
 // =========================================================================
 // Analytics tab — read-only, demo data only for this batch
 // =========================================================================
-
-function Analytics() {
-  return (
-    <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-      <Card className="p-6">
-        <Badge tone="green">Analytics</Badge>
-        <h2 className="mt-4 text-2xl font-black">Performance</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Real analytics integration comes after the storage / events tracking batch.
-        </p>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          {analytics.map((item) => (
-            <MiniStat key={item.label} label={item.label} value={item.value} detail={item.change} />
-          ))}
-        </div>
-      </Card>
-      <Card className="p-6">
-        <h2 className="text-2xl font-black">Traffic sources</h2>
-        <div className="mt-6 space-y-4">
-          {trafficSources.map(([source, share]) => (
-            <div key={source}>
-              <div className="flex justify-between text-sm">
-                <span>{source}</span>
-                <span>{share}%</span>
-              </div>
-              <div className="mt-2 h-2 rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-orange-400"
-                  style={{ width: `${share}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </section>
-  );
-}
 
 // =========================================================================
 // Provider Tag tab
