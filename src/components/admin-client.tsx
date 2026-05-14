@@ -23,6 +23,12 @@ import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 import { RankingPill } from "@/components/product-ranking-ui";
 import { evaluateProductRanking } from "@/lib/product-ranking";
 import { REVIEW_RATING_MAX } from "@/lib/product-reviews";
+import {
+  CREATOR_PROFILE_STATUS_LABEL,
+  CREATOR_PROFILE_STATUSES,
+  type CreatorProfileStatus,
+  type UICreatorApplication,
+} from "@/lib/creator-marketplace";
 
 /**
  * Lightweight shape for the admin Reviews queue. All fields are
@@ -41,6 +47,21 @@ export type AdminReviewItem = {
   reviewerName: string | null;
 };
 
+/**
+ * Flattened creator profile row for the admin Creators tab. Counts are
+ * pre-computed server-side so the client doesn't touch the schema.
+ */
+export type AdminCreatorProfileItem = {
+  id: string;
+  slug: string;
+  displayName: string;
+  status: CreatorProfileStatus;
+  isFeatured: boolean;
+  portfolioCount: number;
+  requestCount: number;
+  createdAt: string;
+};
+
 type AdminClientProps = {
   initialPaymentRequests: UIAdminPaymentRequest[] | null;
   initialProviderTagRequests: UIAdminProviderTagRequest[] | null;
@@ -49,6 +70,8 @@ type AdminClientProps = {
   initialFeaturedSlots: UIAdminFeaturedSlot[] | null;
   initialReports: UIAdminProductReport[] | null;
   initialReviews: AdminReviewItem[] | null;
+  initialCreatorApplications: UICreatorApplication[] | null;
+  initialCreatorProfiles: AdminCreatorProfileItem[] | null;
   realSignals: RealRiskSignal[];
   initialTab?: string;
 };
@@ -63,6 +86,7 @@ const TABS = [
   { key: "products", label: "Products" },
   { key: "reports", label: "Reports" },
   { key: "reviews", label: "Reviews" },
+  { key: "creators", label: "Creators" },
   { key: "featured", label: "Featured slots" },
   { key: "signals", label: "Signals" },
 ] as const;
@@ -83,6 +107,8 @@ export function AdminClient({
   initialFeaturedSlots,
   initialReports,
   initialReviews,
+  initialCreatorApplications,
+  initialCreatorProfiles,
   realSignals,
   initialTab,
 }: AdminClientProps) {
@@ -122,6 +148,15 @@ export function AdminClient({
     initialReviews ?? [],
   );
   const appealedReviewCount = reviews.length;
+  const [creatorApplications, setCreatorApplications] = useState<
+    UICreatorApplication[]
+  >(initialCreatorApplications ?? []);
+  const [creatorProfiles, setCreatorProfiles] = useState<
+    AdminCreatorProfileItem[]
+  >(initialCreatorProfiles ?? []);
+  const pendingCreatorCount = creatorApplications.filter(
+    (a) => a.status === "pending",
+  ).length;
 
   // Sellers tab can request the Products tab pre-filtered by seller via a
   // URL query param (?seller=<id>). Read it and pass into ProductsTab.
@@ -173,7 +208,9 @@ export function AdminClient({
                     ? openReportsCount
                     : item.key === "reviews" && appealedReviewCount > 0
                       ? appealedReviewCount
-                      : null;
+                      : item.key === "creators" && pendingCreatorCount > 0
+                        ? pendingCreatorCount
+                        : null;
             return (
               <button
                 key={item.key}
@@ -299,6 +336,23 @@ export function AdminClient({
             supabaseSourced={supabaseSourced}
             onResolve={(id) =>
               setReviews((prev) => prev.filter((row) => row.id !== id))
+            }
+          />
+        )}
+        {tab === "creators" && (
+          <CreatorsAdminTab
+            applications={creatorApplications}
+            profiles={creatorProfiles}
+            supabaseSourced={supabaseSourced}
+            onApplicationResolved={(id, status) =>
+              setCreatorApplications((prev) =>
+                prev.map((a) => (a.id === id ? { ...a, status } : a)),
+              )
+            }
+            onProfileChange={(id, patch) =>
+              setCreatorProfiles((prev) =>
+                prev.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+              )
             }
           />
         )}
@@ -1741,5 +1795,369 @@ function ReviewsQueueTab({
         </ul>
       )}
     </Card>
+  );
+}
+
+// =========================================================================
+// Creators tab — application queue + creator profile management
+// =========================================================================
+
+function CreatorsAdminTab({
+  applications,
+  profiles,
+  supabaseSourced,
+  onApplicationResolved,
+  onProfileChange,
+}: {
+  applications: UICreatorApplication[];
+  profiles: AdminCreatorProfileItem[];
+  supabaseSourced: boolean;
+  onApplicationResolved: (
+    id: string,
+    status: UICreatorApplication["status"],
+  ) => void;
+  onProfileChange: (
+    id: string,
+    patch: Partial<AdminCreatorProfileItem>,
+  ) => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+
+  const reviewApplication = async (
+    id: string,
+    action: "approve" | "reject",
+  ) => {
+    if (!supabaseSourced) return;
+    setError(null);
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/admin/creator-applications/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          admin_notes: notes[id]?.trim() || undefined,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Couldn't update application.");
+        return;
+      }
+      onApplicationResolved(id, action === "approve" ? "approved" : "rejected");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const updateProfile = async (
+    id: string,
+    patch: { status?: CreatorProfileStatus; is_featured?: boolean },
+  ) => {
+    if (!supabaseSourced) return;
+    setError(null);
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/admin/creator-profiles/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Couldn't update creator profile.");
+        return;
+      }
+      onProfileChange(id, {
+        ...(patch.status ? { status: patch.status } : {}),
+        ...(patch.is_featured !== undefined
+          ? { isFeatured: patch.is_featured }
+          : {}),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const pending = applications.filter((a) => a.status === "pending");
+  const reviewed = applications.filter((a) => a.status !== "pending");
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <div className="rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
+      {/* Applications queue */}
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 p-5">
+          <div>
+            <h2 className="text-xl font-bold">Creator applications</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              {supabaseSourced
+                ? "Approve to create an active creator profile, or reject with a note. Pending applications are shown first."
+                : "Demo mode — connect Supabase to load applications."}
+            </p>
+          </div>
+          <Badge tone={supabaseSourced ? "green" : "amber"}>
+            {supabaseSourced
+              ? `${pending.length} pending`
+              : "Demo only"}
+          </Badge>
+        </div>
+
+        {applications.length === 0 ? (
+          <div className="p-6 text-sm text-slate-500">
+            {supabaseSourced
+              ? "No creator applications yet."
+              : "Demo mode: no applications to show."}
+          </div>
+        ) : (
+          <ul className="divide-y divide-white/10">
+            {[...pending, ...reviewed].map((app) => {
+              const isBusy = busyId === app.id;
+              const tone =
+                app.status === "approved"
+                  ? "green"
+                  : app.status === "rejected"
+                    ? "red"
+                    : "amber";
+              return (
+                <li key={app.id} className="grid gap-3 p-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={tone}>
+                      {app.status === "approved"
+                        ? "Approved"
+                        : app.status === "rejected"
+                          ? "Rejected"
+                          : "Pending"}
+                    </Badge>
+                    <span className="text-sm font-semibold text-white">
+                      {app.creatorName}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {app.email}
+                      {app.discord ? ` · ${app.discord}` : ""}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {new Date(app.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-2 text-xs text-slate-400 sm:grid-cols-2 lg:grid-cols-4">
+                    <CreatorMetaCell label="Platforms" values={app.platforms} />
+                    <CreatorMetaCell
+                      label="Content"
+                      values={app.contentTypes}
+                    />
+                    <CreatorMetaCell label="Games" values={app.gamesCovered} />
+                    <div>
+                      <div className="font-semibold uppercase tracking-wide text-slate-500">
+                        Rate / availability
+                      </div>
+                      <div className="mt-1 text-slate-300">
+                        {app.startingRate ?? "—"}
+                        {app.availability ? ` · ${app.availability}` : ""}
+                      </div>
+                    </div>
+                  </div>
+
+                  {app.bio && (
+                    <p className="text-sm leading-6 text-slate-300 whitespace-pre-line">
+                      {app.bio}
+                    </p>
+                  )}
+                  {app.portfolioLinks.length > 0 && (
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {app.portfolioLinks.map((link) => (
+                        <a
+                          key={link}
+                          href={link}
+                          target="_blank"
+                          rel="noreferrer nofollow"
+                          className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-orange-200 transition hover:bg-orange-500/10"
+                        >
+                          {link.replace(/^https?:\/\//, "").slice(0, 48)} ↗
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {app.adminNotes && app.status !== "pending" && (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-3 text-xs text-slate-400">
+                      <span className="font-semibold uppercase tracking-wide text-slate-500">
+                        Admin note:
+                      </span>{" "}
+                      {app.adminNotes}
+                    </div>
+                  )}
+
+                  {app.status === "pending" && supabaseSourced && (
+                    <div className="grid gap-2">
+                      <textarea
+                        value={notes[app.id] ?? ""}
+                        onChange={(e) =>
+                          setNotes((prev) => ({
+                            ...prev,
+                            [app.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="Admin notes (optional — shown to the applicant on rejection)"
+                        className="min-h-16 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-orange-400/50"
+                      />
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => reviewApplication(app.id, "reject")}
+                          className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:opacity-60"
+                        >
+                          Reject
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => reviewApplication(app.id, "approve")}
+                          className="rounded-lg bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
+                        >
+                          {isBusy ? "Working…" : "Approve + create profile"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+
+      {/* Creator profiles */}
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 p-5">
+          <div>
+            <h2 className="text-xl font-bold">Creator profiles</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Make active / hidden / suspended and feature creators. Hidden
+              and suspended profiles don&apos;t appear publicly.
+            </p>
+          </div>
+          <Badge tone={supabaseSourced ? "green" : "amber"}>
+            {supabaseSourced ? `${profiles.length} profiles` : "Demo only"}
+          </Badge>
+        </div>
+
+        {profiles.length === 0 ? (
+          <div className="p-6 text-sm text-slate-500">
+            No creator profiles yet — approve an application to create one.
+          </div>
+        ) : (
+          <ul className="divide-y divide-white/10">
+            {profiles.map((profile) => {
+              const isBusy = busyId === profile.id;
+              const statusTone =
+                profile.status === "active"
+                  ? "green"
+                  : profile.status === "suspended"
+                    ? "red"
+                    : "amber";
+              return (
+                <li
+                  key={profile.id}
+                  className="grid gap-3 p-5 lg:grid-cols-[1.4fr_1fr]"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={statusTone}>
+                        {CREATOR_PROFILE_STATUS_LABEL[profile.status]}
+                      </Badge>
+                      {profile.isFeatured && (
+                        <Badge tone="orange">Featured</Badge>
+                      )}
+                      <Link
+                        href={`/creators/${profile.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-semibold text-white transition hover:text-orange-200"
+                      >
+                        {profile.displayName} ↗
+                      </Link>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {profile.portfolioCount} portfolio ·{" "}
+                      {profile.requestCount} requests · since{" "}
+                      {new Date(profile.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  {supabaseSourced && (
+                    <div className="flex flex-wrap items-start justify-end gap-2">
+                      {CREATOR_PROFILE_STATUSES.filter(
+                        (s) => s !== "draft" && s !== profile.status,
+                      ).map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => updateProfile(profile.id, { status })}
+                          className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:opacity-60"
+                        >
+                          {status === "active"
+                            ? "Make active"
+                            : status === "hidden"
+                              ? "Hide"
+                              : "Suspend"}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() =>
+                          updateProfile(profile.id, {
+                            is_featured: !profile.isFeatured,
+                          })
+                        }
+                        className="rounded-lg border border-orange-400/40 bg-orange-500/15 px-2.5 py-1.5 text-xs font-semibold text-orange-100 transition hover:bg-orange-500/25 disabled:opacity-60"
+                      >
+                        {profile.isFeatured ? "Unfeature" : "Feature"}
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function CreatorMetaCell({
+  label,
+  values,
+}: {
+  label: string;
+  values: string[];
+}) {
+  return (
+    <div>
+      <div className="font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
+      <div className="mt-1 text-slate-300">
+        {values.length > 0 ? values.join(", ") : "—"}
+      </div>
+    </div>
   );
 }

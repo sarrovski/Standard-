@@ -39,12 +39,15 @@ import {
   SellerReviewsTab,
   type SellerReview,
 } from "@/components/seller-reviews-tab";
+import { SellerCreatorsTab } from "@/components/seller-creators-tab";
+import type { UICreatorRequest } from "@/lib/creator-marketplace";
 
 const tabs = [
   { key: "products", label: "Produits" },
   { key: "payments", label: "Payment Verification" },
   { key: "analytics", label: "Analytics" },
   { key: "reviews", label: "Reviews" },
+  { key: "creators", label: "Creators" },
   { key: "verification", label: "Provider Tag" },
   { key: "billing", label: "Billing" },
 ];
@@ -171,6 +174,8 @@ export type DashboardInitialData = {
   verifiedPaymentMethodCount: number;
   /** Community reviews on this seller's products, any status. */
   reviews: SellerReview[];
+  /** Creator briefs this seller has sent, any status. */
+  creatorRequests: UICreatorRequest[];
 } | null;
 
 type DashboardClientProps = {
@@ -314,6 +319,12 @@ export function DashboardClient({
           <SellerReviewsTab
             supabaseSourced={supabaseSourced}
             initialReviews={initialData?.reviews ?? []}
+          />
+        )}
+        {tab === "creators" && (
+          <SellerCreatorsTab
+            supabaseSourced={supabaseSourced}
+            requests={initialData?.creatorRequests ?? []}
           />
         )}
         {tab === "verification" && (

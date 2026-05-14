@@ -149,6 +149,11 @@ export function AccountMenu({ user }: { user: SessionUser }) {
                 Dashboard
               </MenuLink>
             )}
+            {user.isCreator && (
+              <MenuLink href="/creator-dashboard" onClick={close}>
+                Creator Dashboard
+              </MenuLink>
+            )}
             {user.role === "admin" && (
               <MenuLink href="/admin" onClick={close}>
                 Admin

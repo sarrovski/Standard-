@@ -10,6 +10,13 @@ export type SessionUser = {
   displayName: string | null;
   avatarUrl: string | null;
   role: SessionRole;
+  /**
+   * True when this profile owns a creator_profiles row (any status).
+   * Drives the "Creator Dashboard" entry in the account menu. A user can
+   * be a creator AND a seller — creator-ness is not a role, it's a
+   * linked profile (see migration 017).
+   */
+  isCreator: boolean;
 };
 
 /**
@@ -51,6 +58,11 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
       role: SessionRole;
     }>();
 
+  // Lightweight creator check — one indexed lookup on creator_profiles
+  // (profile_id). Tolerant of the table not existing yet (pre-migration
+  // 017): on error we just treat the user as a non-creator.
+  const isCreator = await profileOwnsCreator(supabase, user.id);
+
   if (!withAvatar.error && withAvatar.data) {
     return {
       id: withAvatar.data.id,
@@ -58,6 +70,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
       displayName: withAvatar.data.display_name,
       avatarUrl: withAvatar.data.avatar_url,
       role: withAvatar.data.role,
+      isCreator,
     };
   }
 
@@ -80,5 +93,23 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     displayName: legacy.display_name,
     avatarUrl: null,
     role: legacy.role,
+    isCreator,
   };
 });
+
+async function profileOwnsCreator(
+  supabase: ReturnType<typeof createClient>,
+  profileId: string,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("creator_profiles")
+      .select("id")
+      .eq("profile_id", profileId)
+      .limit(1);
+    if (error) return false;
+    return Boolean(data && data.length > 0);
+  } catch {
+    return false;
+  }
+}

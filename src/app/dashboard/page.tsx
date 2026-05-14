@@ -8,7 +8,9 @@ import {
   getVerifiedPaymentMethodCount,
 } from "@/lib/repositories/seller";
 import { getReviewsForSeller } from "@/lib/repositories/reviews";
+import { getCreatorRequestsForSeller } from "@/lib/repositories/creators";
 import type { SellerReview } from "@/components/seller-reviews-tab";
+import type { UICreatorRequest } from "@/lib/creator-marketplace";
 import {
   adaptPaymentMethodOption,
   adaptProviderTagStatus,
@@ -44,13 +46,20 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
       subscription: null,
       verifiedPaymentMethodCount: 0,
       reviews: [],
+      creatorRequests: [],
     };
   }
 
-  const [verifiedPaymentMethodCount, trafficStats, reviewsRes] = await Promise.all([
+  const [
+    verifiedPaymentMethodCount,
+    trafficStats,
+    reviewsRes,
+    creatorRequestsRes,
+  ] = await Promise.all([
     getVerifiedPaymentMethodCount(data.seller.id),
     getProductTrafficStats(data.seller.id),
     getReviewsForSeller(data.seller.id),
+    getCreatorRequestsForSeller(data.seller.id),
   ]);
 
   const reviews: SellerReview[] = reviewsRes.data.map((row) => ({
@@ -79,6 +88,7 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
     subscription: adaptSellerSubscription(data.subscription),
     verifiedPaymentMethodCount,
     reviews,
+    creatorRequests: creatorRequestsRes.data,
   };
 }
 

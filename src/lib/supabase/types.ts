@@ -16,6 +16,18 @@ type ProductReportReason =
   | "other";
 type ProductReportStatus = "open" | "reviewed" | "resolved";
 type ProductReviewStatus = "approved" | "appealed" | "rejected";
+type CreatorApplicationStatus = "pending" | "approved" | "rejected";
+type CreatorProfileStatus = "draft" | "active" | "hidden" | "suspended";
+type CreatorRequestStatus = "open" | "responded" | "closed" | "declined";
+type PortfolioItemType =
+  | "video"
+  | "image"
+  | "thumbnail"
+  | "trailer"
+  | "short_form"
+  | "review"
+  | "promo"
+  | "other";
 
 type Table<Row> = { Row: Row; Insert: Partial<Row>; Update: Partial<Row>; Relationships: [] };
 
@@ -47,6 +59,10 @@ export type Database = {
       product_events: Table<{ id: string; product_id: string; kind: "view" | "outbound_click"; visitor_hash: string | null; ts: string }>;
       product_reports: Table<{ id: string; product_id: string; seller_id: string | null; reporter_profile_id: string | null; reason: ProductReportReason; details: string | null; status: ProductReportStatus; visitor_hash: string | null; reviewed_by: string | null; reviewed_at: string | null; created_at: string; updated_at: string }>;
       product_reviews: Table<{ id: string; product_id: string; seller_id: string; reviewer_profile_id: string | null; rating: number; body: string; status: ProductReviewStatus; appeal_reason: string | null; reviewed_by: string | null; reviewed_at: string | null; created_at: string; updated_at: string }>;
+      creator_applications: Table<{ id: string; profile_id: string | null; creator_name: string; email: string; discord: string | null; starting_rate: string | null; platforms: string[]; content_types: string[]; games_covered: string[]; portfolio_links: string[]; availability: string | null; bio: string | null; status: CreatorApplicationStatus; admin_notes: string | null; reviewed_by: string | null; reviewed_at: string | null; created_at: string; updated_at: string }>;
+      creator_profiles: Table<{ id: string; profile_id: string | null; application_id: string | null; slug: string; display_name: string; headline: string | null; bio: string | null; avatar_url: string | null; banner_url: string | null; email: string | null; discord: string | null; website_url: string | null; platforms: string[]; content_types: string[]; games_covered: string[]; starting_rate: string | null; availability: string | null; status: CreatorProfileStatus; is_featured: boolean; created_at: string; updated_at: string }>;
+      creator_portfolio_items: Table<{ id: string; creator_id: string; title: string; description: string | null; item_type: PortfolioItemType; game: string | null; platform: string | null; external_url: string | null; thumbnail_url: string | null; sort_order: number; is_public: boolean; created_at: string; updated_at: string }>;
+      creator_requests: Table<{ id: string; creator_id: string; seller_id: string | null; requester_profile_id: string | null; requester_email: string | null; requester_discord: string | null; title: string; brief: string; budget: string | null; timeline: string | null; status: CreatorRequestStatus; creator_notes: string | null; created_at: string; updated_at: string }>;
     };
     Views: Record<string, never>;
     Functions: {

@@ -15,7 +15,12 @@ import {
   getVerifiedPaymentMethodCountBySeller,
 } from "@/lib/repositories/admin";
 import { getAppealedReviewsForAdmin } from "@/lib/repositories/reviews";
-import type { AdminReviewItem } from "@/components/admin-client";
+import { getCreatorAdminQueue } from "@/lib/repositories/creators";
+import type {
+  AdminReviewItem,
+  AdminCreatorProfileItem,
+} from "@/components/admin-client";
+import type { UICreatorApplication } from "@/lib/creator-marketplace";
 import {
   adaptAdminFeaturedSlot,
   adaptAdminPaymentRequest,
@@ -115,6 +120,8 @@ async function loadAdminData(): Promise<{
   featuredSlots: UIAdminFeaturedSlot[] | null;
   reports: UIAdminProductReport[] | null;
   reviews: AdminReviewItem[] | null;
+  creatorApplications: UICreatorApplication[] | null;
+  creatorProfiles: AdminCreatorProfileItem[] | null;
   realSignals: RealRiskSignal[];
 }> {
   if (!isSupabaseConfigured()) {
@@ -126,6 +133,8 @@ async function loadAdminData(): Promise<{
       featuredSlots: null,
       reports: null,
       reviews: null,
+      creatorApplications: null,
+      creatorProfiles: null,
       realSignals: [],
     };
   }
@@ -141,6 +150,7 @@ async function loadAdminData(): Promise<{
     featuredRes,
     reportsRes,
     reviewsRes,
+    creatorQueueRes,
   ] = await Promise.all([
     getPendingPaymentVerificationRequests(),
     getPendingProviderTagRequests(),
@@ -152,6 +162,7 @@ async function loadAdminData(): Promise<{
     getAllFeaturedSlotsForAdmin(),
     getProductReportsForAdmin(),
     getAppealedReviewsForAdmin(),
+    getCreatorAdminQueue(),
   ]);
 
   if (paymentRes.error) {
@@ -175,6 +186,26 @@ async function loadAdminData(): Promise<{
   if (reviewsRes.error) {
     console.error("[admin] reviews fetch failed:", reviewsRes.error.message);
   }
+  if (creatorQueueRes.error) {
+    console.error(
+      "[admin] creator queue fetch failed:",
+      creatorQueueRes.error.message,
+    );
+  }
+
+  const creatorApplications: UICreatorApplication[] =
+    creatorQueueRes.applications;
+  const creatorProfiles: AdminCreatorProfileItem[] =
+    creatorQueueRes.profiles.map((profile) => ({
+      id: profile.id,
+      slug: profile.slug,
+      displayName: profile.displayName,
+      status: profile.status,
+      isFeatured: profile.isFeatured,
+      portfolioCount: profile.portfolioCount,
+      requestCount: profile.requestCount,
+      createdAt: profile.createdAt,
+    }));
 
   const reviews: AdminReviewItem[] = reviewsRes.data.map((row) => ({
     id: row.id,
@@ -252,6 +283,8 @@ async function loadAdminData(): Promise<{
     featuredSlots,
     reports,
     reviews,
+    creatorApplications,
+    creatorProfiles,
     realSignals,
   };
 }
@@ -276,6 +309,8 @@ export default async function AdminPage({
           initialFeaturedSlots={data.featuredSlots}
           initialReports={data.reports}
           initialReviews={data.reviews}
+          initialCreatorApplications={data.creatorApplications}
+          initialCreatorProfiles={data.creatorProfiles}
           realSignals={data.realSignals}
           initialTab={searchParams?.tab}
         />
