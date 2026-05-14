@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/helpers";
 import { AccountMenu } from "@/components/account-menu";
 import type { SessionUser } from "@/lib/session";
+import { StandardLogo } from "@/components/standard-logo";
 
 export function Shell({ children }: { children: ReactNode }) {
   return (
@@ -19,12 +20,8 @@ export function Shell({ children }: { children: ReactNode }) {
 export function Nav({ user }: { user?: SessionUser | null } = {}) {
   return (
     <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-      <Link href="/" className="flex items-center gap-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white">
-          S
-        </span>
-        <span className="text-2xl font-black tracking-tight">Standard</span>
-      </Link>
+      <StandardLogo href="/" />
+
 
       <div className="hidden items-center gap-7 text-sm font-medium text-slate-300 md:flex">
         <Link href="/marketplace" className="transition hover:text-white">Marketplace</Link>
@@ -180,12 +177,7 @@ export function Footer() {
     <footer className="mx-auto mt-16 max-w-7xl border-t border-white/10 px-6 py-10">
       <div className="grid gap-8 md:grid-cols-[1.2fr_0.7fr_0.8fr_0.7fr]">
         <div>
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white">
-              S
-            </span>
-            <span className="text-2xl font-black tracking-tight">Standard</span>
-          </div>
+          <StandardLogo href={null} />
           <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">
             Standard helps buyers compare sellers, verified payment methods, product pages, and trust signals before they leave for a seller website.
           </p>
