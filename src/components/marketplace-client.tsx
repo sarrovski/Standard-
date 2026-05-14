@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GameLogo } from "@/components/game-logo";
@@ -463,7 +463,6 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                   <Badge tone={product.sellerTag === "Provider / Developer" ? "cyan" : product.sellerTag === "Verified Seller" ? "green" : "default"}>
                     {product.sellerTag}
                   </Badge>
-                  <Badge>{product.architecture}</Badge>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -471,11 +470,17 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                   <CategoryBadge category={product.category} />
                 </div>
 
-                <div className="mt-4 grid grid-cols-3 gap-3 text-center text-sm">
-                  <StatTile value={String(product.integrity ?? "-")} label="Integrity" />
-                  <StatTile value={String(product.activity.vouches)} label="Vouches" />
-                  <StatTile value={product.delivery} label="Delivery" />
-                </div>
+                {/*
+                 * Compact metadata strip. Replaces the legacy Integrity /
+                 * Vouches / Delivery tiles, which were either rarely
+                 * populated or hardcoded zeros. Each chip is derived from
+                 * a real field on the product row; the chip is hidden
+                 * when its signal is absent. The trust label itself
+                 * lives in the RankingPill at the top of the card — we
+                 * don't repeat the score here, and we deliberately don't
+                 * expose the ranking formula publicly.
+                 */}
+                <CardMetadataStrip product={product} />
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   {product.features.slice(0, 3).map((feature) => (
@@ -738,12 +743,48 @@ function CategoryBadge({ category }: { category: string }) {
   );
 }
 
-function StatTile({ value, label }: { value: string; label: string }) {
+/**
+ * Compact metadata strip rendered below the seller line on each
+ * marketplace card. Replaces the legacy Integrity / Vouches / Delivery
+ * tiles. Every chip here maps to a real field on the product row; chips
+ * are omitted entirely when their signal is absent so the card stays
+ * compact and we never display zeros that look like fake counts.
+ *
+ * Public ranking score itself stays hidden — the RankingPill at the
+ * top of the cover surfaces the qualitative trust label only.
+ */
+function CardMetadataStrip({
+  product,
+}: {
+  product: UIProductCard | DemoLikeProduct;
+}) {
+  const hasMedia = productHasMedia(product);
+  const hasFaqSignal = productHasFaq(product);
+  const verifiedCount =
+    "verifiedPayments" in product && Array.isArray(product.verifiedPayments)
+      ? product.verifiedPayments.length
+      : 0;
+
+  if (!hasMedia && !hasFaqSignal && verifiedCount === 0) return null;
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
-      <div className="truncate text-sm font-bold text-white">{value}</div>
-      <div className="mt-1 text-[11px] text-slate-500">{label}</div>
+    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-slate-300">
+      {hasMedia && <MetadataChip>Media</MetadataChip>}
+      {hasFaqSignal && <MetadataChip>FAQ</MetadataChip>}
+      {verifiedCount > 0 && (
+        <MetadataChip>
+          {verifiedCount} verified {verifiedCount === 1 ? "payment" : "payments"}
+        </MetadataChip>
+      )}
     </div>
+  );
+}
+
+function MetadataChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1">
+      {children}
+    </span>
   );
 }
 
