@@ -116,7 +116,7 @@ export function FeaturedSlotForm({
         type="button"
         onClick={start}
         disabled={busy}
-        className="rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+        className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
       >
         {busy ? "Starting checkout..." : "Reserve featured slot"}
       </button>

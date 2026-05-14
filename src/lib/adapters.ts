@@ -21,6 +21,12 @@ import type {
 } from "@/lib/data";
 import type { Database } from "@/lib/supabase/types";
 import { youtubeEmbedUrl } from "@/lib/youtube";
+import {
+  groupsFromFlatFeatures,
+  parseFeatureGroups,
+  type FeatureGroup,
+} from "@/lib/product-features";
+import { parseFaq, type FaqItem } from "@/lib/product-faq";
 
 // ---------- DB row aliases ---------------------------------------------------
 
@@ -112,10 +118,10 @@ export function coercePaymentMethod(name: string | null | undefined): PaymentMet
 // Rotates through gradients deterministically based on slug hash so the same
 // product always gets the same accent across renders.
 const ACCENTS: readonly string[] = [
-  "from-violet-500/70 to-cyan-400/40",
-  "from-fuchsia-500/70 to-orange-400/40",
+  "from-orange-500/70 to-cyan-400/40",
+  "from-orange-500/70 to-orange-400/40",
   "from-emerald-500/70 to-cyan-400/40",
-  "from-indigo-500/70 to-purple-500/40",
+  "from-orange-500/70 to-orange-500/40",
   "from-amber-500/70 to-rose-400/40",
 ];
 
@@ -130,6 +136,7 @@ function accentForSlug(slug: string): string {
 // ---------- Product card adapter (used by marketplace) ----------------------
 
 export type UIProductCard = {
+  id: string;
   slug: string;
   name: string;
   seller: string;
@@ -143,6 +150,11 @@ export type UIProductCard = {
   activity: { vouches: number; views: number; replies: number; lastSeen: string };
   verifiedPayments: PaymentMethod[];
   features: string[];
+  /**
+   * Grouped features (canonical since migration 008). Empty when the
+   * product has only legacy flat features.
+   */
+  featureGroups: FeatureGroup[];
   pricePoints: string[];
   delivery: string;
   accent: string;
@@ -154,7 +166,25 @@ export type UIProductCard = {
   // First product media image when available, otherwise the first YouTube
   // thumbnail. Falls back to the gradient accent when null.
   coverImageUrl: string | null;
+  // Used by marketplace sort ("Newest"). Always present from Supabase;
+  // synthesised from a slug hash for demo data so the sort is stable.
+  createdAt: string;
+  // Used by marketplace filter ("Has FAQ"). True when the product has at
+  // least one well-formed FAQ entry.
+  hasFaq: boolean;
+  // Used by product-ranking ("FAQ: 3+ items rule"). Count of well-formed
+  // FAQ entries (q + a both non-empty). Always >= 0.
+  faqCount: number;
 };
+
+function resolveFeatureGroups(
+  groupedRaw: unknown,
+  flat: string[] | null | undefined,
+): FeatureGroup[] {
+  const parsed = parseFeatureGroups(groupedRaw);
+  if (parsed.length > 0) return parsed;
+  return groupsFromFlatFeatures(flat ?? []);
+}
 
 function tagFromProviderStatus(
   status: Database["public"]["Enums"]["provider_tag_status"] | null | undefined,
@@ -173,6 +203,7 @@ export function adaptProductCard(
   const firstVideo = sortedMedia.find((item) => item.type === "youtube");
   const coverImageUrl = firstImage?.imageUrl ?? firstVideo?.thumbnailUrl ?? null;
   return {
+    id: row.id,
     slug: row.slug,
     name: row.name,
     seller: seller?.seller_name ?? "Unknown seller",
@@ -186,6 +217,7 @@ export function adaptProductCard(
     activity: { vouches: 0, views: 0, replies: 0, lastSeen: "Recently active" },
     verifiedPayments: verifiedMethodNames.map(coercePaymentMethod),
     features: row.features ?? [],
+    featureGroups: resolveFeatureGroups(row.features_grouped, row.features),
     pricePoints: row.price_points ?? [],
     delivery: "Instant",
     accent: accentForSlug(row.slug),
@@ -194,6 +226,9 @@ export function adaptProductCard(
     websiteLabel: row.website_url ? "Visit official website" : undefined,
     paymentProfiles: [],
     coverImageUrl,
+    createdAt: row.created_at,
+    hasFaq: parseFaq(row.faq).length > 0,
+    faqCount: parseFaq(row.faq).length,
   };
 }
 
@@ -249,7 +284,7 @@ function adaptProductMedia(row: ProductMediaRow): UIProductMedia | null {
   };
 }
 
-function sortedProductMedia(
+export function sortedProductMedia(
   rows: ProductMediaRow[] | null | undefined,
 ): UIProductMedia[] {
   return (rows ?? [])
@@ -262,6 +297,8 @@ function sortedProductMedia(
 // ---------- Full product detail adapter (used by /products/[slug]) ---------
 
 export type UIProductDetail = UIProductCard & {
+  /** Seller record id — used for own-seller checks (review submit, appeal). */
+  sellerId: string;
   refundPolicy: string;
   websiteUrl: string;
   websiteLabel: string;
@@ -312,6 +349,7 @@ export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
 
   return {
     ...card,
+    sellerId: seller?.id ?? row.seller_id,
     paymentProfiles: profiles,
     refundPolicy: "See seller's official site",
     websiteUrl: row.website_url ?? "",
@@ -320,7 +358,7 @@ export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
     telegram: seller?.telegram_handle ?? "",
     trustSignals,
     gallery,
-    faq: [],
+    faq: parseFaq(row.faq),
   };
 }
 
@@ -383,6 +421,263 @@ export function adaptAdminProviderTagRequest(
   };
 }
 
+// ---------- Admin sellers list adapter ------------------------------------
+
+export type UIAdminSeller = {
+  id: string;
+  sellerName: string;
+  profileEmail: string | null;
+  profileDisplayName: string | null;
+  role: "user" | "seller" | "admin";
+  providerTag: "Pending" | "Approved" | "Rejected" | "Not requested";
+  subscriptionStatus:
+    | "inactive"
+    | "trialing"
+    | "active"
+    | "past_due"
+    | "canceled"
+    | "unknown";
+  currentPeriodEnd: string | null;
+  productsCount: number;
+  verifiedPaymentMethodsCount: number;
+  websiteUrl: string | null;
+  createdAt: string;
+};
+
+type AdminSellerRow = Row<"sellers"> & {
+  profiles?:
+    | Pick<Row<"profiles">, "id" | "email" | "display_name" | "role">
+    | null;
+  subscriptions?: Array<
+    Pick<Row<"subscriptions">, "status" | "current_period_end">
+  > | null;
+};
+
+export function adaptAdminSeller(
+  row: AdminSellerRow,
+  productsCount: number,
+  verifiedPaymentMethodsCount: number,
+): UIAdminSeller {
+  const providerStatusMap: Record<
+    Database["public"]["Enums"]["provider_tag_status"],
+    UIAdminSeller["providerTag"]
+  > = {
+    none: "Not requested",
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+  };
+  // sellers.subscriptions can come back as an array (one-to-many) or a
+  // single object depending on the relation Supabase infers — pick the
+  // most recently created entry for the badge.
+  const sub = Array.isArray(row.subscriptions)
+    ? row.subscriptions[0]
+    : ((row.subscriptions ?? null) as
+        | {
+            status: Database["public"]["Enums"]["subscription_status"];
+            current_period_end: string | null;
+          }
+        | null);
+  return {
+    id: row.id,
+    sellerName: row.seller_name,
+    profileEmail: row.profiles?.email ?? null,
+    profileDisplayName: row.profiles?.display_name ?? null,
+    role: (row.profiles?.role ?? "seller") as UIAdminSeller["role"],
+    providerTag: providerStatusMap[row.provider_tag_status],
+    subscriptionStatus: (sub?.status ?? "unknown") as UIAdminSeller["subscriptionStatus"],
+    currentPeriodEnd: sub?.current_period_end ?? null,
+    productsCount,
+    verifiedPaymentMethodsCount,
+    websiteUrl: row.website_url,
+    createdAt: row.created_at,
+  };
+}
+
+// ---------- Admin products list adapter -----------------------------------
+
+export type UIAdminProduct = {
+  id: string;
+  slug: string;
+  name: string;
+  game: string;
+  category: string;
+  status: "draft" | "published" | "archived";
+  statusLabel: "Draft" | "Published" | "Private";
+  sellerId: string;
+  sellerName: string;
+  sellerTag: string;
+  websiteUrl: string | null;
+  pendingVerifications: number;
+  verifiedPaymentCount: number;
+  coverImageUrl: string | null;
+  createdAt: string;
+  summary: string;
+  featureGroupCount: number;
+  flatFeatureCount: number;
+  faqCount: number;
+  hasMedia: boolean;
+};
+
+type AdminProductRow = Row<"products"> & {
+  sellers?: Pick<
+    Row<"sellers">,
+    "id" | "seller_name" | "profile_id" | "provider_tag_status"
+  > | null;
+  product_media?: Row<"product_media">[] | null;
+};
+
+export function adaptAdminProduct(
+  row: AdminProductRow,
+  pendingVerifications: number,
+  verifiedPaymentCount: number,
+): UIAdminProduct {
+  const statusLabel =
+    row.status === "published"
+      ? "Published"
+      : row.status === "draft"
+        ? "Draft"
+        : "Private";
+  const sortedMedia = sortedProductMedia(row.product_media);
+  const firstImage = sortedMedia.find((item) => item.type === "image");
+  const firstVideo = sortedMedia.find((item) => item.type === "youtube");
+  const coverImageUrl =
+    firstImage?.imageUrl ?? firstVideo?.thumbnailUrl ?? null;
+  const featureGroups = parseFeatureGroups(row.features_grouped);
+  const faq = parseFaq(row.faq);
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    game: row.game,
+    category: row.category,
+    status: row.status,
+    statusLabel,
+    sellerId: row.sellers?.id ?? row.seller_id,
+    sellerName: row.sellers?.seller_name ?? "Unknown seller",
+    sellerTag: tagFromProviderStatus(row.sellers?.provider_tag_status),
+    websiteUrl: row.website_url,
+    pendingVerifications,
+    verifiedPaymentCount,
+    coverImageUrl,
+    createdAt: row.created_at,
+    summary: row.summary ?? "",
+    featureGroupCount: featureGroups.length,
+    flatFeatureCount: (row.features ?? []).length,
+    faqCount: faq.length,
+    hasMedia: sortedMedia.length > 0,
+  };
+}
+
+// ---------- Admin featured-slots adapter ----------------------------------
+
+export type UIAdminFeaturedSlot = {
+  id: string;
+  game: string;
+  category: string;
+  status: "available" | "active" | "expired" | "cancelled";
+  statusLabel: "Available" | "Active" | "Expired" | "Cancelled";
+  productSlug: string | null;
+  productName: string | null;
+  sellerName: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+};
+
+type AdminFeaturedSlotRow = Row<"featured_slots"> & {
+  products?: Pick<Row<"products">, "name" | "slug"> | null;
+  sellers?: Pick<Row<"sellers">, "seller_name"> | null;
+};
+
+export function adaptAdminFeaturedSlot(
+  row: AdminFeaturedSlotRow,
+): UIAdminFeaturedSlot {
+  const statusLabel = (row.status[0]?.toUpperCase() ?? "") + row.status.slice(1);
+  return {
+    id: row.id,
+    game: row.game,
+    category: row.category,
+    status: row.status,
+    statusLabel: statusLabel as UIAdminFeaturedSlot["statusLabel"],
+    productSlug: row.products?.slug ?? null,
+    productName: row.products?.name ?? null,
+    sellerName: row.sellers?.seller_name ?? null,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+  };
+}
+
+// ---------- Admin product reports adapter ---------------------------------
+
+export type UIAdminProductReport = {
+  id: string;
+  productId: string;
+  productName: string;
+  productSlug: string | null;
+  sellerId: string | null;
+  sellerName: string | null;
+  /** display_name only — admin views never receive reporter email. */
+  reporterDisplayName: string | null;
+  reason:
+    | "misleading_information"
+    | "payment_issue"
+    | "impersonation"
+    | "broken_official_link"
+    | "unsafe_or_prohibited"
+    | "other";
+  reasonLabel: string;
+  details: string | null;
+  status: "open" | "reviewed" | "resolved";
+  statusLabel: "Open" | "Reviewed" | "Resolved";
+  reviewedAt: string | null;
+  createdAt: string;
+};
+
+const REPORT_REASON_LABELS: Record<UIAdminProductReport["reason"], string> = {
+  misleading_information: "Misleading information",
+  payment_issue: "Payment issue",
+  impersonation: "Impersonation",
+  broken_official_link: "Broken official link",
+  unsafe_or_prohibited: "Unsafe or prohibited",
+  other: "Other",
+};
+
+const REPORT_STATUS_LABELS: Record<
+  UIAdminProductReport["status"],
+  UIAdminProductReport["statusLabel"]
+> = {
+  open: "Open",
+  reviewed: "Reviewed",
+  resolved: "Resolved",
+};
+
+type AdminProductReportRow = Row<"product_reports"> & {
+  products?: Pick<Row<"products">, "name" | "slug"> | null;
+  sellers?: Pick<Row<"sellers">, "seller_name"> | null;
+};
+
+export function adaptAdminProductReport(
+  row: AdminProductReportRow,
+  reporterDisplayName: string | null,
+): UIAdminProductReport {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    productName: row.products?.name ?? "Unknown product",
+    productSlug: row.products?.slug ?? null,
+    sellerId: row.seller_id,
+    sellerName: row.sellers?.seller_name ?? null,
+    reporterDisplayName,
+    reason: row.reason,
+    reasonLabel: REPORT_REASON_LABELS[row.reason],
+    details: row.details,
+    status: row.status,
+    statusLabel: REPORT_STATUS_LABELS[row.status],
+    reviewedAt: row.reviewed_at,
+    createdAt: row.created_at,
+  };
+}
+
 // ---------- Seller dashboard adapters --------------------------------------
 
 /**
@@ -411,10 +706,16 @@ export type UISellerProductCard = {
   rawStatus: "draft" | "published" | "archived";
   // Sorted list of attached media (Supabase mode). Empty array in demo mode.
   media: UIProductMedia[];
+  // Extra fields used by the seller-facing "Listing strength" score.
+  summary: string;
+  featureGroups: FeatureGroup[];
+  faq: FaqItem[];
+  websiteUrl: string;
 };
 
 export function adaptSellerProductCard(
   row: ProductRow & { product_media?: ProductMediaRow[] | null },
+  traffic?: { views: number; outboundClicks: number },
 ): UISellerProductCard {
   const websiteHost = row.website_url
     ? row.website_url.replace(/^https?:\/\//, "")
@@ -426,6 +727,15 @@ export function adaptSellerProductCard(
         ? "Draft"
         : "Archived";
   const media = sortedProductMedia(row.product_media);
+  const parsedGroups = parseFeatureGroups(row.features_grouped);
+  const featureGroups =
+    parsedGroups.length > 0
+      ? parsedGroups
+      : groupsFromFlatFeatures(row.features ?? []);
+  const views = traffic?.views ?? 0;
+  const outboundClicks = traffic?.outboundClicks ?? 0;
+  const outboundCtr =
+    views > 0 ? `${((outboundClicks / views) * 100).toFixed(2)}%` : "0%";
   return {
     id: row.id,
     slug: row.slug,
@@ -436,9 +746,9 @@ export function adaptSellerProductCard(
     game: row.game,
     category: row.category,
     features: row.features ?? [],
-    views: 0,
-    outboundClicks: 0,
-    outboundCtr: "0%",
+    views,
+    outboundClicks,
+    outboundCtr,
     integrity: row.trust_score != null ? String(row.trust_score) : "Pending",
     pageTemplate: "Hero Spotlight",
     mediaAssets: media.length,
@@ -450,6 +760,10 @@ export function adaptSellerProductCard(
           ? "Drive traffic from your website"
           : "Restore from Produits",
     media,
+    summary: row.summary ?? "",
+    featureGroups,
+    faq: parseFaq(row.faq),
+    websiteUrl: row.website_url ?? "",
   };
 }
 
@@ -459,7 +773,11 @@ export function adaptSellerProductCard(
  */
 export type UISellerPaymentRequest = {
   id: string;
-  productName: string;
+  /**
+   * Legacy: when a request was filed against a specific product before the
+   * dashboard moved to per-seller verification. Null on all new requests.
+   */
+  productName: string | null;
   productSlug: string | null;
   method: PaymentMethod;
   status: PaymentVerificationStatus;
@@ -474,7 +792,7 @@ export function adaptSellerPaymentRequest(
 ): UISellerPaymentRequest {
   return {
     id: row.id,
-    productName: row.products?.name ?? "—",
+    productName: row.products?.name ?? null,
     productSlug: row.products?.slug ?? null,
     method: coercePaymentMethod(row.payment_methods?.name),
     status: mapPaymentStatusToUI(row.status),

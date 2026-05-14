@@ -1,0 +1,1072 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Badge, Card } from "@/components/ui";
+import { useRecentlyViewed } from "@/lib/recently-viewed";
+import { createClient } from "@/lib/supabase/client";
+import type { SavedProductRow } from "@/lib/repositories/buyer";
+
+type AccountProfile = {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: "user" | "seller" | "admin";
+};
+
+// Settings is the default landing tab — the account menu's "Account" link
+// goes to /account and the buyer almost always wants their own settings
+// first. Saved products + Recently viewed move below it.
+const TABS = [
+  { key: "settings", label: "Settings" },
+  { key: "saved", label: "Saved products" },
+  { key: "recent", label: "Recently viewed" },
+] as const;
+
+type TabKey = (typeof TABS)[number]["key"];
+const VALID_TABS: Set<string> = new Set(TABS.map((t) => t.key));
+
+function normalizeTab(candidate: string | null | undefined): TabKey {
+  if (candidate && VALID_TABS.has(candidate)) return candidate as TabKey;
+  return "settings";
+}
+
+export function AccountDashboardClient({
+  profile,
+  savedProducts,
+  initialTab,
+  demoMode = false,
+}: {
+  profile: AccountProfile;
+  savedProducts: SavedProductRow[];
+  initialTab?: string;
+  /**
+   * Demo / no-Supabase render. Hides forms that would talk directly to
+   * Supabase Auth (password change, 2FA) so the page still demos a clean
+   * dashboard layout instead of crashing on a missing browser client.
+   */
+  demoMode?: boolean;
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<TabKey>(() => normalizeTab(initialTab));
+
+  useEffect(() => {
+    const next = normalizeTab(searchParams.get("tab"));
+    setTab((prev) => (prev === next ? prev : next));
+  }, [searchParams]);
+
+  const handleTabClick = (key: TabKey) => {
+    setTab(key);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", key);
+    router.replace(`/account?${params.toString()}`, { scroll: false });
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+      <aside className="lg:sticky lg:top-6 lg:self-start">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex items-center gap-3">
+            {profile.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profile.avatar_url}
+                alt=""
+                aria-hidden="true"
+                className="h-9 w-9 rounded-xl object-cover"
+              />
+            ) : (
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-sm font-black text-white">
+                {(profile.display_name?.[0] ?? profile.email?.[0] ?? "U").toUpperCase()}
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-white">
+                {profile.display_name ?? "Your account"}
+              </div>
+              <div className="mt-1">
+                <Badge
+                  tone={
+                    profile.role === "admin"
+                      ? "orange"
+                      : profile.role === "seller"
+                        ? "green"
+                        : "default"
+                  }
+                >
+                  {profile.role === "admin"
+                    ? "Admin"
+                    : profile.role === "seller"
+                      ? "Seller"
+                      : "Buyer"}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <nav className="mt-4 grid gap-1 rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+          {TABS.map((item) => {
+            const isActive = tab === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => handleTabClick(item.key)}
+                className={
+                  "flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold transition " +
+                  (isActive
+                    ? "bg-orange-500/15 text-white"
+                    : "text-slate-400 hover:bg-white/[0.04] hover:text-white")
+                }
+                aria-pressed={isActive}
+              >
+                <span
+                  aria-hidden="true"
+                  className={
+                    "h-4 w-1 rounded-full transition " +
+                    (isActive ? "bg-orange-400" : "bg-transparent")
+                  }
+                />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {profile.role === "user" && (
+          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-slate-400">
+            <div className="font-semibold text-white">Want to sell?</div>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Switch to a seller plan to publish your own products.
+            </p>
+            <Link
+              href="/account?view=sell"
+              className="mt-3 inline-flex w-full justify-center rounded-xl border border-orange-400/40 bg-orange-500/15 px-3 py-2 text-xs font-semibold text-orange-100 hover:bg-orange-500/25"
+            >
+              Start selling
+            </Link>
+          </div>
+        )}
+      </aside>
+
+      <div className="min-w-0">
+        {tab === "saved" && <SavedTab savedProducts={savedProducts} demoMode={demoMode} />}
+        {tab === "recent" && <RecentlyViewedTab />}
+        {tab === "settings" && <SettingsTab profile={profile} demoMode={demoMode} />}
+      </div>
+    </div>
+  );
+}
+
+function SavedTab({
+  savedProducts,
+  demoMode = false,
+}: {
+  savedProducts: SavedProductRow[];
+  demoMode?: boolean;
+}) {
+  const [items, setItems] = useState(savedProducts);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const removeItem = async (productId: string) => {
+    if (demoMode) return;
+    setBusyId(productId);
+    setError(null);
+    const previous = items;
+    setItems((rows) => rows.filter((row) => row.product.id !== productId));
+    try {
+      const response = await fetch("/api/saved-products", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: productId }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        setError(payload.error ?? "Could not remove product.");
+        setItems(previous);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+      setItems(previous);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Badge tone="orange">Saved</Badge>
+          <h2 className="mt-3 text-2xl font-black">Saved products</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Products you saved while browsing. Open one to view the full
+            page or remove it from your list.
+          </p>
+        </div>
+        <Link
+          href="/marketplace"
+          className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold transition hover:bg-white/[0.08]"
+        >
+          Browse marketplace
+        </Link>
+      </div>
+
+      {error ? (
+        <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="mt-5 divide-y divide-white/10">
+        {items.length === 0 && (
+          <div className="py-10 text-center">
+            <p className="text-sm text-slate-400">No saved products yet.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Tap the heart on any product page to add it here.
+            </p>
+          </div>
+        )}
+        {items.map((row) => {
+          const firstImage = row.product.product_media?.find(
+            (media) => media.public_url || media.thumbnail_url,
+          );
+          const thumb =
+            firstImage?.public_url ?? firstImage?.thumbnail_url ?? null;
+          return (
+            <div
+              key={row.id}
+              className="flex items-center gap-4 py-4"
+            >
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-slate-950/60">
+                {thumb ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={thumb}
+                    alt={row.product.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <svg
+                    aria-hidden="true"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-slate-500"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="m21 15-5-5L5 21" />
+                  </svg>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-white">
+                  {row.product.name}
+                </div>
+                <div className="mt-1 truncate text-xs text-slate-400">
+                  {row.product.game}
+                  {row.product.sellers
+                    ? ` · ${row.product.sellers.seller_name}`
+                    : ""}
+                </div>
+              </div>
+              <Link
+                href={`/products/${row.product.slug}`}
+                className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold transition hover:bg-white/[0.08]"
+              >
+                View
+              </Link>
+              <button
+                type="button"
+                onClick={() => removeItem(row.product.id)}
+                disabled={busyId === row.product.id}
+                className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:opacity-60"
+              >
+                {busyId === row.product.id ? "Removing…" : "Remove"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function RecentlyViewedTab() {
+  const items = useRecentlyViewed();
+  return (
+    <Card className="p-6">
+      <Badge tone="default">Recently viewed</Badge>
+      <h2 className="mt-3 text-2xl font-black">Recently viewed</h2>
+      <p className="mt-2 text-sm text-slate-400">
+        Last products you opened in this browser. Cleared when you clear
+        your browser storage.
+      </p>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        {items.length === 0 && (
+          <p className="col-span-full py-6 text-sm text-slate-500">
+            Nothing here yet — visit a product page and it will show up.
+          </p>
+        )}
+        {items.map((item) => (
+          <Link
+            key={item.slug}
+            href={`/products/${item.slug}`}
+            className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3 transition hover:bg-white/[0.06]"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-slate-950/60">
+              {item.thumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.thumbnailUrl}
+                  alt={item.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <svg
+                  aria-hidden="true"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-slate-500"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="m21 15-5-5L5 21" />
+                </svg>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-white">
+                {item.name}
+              </div>
+              <div className="mt-0.5 truncate text-xs text-slate-400">
+                {item.game}
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function SettingsTab({
+  profile,
+  demoMode = false,
+}: {
+  profile: AccountProfile;
+  demoMode?: boolean;
+}) {
+  return (
+    <div className="grid gap-6">
+      <AvatarCard profile={profile} demoMode={demoMode} />
+      <ProfileCard profile={profile} demoMode={demoMode} />
+      {demoMode ? <SecurityDemoCard /> : <ChangePasswordCard />}
+      {demoMode ? <TwoFactorDemoCard /> : <TwoFactorCard />}
+    </div>
+  );
+}
+
+function AvatarCard({
+  profile,
+  demoMode = false,
+}: {
+  profile: AccountProfile;
+  demoMode?: boolean;
+}) {
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedOk, setSavedOk] = useState(false);
+
+  const initial = (
+    profile.display_name?.[0] ?? profile.email?.[0] ?? "U"
+  ).toUpperCase();
+
+  const reset = () => {
+    setError(null);
+    setSavedOk(false);
+  };
+
+  const handleSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset so the same file can be re-selected later if needed.
+    event.target.value = "";
+    if (!file) return;
+    reset();
+
+    if (demoMode) {
+      setError("Demo mode — connect Supabase to upload an avatar.");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image must be 2MB or smaller.");
+      return;
+    }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setError("Use a PNG, JPEG, or WebP image.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch("/api/account/avatar", {
+        method: "POST",
+        body,
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        avatar_url?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.avatar_url) {
+        setError(payload.error ?? "Couldn't upload avatar.");
+        return;
+      }
+      setAvatarUrl(payload.avatar_url);
+      setSavedOk(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    reset();
+    if (demoMode) {
+      setError("Demo mode — connect Supabase to remove the avatar.");
+      return;
+    }
+    if (!window.confirm("Remove your profile picture?")) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/account/avatar", { method: "DELETE" });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Couldn't remove avatar.");
+        return;
+      }
+      setAvatarUrl(null);
+      setSavedOk(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <Badge tone="default">Profile picture</Badge>
+      <h2 className="mt-3 text-2xl font-black">Profile picture</h2>
+      <p className="mt-2 text-sm text-slate-400">
+        PNG, JPEG, or WebP. Up to 2MB. Shows up next to your account on
+        Standard.
+      </p>
+
+      <div className="mt-5 flex flex-wrap items-center gap-5">
+        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt="Current profile picture"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="bg-gradient-to-br from-orange-400 to-orange-600 bg-clip-text text-2xl font-black text-transparent">
+              {initial}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            className={`inline-flex cursor-pointer items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+          >
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={handleSelect}
+              disabled={busy}
+            />
+            {avatarUrl ? "Change picture" : "Upload picture"}
+          </label>
+          {avatarUrl && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Remove
+            </button>
+          )}
+          {busy && (
+            <span className="text-xs text-slate-400">Working…</span>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+      {savedOk && !error && (
+        <div className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+          Profile picture saved.
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function SecurityDemoCard() {
+  return (
+    <Card className="p-6">
+      <Badge tone="default">Security</Badge>
+      <h2 className="mt-3 text-2xl font-black">Change password</h2>
+      <p className="mt-2 text-sm text-slate-400">
+        Demo mode — connect Supabase Auth to enable password changes here.
+        On the live site this card has two password fields (≥8 chars, must
+        match) and an orange &ldquo;Update password&rdquo; button.
+      </p>
+    </Card>
+  );
+}
+
+function TwoFactorDemoCard() {
+  return (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Badge tone="default">Security</Badge>
+          <h2 className="mt-3 text-2xl font-black">Two-factor authentication</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Demo mode — Supabase Auth MFA is unavailable here. On the live
+            site this flow uses TOTP: Supabase returns a QR code + secret,
+            the user scans with Google Authenticator / 1Password / Authy
+            and enters the 6-digit code to verify.
+          </p>
+        </div>
+        <Badge tone="amber">2FA off</Badge>
+      </div>
+      <div className="mt-5">
+        <button
+          type="button"
+          disabled
+          className="inline-flex cursor-not-allowed rounded-xl border border-orange-400/40 bg-orange-500/15 px-5 py-3 text-sm font-semibold text-orange-100 opacity-60"
+        >
+          Enable two-factor authentication
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+function ProfileCard({
+  profile,
+  demoMode = false,
+}: {
+  profile: AccountProfile;
+  demoMode?: boolean;
+}) {
+  const [displayName, setDisplayName] = useState(profile.display_name ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedOk, setSavedOk] = useState(false);
+  const dirty = useMemo(
+    () => displayName.trim() !== (profile.display_name ?? "").trim(),
+    [displayName, profile.display_name],
+  );
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setSavedOk(false);
+    if (demoMode) {
+      setError("Demo mode — connect Supabase to save profile changes.");
+      return;
+    }
+    if (!displayName.trim()) {
+      setError("Display name is required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await fetch("/api/account", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name: displayName.trim() }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        profile?: { display_name: string | null };
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Could not save settings.");
+        return;
+      }
+      setSavedOk(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <Badge tone="default">Profile</Badge>
+      <h2 className="mt-3 text-2xl font-black">Profile</h2>
+      <p className="mt-2 text-sm text-slate-400">
+        How you appear on Standard. Email and account type are managed by
+        Supabase Auth and your subscription, so they can't be edited here.
+      </p>
+
+      <form onSubmit={submit} className="mt-6 grid gap-5">
+        <label className="grid gap-2 text-sm font-semibold text-slate-200">
+          Display name
+          <input
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+            placeholder="How you appear on Standard"
+            maxLength={64}
+            required
+          />
+        </label>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <ReadOnlyField label="Email" value={profile.email ?? "—"} />
+          <ReadOnlyField
+            label="Account type"
+            value={
+              profile.role === "admin"
+                ? "Admin"
+                : profile.role === "seller"
+                  ? "Seller"
+                  : "Buyer"
+            }
+          />
+        </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+            {error}
+          </div>
+        ) : null}
+        {savedOk ? (
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+            Profile saved.
+          </div>
+        ) : null}
+
+        <div>
+          <button
+            type="submit"
+            disabled={saving || !dirty}
+            className="inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Save profile"}
+          </button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+function ChangePasswordCard() {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedOk, setSavedOk] = useState(false);
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setSavedOk(false);
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("Passwords don't match.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+      setSavedOk(true);
+      setPassword("");
+      setConfirm("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <Badge tone="default">Security</Badge>
+      <h2 className="mt-3 text-2xl font-black">Change password</h2>
+      <p className="mt-2 text-sm text-slate-400">
+        Pick a new password of at least 8 characters. You'll stay signed
+        in on this device.
+      </p>
+
+      <form onSubmit={submit} className="mt-6 grid gap-5 md:grid-cols-2">
+        <label className="grid gap-2 text-sm font-semibold text-slate-200">
+          New password
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-semibold text-slate-200">
+          Confirm password
+          <input
+            type="password"
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
+        </label>
+
+        {error ? (
+          <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200 md:col-span-2">
+            {error}
+          </div>
+        ) : null}
+        {savedOk ? (
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100 md:col-span-2">
+            Password updated.
+          </div>
+        ) : null}
+
+        <div className="md:col-span-2">
+          <button
+            type="submit"
+            disabled={saving || password.length === 0}
+            className="inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "Updating…" : "Update password"}
+          </button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+type EnrollState =
+  | { kind: "loading" }
+  | { kind: "disabled" }
+  | { kind: "enrolling"; factorId: string; qrCode: string; secret: string }
+  | { kind: "enabled"; factorId: string };
+
+function TwoFactorCard() {
+  const supabase = useMemo(() => createClient(), []);
+  const [state, setState] = useState<EnrollState>({ kind: "loading" });
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    const { data, error: listErr } = await supabase.auth.mfa.listFactors();
+    if (listErr) {
+      setError(listErr.message);
+      setState({ kind: "disabled" });
+      return;
+    }
+    const verified = data?.totp?.find((factor) => factor.status === "verified");
+    if (verified) {
+      setState({ kind: "enabled", factorId: verified.id });
+      return;
+    }
+    setState({ kind: "disabled" });
+  }, [supabase]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const startEnroll = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      // Clean up any unverified leftover factors first so enroll doesn't
+      // 409 on the unique factor-name constraint.
+      const { data: list } = await supabase.auth.mfa.listFactors();
+      const leftover = list?.totp?.find(
+        (factor) => factor.status !== "verified",
+      );
+      if (leftover) {
+        await supabase.auth.mfa.unenroll({ factorId: leftover.id });
+      }
+      const { data, error: enrollErr } = await supabase.auth.mfa.enroll({
+        factorType: "totp",
+      });
+      if (enrollErr || !data) {
+        setError(enrollErr?.message ?? "Could not start 2FA enrollment.");
+        return;
+      }
+      setState({
+        kind: "enrolling",
+        factorId: data.id,
+        qrCode: data.totp.qr_code,
+        secret: data.totp.secret,
+      });
+      setCode("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifyEnroll = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (state.kind !== "enrolling") return;
+    setError(null);
+    setBusy(true);
+    try {
+      const challenge = await supabase.auth.mfa.challenge({
+        factorId: state.factorId,
+      });
+      if (challenge.error || !challenge.data) {
+        setError(challenge.error?.message ?? "Could not start challenge.");
+        return;
+      }
+      const { error: verifyErr } = await supabase.auth.mfa.verify({
+        factorId: state.factorId,
+        challengeId: challenge.data.id,
+        code: code.trim(),
+      });
+      if (verifyErr) {
+        setError(verifyErr.message);
+        return;
+      }
+      setState({ kind: "enabled", factorId: state.factorId });
+      setNotice("Two-factor authentication enabled.");
+      setCode("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelEnroll = async () => {
+    if (state.kind !== "enrolling") return;
+    setBusy(true);
+    try {
+      await supabase.auth.mfa.unenroll({ factorId: state.factorId });
+      setState({ kind: "disabled" });
+      setCode("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    if (state.kind !== "enabled") return;
+    const confirmed = window.confirm(
+      "Disable two-factor authentication? You'll go back to password-only sign in.",
+    );
+    if (!confirmed) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const { error: unenrollErr } = await supabase.auth.mfa.unenroll({
+        factorId: state.factorId,
+      });
+      if (unenrollErr) {
+        setError(unenrollErr.message);
+        return;
+      }
+      setState({ kind: "disabled" });
+      setNotice("Two-factor authentication disabled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Badge tone="default">Security</Badge>
+          <h2 className="mt-3 text-2xl font-black">Two-factor authentication</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Add an authenticator app code on top of your password. Standard
+            uses TOTP — works with Google Authenticator, 1Password, Authy, etc.
+          </p>
+        </div>
+        {state.kind === "enabled" && (
+          <Badge tone="green">2FA enabled</Badge>
+        )}
+        {state.kind === "disabled" && (
+          <Badge tone="amber">2FA off</Badge>
+        )}
+      </div>
+
+      <div className="mt-5">
+        {state.kind === "loading" && (
+          <p className="text-sm text-slate-500">Loading 2FA status…</p>
+        )}
+
+        {state.kind === "disabled" && (
+          <button
+            type="button"
+            onClick={startEnroll}
+            disabled={busy}
+            className="inline-flex rounded-xl border border-orange-400/40 bg-orange-500/15 px-5 py-3 text-sm font-semibold text-orange-100 transition hover:bg-orange-500/25 disabled:opacity-60"
+          >
+            {busy ? "Starting…" : "Enable two-factor authentication"}
+          </button>
+        )}
+
+        {state.kind === "enrolling" && (
+          <div className="grid gap-5 md:grid-cols-[auto_1fr] md:items-start">
+            <div className="flex h-44 w-44 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={state.qrCode}
+                alt="Scan with your authenticator app"
+                className="h-full w-full"
+              />
+            </div>
+            <div>
+              <p className="text-sm text-slate-300">
+                Scan this QR with your authenticator app, then enter the
+                6-digit code it shows.
+              </p>
+              <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-slate-400">
+                Can't scan? Enter this secret manually:
+                <code className="mt-1 block font-mono text-xs text-slate-200">
+                  {state.secret}
+                </code>
+              </div>
+              <form onSubmit={verifyEnroll} className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <input
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  value={code}
+                  onChange={(event) =>
+                    setCode(event.target.value.replace(/\D/g, ""))
+                  }
+                  placeholder="123456"
+                  className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-mono tracking-[0.4em] text-white outline-none transition focus:border-orange-300/50"
+                  required
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={busy || code.length !== 6}
+                    className="inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {busy ? "Verifying…" : "Verify"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEnroll}
+                    disabled={busy}
+                    className="inline-flex rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.08] disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {state.kind === "enabled" && (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-slate-300">
+              Codes from your authenticator app are required at sign-in.
+            </p>
+            <button
+              type="button"
+              onClick={disable}
+              disabled={busy}
+              className="inline-flex rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:opacity-60"
+            >
+              {busy ? "Disabling…" : "Disable 2FA"}
+            </button>
+          </div>
+        )}
+
+        {error ? (
+          <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+            {error}
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+            {notice}
+          </div>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-2">
+      <span className="text-sm font-semibold text-slate-200">{label}</span>
+      <div className="truncate rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-400">
+        {value}
+      </div>
+    </div>
+  );
+}

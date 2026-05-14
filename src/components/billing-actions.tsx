@@ -29,7 +29,7 @@ export function BillingActions({ hasStripeCustomer }: { hasStripeCustomer: boole
       <button
         onClick={openPortal}
         disabled={busy || !hasStripeCustomer}
-        className="rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+        className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
         title={!hasStripeCustomer ? "No Stripe customer linked yet — subscribe first" : undefined}
       >
         {busy ? "Opening…" : "Open billing portal"}

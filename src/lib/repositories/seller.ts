@@ -44,6 +44,80 @@ export async function getSellerProducts(sellerId: string) {
     .order("created_at", { ascending: false });
 }
 
+/**
+ * Per-product traffic totals (views + outbound clicks) for a seller.
+ *
+ * Backed by the public.get_product_traffic_stats(uuid) RPC defined in
+ * migration 010_product_events.sql. Returns an empty Map on error so
+ * callers can fall back to "no traffic yet" without crashing.
+ */
+export type ProductTrafficStats = {
+  views: number;
+  outboundClicks: number;
+};
+
+export async function getProductTrafficStats(
+  sellerId: string,
+): Promise<Map<string, ProductTrafficStats>> {
+  // EXECUTE on public.get_product_traffic_stats is revoked from anon /
+  // authenticated by migration 012_security_hardening_round_2.sql to
+  // satisfy the Supabase advisor. The function therefore can only be
+  // called by service_role, so we invoke it through the admin client.
+  // This call site is already server-only and the caller is responsible
+  // for passing the correct sellerId (the dashboard page derives it from
+  // the authenticated user before calling). The admin client is safe to
+  // use here for that reason.
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.rpc(
+    "get_product_traffic_stats" as never,
+    { p_seller_id: sellerId } as never,
+  );
+  if (error) {
+    console.error("[seller-repo] traffic stats RPC failed:", error.message);
+    return new Map();
+  }
+  const rows = (data ?? []) as Array<{
+    product_id: string;
+    views: number | string | null;
+    outbound_clicks: number | string | null;
+  }>;
+  const stats = new Map<string, ProductTrafficStats>();
+  for (const row of rows) {
+    stats.set(row.product_id, {
+      views: Number(row.views ?? 0) || 0,
+      outboundClicks: Number(row.outbound_clicks ?? 0) || 0,
+    });
+  }
+  return stats;
+}
+
+/**
+ * Count the verified seller_payment_methods rows for a seller. Used by the
+ * seller-facing "Listing strength" score so we can credit the seller once
+ * they've gone through payment-method verification at least once.
+ *
+ * Returns 0 on any error so callers can fall back gracefully.
+ */
+export async function getVerifiedPaymentMethodCount(
+  sellerId: string,
+): Promise<number> {
+  const supabase = createClient();
+  const { count, error } = await supabase
+    .from("seller_payment_methods")
+    .select("*", { count: "exact", head: true })
+    .eq("seller_id", sellerId)
+    .eq("status", "verified");
+  if (error) {
+    console.error(
+      "[seller-repo] verified payment method count failed:",
+      error.message,
+    );
+    return 0;
+  }
+  return count ?? 0;
+}
+
 export async function getSellerPaymentVerificationRequests(sellerId: string) {
   const supabase = createClient();
   return supabase

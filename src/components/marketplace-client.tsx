@@ -1,17 +1,150 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GameLogo } from "@/components/game-logo";
 import { Badge, Card } from "@/components/ui";
-import { featuredSlots as defaultSlots, games, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
+import { featuredSlots as defaultSlots, games, productCategories, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
 import { cn } from "@/lib/helpers";
 import { getPaymentVisualIdentity } from "@/lib/payment-identities";
 import { getCategoryVisualIdentity, getGameVisualIdentity } from "@/lib/visual-identities";
+import { evaluateProductRanking, isNewListing, type RankingInput } from "@/lib/product-ranking";
+import { RankingPill } from "@/components/product-ranking-ui";
 
-// Supabase marketplace results are already constrained to published products.
-// Pending review and draft products are never shown publicly.
-const publicProductStatuses = ["All", "Published"] as const;
+function readOrAll(
+  value: string | null,
+  allowed: ReadonlyArray<string>,
+): string {
+  if (value && allowed.includes(value)) return value;
+  return "All";
+}
+
+const SORT_OPTIONS = [
+  { value: "recommended", label: "Recommended" },
+  { value: "newest", label: "Newest" },
+  { value: "most_trusted", label: "Most trusted" },
+  { value: "most_viewed", label: "Most viewed" },
+] as const;
+type SortKey = (typeof SORT_OPTIONS)[number]["value"];
+const DEFAULT_SORT: SortKey = "recommended";
+const SORT_VALUES = new Set<SortKey>(SORT_OPTIONS.map((option) => option.value));
+
+function readSort(value: string | null): SortKey {
+  return value && SORT_VALUES.has(value as SortKey)
+    ? (value as SortKey)
+    : DEFAULT_SORT;
+}
+
+/**
+ * Stable hash → ISO date in 2025, so demo products have distinct createdAt
+ * values for the Newest sort without us hand-encoding them in data.ts.
+ */
+function synthCreatedAt(slug: string): string {
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
+  }
+  const base = Date.parse("2025-01-01T00:00:00Z");
+  const offsetMs = (hash % 365) * 86_400_000;
+  return new Date(base + offsetMs).toISOString();
+}
+
+type DemoLikeProduct = {
+  slug: string;
+  faq?: ReadonlyArray<{ q: string; a: string }>;
+  gallery?: ReadonlyArray<{ title: string; accent: string }>;
+};
+
+function productHasMedia(product: UIProductCard | DemoLikeProduct): boolean {
+  if ("coverImageUrl" in product && product.coverImageUrl) return true;
+  // Demo products carry a `gallery` array of placeholder entries with at
+  // least a title; treat any non-empty gallery as "has media" so the
+  // filter is useful in demo mode too.
+  if ("gallery" in product && Array.isArray(product.gallery)) {
+    return product.gallery.length > 0;
+  }
+  return false;
+}
+
+function productHasFaq(product: UIProductCard | DemoLikeProduct): boolean {
+  if ("hasFaq" in product) return Boolean(product.hasFaq);
+  if ("faq" in product && Array.isArray(product.faq)) {
+    return product.faq.some(
+      (item) => item.q.trim() !== "" && item.a.trim() !== "",
+    );
+  }
+  return false;
+}
+
+function productCreatedAt(product: UIProductCard | DemoLikeProduct): string {
+  if ("createdAt" in product && typeof product.createdAt === "string") {
+    return product.createdAt;
+  }
+  return synthCreatedAt(product.slug);
+}
+
+function productTrustScore(product: { integrity?: number | null }): number {
+  return typeof product.integrity === "number" ? product.integrity : -1;
+}
+
+function productViews(product: { activity?: { views?: number } }): number {
+  return product.activity?.views ?? 0;
+}
+
+type RankableProduct = UIProductCard | (DemoLikeProduct & {
+  productStatus?: string;
+  sellerTag?: string;
+  verifiedPayments?: ReadonlyArray<unknown>;
+  summary?: string;
+  features?: ReadonlyArray<string>;
+  featureGroups?: ReadonlyArray<{ features: ReadonlyArray<string> }>;
+  faqCount?: number;
+});
+
+function productToRankingInput(product: RankableProduct): RankingInput {
+  const productStatus =
+    "productStatus" in product && typeof product.productStatus === "string"
+      ? product.productStatus
+      : "";
+  const summary =
+    "summary" in product && typeof product.summary === "string"
+      ? product.summary
+      : "";
+  const features = Array.isArray((product as { features?: unknown }).features)
+    ? ((product as { features: ReadonlyArray<string> }).features)
+    : [];
+  const groups = Array.isArray((product as { featureGroups?: unknown }).featureGroups)
+    ? ((product as { featureGroups: ReadonlyArray<{ features: ReadonlyArray<string> }> }).featureGroups)
+    : [];
+  const verifiedPaymentCount = Array.isArray(
+    (product as { verifiedPayments?: unknown }).verifiedPayments,
+  )
+    ? ((product as { verifiedPayments: ReadonlyArray<unknown> }).verifiedPayments).length
+    : 0;
+  const faqCountRaw =
+    "faqCount" in product && typeof product.faqCount === "number"
+      ? product.faqCount
+      : "faq" in product && Array.isArray((product as { faq?: unknown }).faq)
+        ? ((product as { faq: ReadonlyArray<{ q?: string; a?: string }> }).faq).filter(
+            (item) => (item.q ?? "").trim() !== "" && (item.a ?? "").trim() !== "",
+          ).length
+        : 0;
+  return {
+    published: productStatus === "Published" || productStatus === "published",
+    sellerTag: (product as { sellerTag?: string }).sellerTag ?? "",
+    verifiedPaymentCount,
+    hasMedia: productHasMedia(product),
+    summary,
+    featureGroupCount: groups.length,
+    flatFeatureCount: features.length,
+    faqCount: faqCountRaw,
+  };
+}
+
+// Supabase marketplace results are already constrained to published products
+// at the server, so there's no need for a UI "Status" filter — every row
+// here is already public.
 const publicVisibleStatuses = new Set<string>(["Published"]);
 
 import { getFeaturedSlots, getLocalProducts } from "@/lib/product-store";
@@ -30,13 +163,76 @@ type MarketplaceClientProps = {
 
 export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
   const supabaseSourced = initialProducts !== null;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [localProducts, setLocalProducts] = useState<LocalProduct[]>([]);
   const [slots, setSlots] = useState<LocalFeaturedSlot[]>([]);
-  const [selectedGame, setSelectedGame] = useState("All");
-  const [selectedPayment, setSelectedPayment] = useState("All");
-  const [selectedTag, setSelectedTag] = useState("All");
-  const [selectedStatus, setSelectedStatus] = useState("All");
+  // Seed filters from URL params on first render so the landing-page CTAs
+  // (/marketplace?game=Valorant&category=Internal) actually pre-filter.
+  const [selectedGame, setSelectedGame] = useState(() =>
+    readOrAll(searchParams.get("game"), games),
+  );
+  const [selectedCategory, setSelectedCategory] = useState(() =>
+    readOrAll(searchParams.get("category"), productCategories),
+  );
+  const [selectedPayment, setSelectedPayment] = useState(() =>
+    readOrAll(searchParams.get("payment"), paymentMethods),
+  );
+  const [selectedTag, setSelectedTag] = useState(() =>
+    readOrAll(searchParams.get("tag"), sellerTags),
+  );
+  const [hasMedia, setHasMedia] = useState(
+    () => searchParams.get("has_media") === "1",
+  );
+  const [hasFaq, setHasFaq] = useState(
+    () => searchParams.get("has_faq") === "1",
+  );
+  const [sortKey, setSortKey] = useState<SortKey>(() =>
+    readSort(searchParams.get("sort")),
+  );
+
+  const clearAllFilters = () => {
+    setSelectedGame("All");
+    setSelectedCategory("All");
+    setSelectedPayment("All");
+    setSelectedTag("All");
+    setHasMedia(false);
+    setHasFaq(false);
+    setSortKey(DEFAULT_SORT);
+  };
+
+  // Write filter changes back to the URL so the resulting state is
+  // shareable / bookmarkable. Skip the very first sync since state was
+  // seeded from the URL we already have.
+  const firstSync = useRef(true);
+  useEffect(() => {
+    if (firstSync.current) {
+      firstSync.current = false;
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    const apply = (key: string, value: string) => {
+      if (value === "All") params.delete(key);
+      else params.set(key, value);
+    };
+    apply("game", selectedGame);
+    apply("category", selectedCategory);
+    apply("payment", selectedPayment);
+    apply("tag", selectedTag);
+    if (hasMedia) params.set("has_media", "1");
+    else params.delete("has_media");
+    if (hasFaq) params.set("has_faq", "1");
+    else params.delete("has_faq");
+    if (sortKey !== DEFAULT_SORT) params.set("sort", sortKey);
+    else params.delete("sort");
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next === current) return;
+    router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGame, selectedCategory, selectedPayment, selectedTag, hasMedia, hasFaq, sortKey]);
 
   useEffect(() => {
     // Only hydrate the demo store when we're not already showing real data.
@@ -55,32 +251,85 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
 
   const filtered = allProducts.filter((product) => {
     const matchesGame = selectedGame === "All" || product.game === selectedGame;
+    const matchesCategory =
+      selectedCategory === "All" || product.category === selectedCategory;
     const matchesPayment = selectedPayment === "All" || product.verifiedPayments.includes(selectedPayment as never);
     const matchesTag = selectedTag === "All" || product.sellerTag === selectedTag;
-    const matchesStatus = selectedStatus === "All" || product.productStatus === selectedStatus;
-    return matchesGame && matchesPayment && matchesTag && matchesStatus;
+    const matchesMedia = !hasMedia || productHasMedia(product);
+    const matchesFaq = !hasFaq || productHasFaq(product);
+    return matchesGame && matchesCategory && matchesPayment && matchesTag && matchesMedia && matchesFaq;
   });
 
+  // Memoise per-product ranking so the sort + pill share one computation.
+  const rankings = new Map<string, ReturnType<typeof evaluateProductRanking>>();
+  for (const product of filtered) {
+    rankings.set(product.slug, evaluateProductRanking(productToRankingInput(product)));
+  }
+
+  const sortFn = (a: typeof filtered[number], b: typeof filtered[number]) => {
+    switch (sortKey) {
+      case "newest": {
+        const aDate = productCreatedAt(a);
+        const bDate = productCreatedAt(b);
+        return bDate.localeCompare(aDate);
+      }
+      case "most_viewed":
+        return productViews(b) - productViews(a);
+      case "most_trusted":
+        return productTrustScore(b) - productTrustScore(a);
+      case "recommended":
+      default: {
+        const aScore = rankings.get(a.slug)?.score ?? 0;
+        const bScore = rankings.get(b.slug)?.score ?? 0;
+        if (aScore !== bScore) return bScore - aScore;
+        // Tiebreak: newer products surface higher within the same level.
+        return productCreatedAt(b).localeCompare(productCreatedAt(a));
+      }
+    }
+  };
+  const sorted = [...filtered].sort(sortFn);
+
   const activeFeaturedSlots = slots.filter((slot) => slot.status === "Occupied");
-  const featuredProducts = filtered.filter((product) =>
+  const featuredProducts = sorted.filter((product) =>
     activeFeaturedSlots.some(
       (slot) =>
         (slot.productSlug && slot.productSlug === product.slug) ||
         (!slot.productSlug && slot.category === product.game && slot.product === product.name),
     ),
   );
-  const regularProducts = filtered.filter((product) => !featuredProducts.includes(product));
+  const regularProducts = sorted.filter((product) => !featuredProducts.includes(product));
   const orderedProducts = [...featuredProducts, ...regularProducts];
+
+  const filtersActive =
+    selectedGame !== "All" ||
+    selectedCategory !== "All" ||
+    selectedPayment !== "All" ||
+    selectedTag !== "All" ||
+    hasMedia ||
+    hasFaq;
+  const sortActive = sortKey !== DEFAULT_SORT;
 
   return (
     <>
       <Card className="mt-8 p-5">
-        <div className="grid gap-6 xl:grid-cols-4">
+        <div className="grid gap-6 xl:grid-cols-2">
           <FilterBlock title="Games">
             {(["All", ...games] as const).map((game) => (
               <GameFilterButton key={game} game={game} active={selectedGame === game} onClick={() => setSelectedGame(game)} />
             ))}
           </FilterBlock>
+          <FilterBlock title="Category">
+            {(["All", ...productCategories] as const).map((category) => (
+              <CategoryFilterButton
+                key={category}
+                category={category}
+                active={selectedCategory === category}
+                onClick={() => setSelectedCategory(category)}
+              />
+            ))}
+          </FilterBlock>
+        </div>
+        <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
           <FilterBlock title="Payments">
             {(["All", ...paymentMethods] as const).map((payment) => (
               <PaymentFilterButton
@@ -98,13 +347,44 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
               </FilterButton>
             ))}
           </FilterBlock>
-          <FilterBlock title="Status">
-            {publicProductStatuses.map((status) => (
-              <FilterButton key={status} active={selectedStatus === status} onClick={() => setSelectedStatus(status)}>
-                {status}
-              </FilterButton>
-            ))}
-          </FilterBlock>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+              <span className="text-slate-300">Sort by</span>
+              <select
+                value={sortKey}
+                onChange={(event) => setSortKey(readSort(event.target.value))}
+                className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-1.5 text-sm text-white outline-none focus:border-orange-400/50"
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FilterToggle
+              label="Has media"
+              active={hasMedia}
+              onChange={() => setHasMedia((v) => !v)}
+            />
+            <FilterToggle
+              label="Has FAQ"
+              active={hasFaq}
+              onChange={() => setHasFaq((v) => !v)}
+            />
+          </div>
+          {(filtersActive || sortActive) && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-100"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       </Card>
 
@@ -114,12 +394,20 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
           <p className="mt-1 text-sm text-slate-500">{orderedProducts.length} products found</p>
         </div>
         <div className="hidden gap-2 md:flex">
-          <Badge tone="purple">Featured first</Badge>
+          <Badge tone="orange">Featured first</Badge>
           <Badge tone="green">Verified</Badge>
-          <Badge tone="cyan">Provider / Developer</Badge>
+          <Badge tone="default">Provider / Developer</Badge>
         </div>
       </div>
 
+      {orderedProducts.length === 0 ? (
+        <MarketplaceEmptyState
+          filtersActive={filtersActive}
+          selectedGame={selectedGame}
+          selectedCategory={selectedCategory}
+          onClear={clearAllFilters}
+        />
+      ) : (
       <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {orderedProducts.map((product, index) => {
           const isFeatured = featuredProducts.includes(product);
@@ -149,8 +437,18 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                       <GameMark game={product.game} />
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
-                      <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
-                      {isFeatured && <Badge tone="purple">Featured</Badge>}
+                      {isFeatured && <Badge tone="orange">Featured</Badge>}
+                      {(() => {
+                        const ranking = rankings.get(product.slug);
+                        if (!ranking) return null;
+                        const isNew = isNewListing(productCreatedAt(product));
+                        // Skip the "Low trust" pill on cards (we don't want
+                        // to publicly badge a low-trust listing); only show
+                        // the warmer "New listing" override for fresh
+                        // low-level products. Medium + high always render.
+                        if (ranking.level === "low" && !isNew) return null;
+                        return <RankingPill result={ranking} isNew={isNew} />;
+                      })()}
                     </div>
                   </div>
                   <div className="mt-7">
@@ -165,7 +463,6 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                   <Badge tone={product.sellerTag === "Provider / Developer" ? "cyan" : product.sellerTag === "Verified Seller" ? "green" : "default"}>
                     {product.sellerTag}
                   </Badge>
-                  <Badge>{product.architecture}</Badge>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -173,11 +470,17 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                   <CategoryBadge category={product.category} />
                 </div>
 
-                <div className="mt-4 grid grid-cols-3 gap-3 text-center text-sm">
-                  <StatTile value={String(product.integrity ?? "-")} label="Integrity" />
-                  <StatTile value={String(product.activity.vouches)} label="Vouches" />
-                  <StatTile value={product.delivery} label="Delivery" />
-                </div>
+                {/*
+                 * Compact metadata strip. Replaces the legacy Integrity /
+                 * Vouches / Delivery tiles, which were either rarely
+                 * populated or hardcoded zeros. Each chip is derived from
+                 * a real field on the product row; the chip is hidden
+                 * when its signal is absent. The trust label itself
+                 * lives in the RankingPill at the top of the card — we
+                 * don't repeat the score here, and we deliberately don't
+                 * expose the ranking formula publicly.
+                 */}
+                <CardMetadataStrip product={product} />
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   {product.features.slice(0, 3).map((feature) => (
@@ -202,7 +505,7 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                   </div>
                   <Link
                     href={`/products/${product.slug}`}
-                    className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold"
+                    className="inline-flex items-center justify-center rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold"
                   >
                     View product
                   </Link>
@@ -212,7 +515,98 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
           );
         })}
       </div>
+      )}
     </>
+  );
+}
+
+function MarketplaceEmptyState({
+  filtersActive,
+  selectedGame,
+  selectedCategory,
+  onClear,
+}: {
+  filtersActive: boolean;
+  selectedGame: string;
+  selectedCategory: string;
+  onClear: () => void;
+}) {
+  const game = selectedGame !== "All" ? selectedGame : null;
+  const category = selectedCategory !== "All" ? selectedCategory : null;
+  const headline = filtersActive
+    ? game && category
+      ? `No products in ${game} · ${category} yet`
+      : game
+        ? `No products in ${game} yet`
+        : category
+          ? `No products in the ${category} category yet`
+          : "No products match your filters"
+    : "No products yet";
+  return (
+    <div className="mt-6 rounded-3xl border border-dashed border-white/15 bg-slate-950/40 p-10 text-center">
+      <h3 className="text-2xl font-black tracking-tight">{headline}</h3>
+      <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-400">
+        {filtersActive
+          ? "Try clearing one or two filters, or browse the full marketplace."
+          : "Once sellers publish products, they'll appear here."}
+      </p>
+      {filtersActive && (
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_8px_24px_-12px_rgba(249,115,22,0.65)] transition hover:bg-orange-400"
+          >
+            Clear filters
+          </button>
+          <Link
+            href="/marketplace"
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+          >
+            View all products
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterToggle({
+  label,
+  active,
+  onChange,
+}: {
+  label: string;
+  active: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition",
+        active
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
+          : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border",
+          active
+            ? "border-orange-300/70 bg-orange-400/30"
+            : "border-white/20 bg-transparent",
+        )}
+      >
+        {active && (
+          <span aria-hidden="true" className="block h-1.5 w-1.5 rounded-full bg-orange-200" />
+        )}
+      </span>
+      {label}
+    </button>
   );
 }
 
@@ -241,7 +635,7 @@ function GameFilterButton({ game, active, onClick }: { game: string; active: boo
       className={cn(
         "group inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition",
         active
-          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-purple-950/30"
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >
@@ -265,7 +659,7 @@ function FilterButton({ active, onClick, children }: { active: boolean; onClick:
       className={cn(
         "rounded-full border px-3 py-1.5 text-sm transition",
         active
-          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-purple-950/30"
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >
@@ -291,7 +685,7 @@ function PaymentFilterButton({ payment, active, onClick }: { payment: string; ac
       className={cn(
         "inline-flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-sm transition",
         active
-          ? "border-white/30 bg-white/[0.09] text-white shadow-lg shadow-purple-950/30"
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
           : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
       )}
     >
@@ -349,11 +743,145 @@ function CategoryBadge({ category }: { category: string }) {
   );
 }
 
-function StatTile({ value, label }: { value: string; label: string }) {
+/**
+ * Compact metadata strip rendered below the seller line on each
+ * marketplace card. Replaces the legacy Integrity / Vouches / Delivery
+ * tiles. Every chip here maps to a real field on the product row; chips
+ * are omitted entirely when their signal is absent so the card stays
+ * compact and we never display zeros that look like fake counts.
+ *
+ * Public ranking score itself stays hidden — the RankingPill at the
+ * top of the cover surfaces the qualitative trust label only.
+ */
+function CardMetadataStrip({
+  product,
+}: {
+  product: UIProductCard | DemoLikeProduct;
+}) {
+  const hasMedia = productHasMedia(product);
+  const hasFaqSignal = productHasFaq(product);
+  const verifiedCount =
+    "verifiedPayments" in product && Array.isArray(product.verifiedPayments)
+      ? product.verifiedPayments.length
+      : 0;
+
+  if (!hasMedia && !hasFaqSignal && verifiedCount === 0) return null;
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
-      <div className="truncate text-sm font-bold text-white">{value}</div>
-      <div className="mt-1 text-[11px] text-slate-500">{label}</div>
+    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-slate-300">
+      {hasMedia && <MetadataChip>Media</MetadataChip>}
+      {hasFaqSignal && <MetadataChip>FAQ</MetadataChip>}
+      {verifiedCount > 0 && (
+        <MetadataChip>
+          {verifiedCount} verified {verifiedCount === 1 ? "payment" : "payments"}
+        </MetadataChip>
+      )}
     </div>
   );
+}
+
+function MetadataChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1">
+      {children}
+    </span>
+  );
+}
+
+function CategoryFilterButton({
+  category,
+  active,
+  onClick,
+}: {
+  category: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition",
+        active
+          ? "border-orange-400/60 bg-orange-500/15 text-white shadow-[0_8px_24px_-16px_rgba(249,115,22,0.7)]"
+          : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white",
+      )}
+    >
+      <CategoryIcon name={category} />
+      <span>{category}</span>
+    </button>
+  );
+}
+
+function CategoryIcon({ name }: { name: string }) {
+  const stroke = {
+    fill: "none" as const,
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  switch (name) {
+    case "All":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      );
+    case "Internal":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+          <rect x="9.5" y="9.5" width="5" height="5" rx="0.5" />
+          <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" />
+        </svg>
+      );
+    case "External":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <rect x="2" y="4" width="20" height="13" rx="2" />
+          <path d="M8 20h8M12 17v3" />
+        </svg>
+      );
+    case "DMA":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <rect x="3" y="6" width="18" height="12" rx="1.5" />
+          <circle cx="8" cy="12" r="1.2" />
+          <circle cx="16" cy="12" r="1.2" />
+          <path d="M9.2 12H14.8M8 9.5V8M16 9.5V8M8 14.5V16M16 14.5V16" />
+        </svg>
+      );
+    case "Scripts":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 4l-4 16" />
+        </svg>
+      );
+    case "Spoofer":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <path d="M12 3l8 3v5c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-3z" />
+          <path d="M9 13a3 3 0 0 0 6-1M15 11a3 3 0 0 0-6 1" />
+        </svg>
+      );
+    case "Other":
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="19" cy="12" r="2" />
+        </svg>
+      );
+    default:
+      return (
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" {...stroke}>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+        </svg>
+      );
+  }
 }

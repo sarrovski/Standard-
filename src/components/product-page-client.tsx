@@ -7,13 +7,68 @@ import { Badge, ButtonLink, Card } from "@/components/ui";
 import { products as demoProducts } from "@/lib/data";
 import { getLocalProducts } from "@/lib/product-store";
 import type { UIProductDetail, UIProductMedia } from "@/lib/adapters";
-import type { PaymentMethod } from "@/lib/data";
+import type { PaymentMethod, PaymentProfile } from "@/lib/data";
 import { NoVerifiedPayments, PaymentPill } from "@/components/payment-pill";
+import { SaveProductButton } from "@/components/save-product-button";
+import { TrustBox } from "@/components/trust-box";
+import { ReportListingButton } from "@/components/report-listing-button";
+import { toSlug } from "@/lib/slugs";
+import { recordRecentlyViewed } from "@/lib/recently-viewed";
+import {
+  evaluateProductRanking,
+  type RankingInput,
+} from "@/lib/product-ranking";
+import { RankingPill, TrustSignalsList } from "@/components/product-ranking-ui";
+import { ReviewSubmitButton } from "@/components/review-submit-button";
+import {
+  REVIEW_PUBLIC_LABEL_PLURAL,
+  REVIEW_RATING_MAX,
+} from "@/lib/product-reviews";
+
+export type ProductPageReview = {
+  id: string;
+  reviewerDisplayName: string | null;
+  reviewerAvatarUrl: string | null;
+  rating: number;
+  body: string;
+  createdAt: string;
+};
+
+/**
+ * Best-effort beacon to the product-events API. Uses sendBeacon so the
+ * request survives navigation (outbound CTA clicks), falls back to a
+ * keepalive fetch when sendBeacon isn't available. Failures are swallowed
+ * — tracking is never allowed to block the buyer.
+ */
+function trackProductEvent(
+  productId: string,
+  kind: "view" | "outbound_click",
+): void {
+  try {
+    const payload = JSON.stringify({ product_id: productId, kind });
+    if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
+      const blob = new Blob([payload], { type: "application/json" });
+      const sent = navigator.sendBeacon("/api/product-events", blob);
+      if (sent) return;
+    }
+    fetch("/api/product-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {
+      // ignore — beacons are best-effort
+    });
+  } catch {
+    // ignore
+  }
+}
 
 // Shape the page actually renders. UIProductDetail (Supabase-sourced) and the
 // demo products (data.ts) both satisfy this. Fields the UI uses but neither
 // source guarantees are made optional.
 type RenderableProduct = {
+  id?: string;
   slug: string;
   name: string;
   seller: string;
@@ -29,8 +84,10 @@ type RenderableProduct = {
   discord?: string;
   telegram?: string;
   features: string[];
+  featureGroups?: Array<{ name: string; features: string[] }>;
   pricePoints: string[];
   verifiedPayments: PaymentMethod[];
+  paymentProfiles?: PaymentProfile[];
   trustSignals?: string[];
   gallery?: Array<UIProductMedia | DemoMediaItem>;
   faq?: { q: string; a: string }[];
@@ -51,6 +108,11 @@ type ProductPageClientProps = {
   initialProduct: UIProductDetail | null;
   loadState?: ProductLoadState;
   loadMessage?: string;
+  initialSaved?: boolean;
+  loggedIn?: boolean;
+  reviews?: ReadonlyArray<ProductPageReview>;
+  /** True when the viewer is the seller-owner of this product. They can't review. */
+  isOwnSeller?: boolean;
 };
 
 function normalizeGallery(
@@ -82,6 +144,10 @@ export function ProductPageClient({
   initialProduct,
   loadState = "ok",
   loadMessage,
+  initialSaved = false,
+  loggedIn = false,
+  reviews = [],
+  isOwnSeller = false,
 }: ProductPageClientProps) {
   const supabaseSourced = initialProduct !== null;
 
@@ -107,6 +173,46 @@ export function ProductPageClient({
   useEffect(() => {
     setActiveMediaIndex(0);
   }, [product?.slug]);
+
+  // Record the view for the localStorage-backed "Recently viewed" list on
+  // the buyer dashboard. Skip until we have a product so we don't pollute
+  // the list with not-found visits.
+  useEffect(() => {
+    if (!product) return;
+    const firstMedia = product.gallery?.find(
+      (item): item is UIProductMedia =>
+        "type" in item && (item.imageUrl !== null || item.thumbnailUrl !== null),
+    );
+    const demoMedia = product.gallery?.find(
+      (item): item is { title: string; accent: string; imageUrl?: string | null } =>
+        !("type" in item),
+    );
+    const thumbnailUrl =
+      firstMedia?.imageUrl ??
+      firstMedia?.thumbnailUrl ??
+      demoMedia?.imageUrl ??
+      null;
+    recordRecentlyViewed({
+      slug: product.slug,
+      name: product.name,
+      game: product.game,
+      thumbnailUrl,
+    });
+  }, [product]);
+
+  // Fire a 'view' beacon once per mount per product. We only have a real
+  // product_id from Supabase; demo products use slug-as-id and don't
+  // correspond to a row, so we skip recording for them.
+  useEffect(() => {
+    if (!product || !supabaseSourced) return;
+    if (!product.id) return;
+    trackProductEvent(product.id, "view");
+  }, [product, supabaseSourced]);
+
+  const trackOutboundClick = () => {
+    if (!supabaseSourced || !product?.id) return;
+    trackProductEvent(product.id, "outbound_click");
+  };
 
   if (!product) {
     // Tailor the empty state to what actually happened. Previously this
@@ -146,20 +252,43 @@ export function ProductPageClient({
   const activeMedia = mediaItems[activeMediaIndex] ?? mediaItems[0] ?? null;
   const faq = product.faq ?? [];
   const trustSignals = product.trustSignals ?? [];
+  // Compute the ranking from the same data we render — keeps the
+  // marketplace pill, dashboard pill, and this product page in sync.
+  const productGallery = product.gallery ?? [];
+  const validFaqCount = (product.faq ?? []).filter(
+    (item) => item.q.trim() !== "" && item.a.trim() !== "",
+  ).length;
+  const rankingInput: RankingInput = {
+    published: product.productStatus === "Published",
+    sellerTag: product.sellerTag ?? "",
+    verifiedPaymentCount: product.verifiedPayments?.length ?? 0,
+    hasMedia: productGallery.length > 0,
+    summary: product.summary ?? "",
+    featureGroupCount: product.featureGroups?.length ?? 0,
+    flatFeatureCount: product.features?.length ?? 0,
+    faqCount: validFaqCount,
+  };
+  const ranking = evaluateProductRanking(rankingInput);
   const websiteUrl = product.websiteUrl ?? "";
   const websiteLabel = product.websiteLabel ?? "Visit official website";
   const discord = product.discord ?? "";
   const telegram = product.telegram ?? "";
 
+  const featureGroupsToRender =
+    product.featureGroups && product.featureGroups.length > 0
+      ? product.featureGroups
+      : product.features.length > 0
+        ? [{ name: "Features", features: product.features }]
+        : [];
+
   return (
-    <>
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="overflow-hidden border-purple-400/30">
-          <div className={`bg-gradient-to-br ${product.accent} p-8`}>
+    <div className="mx-auto max-w-5xl">
+      {/* 1. Hero ---------------------------------------------------------- */}
+      <section className="mt-6">
+        <Card className="overflow-hidden border-orange-400/30">
+          <div className={`bg-gradient-to-br ${product.accent} p-7 md:p-10`}>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={product.productStatus === "Published" ? "green" : "amber"}>{product.productStatus}</Badge>
-              <Badge tone={product.sellerTag === "Provider / Developer" ? "cyan" : product.sellerTag === "Verified Seller" ? "green" : "default"}>{product.sellerTag}</Badge>
-              <Badge>
+              <Badge tone="default">
                 <span className="inline-flex items-center gap-1.5">
                   <GameLogo
                     game={product.game}
@@ -169,108 +298,220 @@ export function ProductPageClient({
                   {product.game}
                 </span>
               </Badge>
-              <Badge>{product.architecture}</Badge>
+              <Badge>{product.category}</Badge>
+              <Badge
+                tone={
+                  product.sellerTag === "Provider / Developer"
+                    ? "cyan"
+                    : product.sellerTag === "Verified Seller"
+                      ? "green"
+                      : "default"
+                }
+              >
+                {product.sellerTag}
+              </Badge>
+              <RankingPill result={ranking} />
             </div>
-            <h1 className="mt-6 text-4xl font-black md:text-5xl">{product.name}</h1>
-            <p className="mt-4 max-w-3xl text-white/85">{product.summary}</p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              {websiteUrl ? <ButtonLink href={websiteUrl}>{websiteLabel}</ButtonLink> : null}
-              <ButtonLink href="/login" variant="secondary">Follow seller</ButtonLink>
-            </div>
-          </div>
-        </Card>
 
-        <Card className="p-6">
-          <Badge tone="purple">Seller conversion panel</Badge>
-          <h2 className="mt-4 text-2xl font-black">Continue to seller website</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-400">
-            Standard gives the buyer context. The next step is to continue on the seller’s official website.
-          </p>
-          <div className="mt-5 grid gap-3">
-            <Fact label="Seller" value={product.seller} />
-            <Fact label="Official website" value={websiteUrl || "—"} />
-            <Fact label="Discord" value={discord || "—"} />
-            <Fact label="Telegram" value={telegram || "—"} />
-          </div>
-          {websiteUrl ? (
-            <a href={websiteUrl} className="mt-6 inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold text-white">
-              Go to official website
-            </a>
-          ) : null}
-        </Card>
-      </section>
+            <h1 className="mt-6 text-4xl font-black md:text-5xl">
+              {product.name}
+            </h1>
+            {product.summary && (
+              <p className="mt-4 max-w-3xl text-base leading-7 text-white/85 md:text-lg">
+                {product.summary}
+              </p>
+            )}
 
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_320px]">
-        <div className="space-y-6">
-          <MediaCarousel
-            accent={product.accent}
-            activeIndex={activeMediaIndex}
-            activeMedia={activeMedia}
-            mediaItems={mediaItems}
-            onSelect={setActiveMediaIndex}
-          />
-
-          <Panel title="Features">
-            <div className="grid gap-3 md:grid-cols-2">
-              {product.features.map((feature) => (
-                <div key={feature} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm">
-                  {feature}
-                </div>
-              ))}
-            </div>
-          </Panel>
-
-          {faq.length > 0 && (
-            <Panel title="FAQ">
-              <div className="space-y-3">
-                {faq.map((item) => (
-                  <div key={item.q} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="font-semibold">{item.q}</div>
-                    <div className="mt-2 text-sm leading-6 text-slate-400">{item.a}</div>
-                  </div>
+            {product.pricePoints.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {product.pricePoints.map((price) => (
+                  <span
+                    key={price}
+                    className="rounded-full border border-white/20 bg-black/30 px-3 py-1 text-xs font-bold text-white"
+                  >
+                    {price}
+                  </span>
                 ))}
               </div>
-            </Panel>
-          )}
-        </div>
+            )}
 
-        <aside className="space-y-6">
-          <Panel title="Trust signals">
-            <div className="flex flex-wrap gap-2">
-              {trustSignals.length > 0 ? (
-                trustSignals.map((signal) => (
-                  <Badge key={signal} tone={signal.includes("Verified") || signal.includes("Provider") ? "green" : "default"}>
-                    {signal}
-                  </Badge>
-                ))
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              {websiteUrl ? (
+                <ButtonLink href={websiteUrl} onClick={trackOutboundClick}>
+                  {websiteLabel}
+                </ButtonLink>
               ) : (
-                <p className="text-sm text-slate-500">No trust signals yet.</p>
+                <span className="inline-flex items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-slate-300">
+                  Official website not added yet
+                </span>
               )}
+              {product.id ? (
+                <SaveProductButton
+                  productId={product.id}
+                  productSlug={product.slug}
+                  initialSaved={initialSaved}
+                  loggedIn={loggedIn}
+                />
+              ) : null}
             </div>
-          </Panel>
-
-          <Panel title="Verified payment methods">
-            <div className="flex flex-wrap gap-2">
-              {product.verifiedPayments.length ? (
-                product.verifiedPayments.map((payment) => <PaymentPill key={payment} method={payment} />)
-              ) : (
-                <NoVerifiedPayments />
-              )}
-            </div>
-          </Panel>
-
-          <Panel title="Price points">
-            <div className="space-y-2">
-              {product.pricePoints.map((price) => (
-                <div key={price} className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm font-medium">
-                  {price}
-                </div>
-              ))}
-            </div>
-          </Panel>
-        </aside>
+          </div>
+        </Card>
       </section>
-    </>
+
+      {/* 2. Showcase media ----------------------------------------------- */}
+      <section className="mx-auto mt-10 max-w-3xl">
+        <MediaCarousel
+          accent={product.accent}
+          activeIndex={activeMediaIndex}
+          activeMedia={activeMedia}
+          mediaItems={mediaItems}
+          onSelect={setActiveMediaIndex}
+        />
+      </section>
+
+      {/* 3. Features ----------------------------------------------------- */}
+      {featureGroupsToRender.length > 0 && (
+        <section className="mt-10">
+          <FeaturesPanel groups={featureGroupsToRender} />
+        </section>
+      )}
+
+      {/* 4. Trust + seller ----------------------------------------------- */}
+      <section className="mt-10">
+        <Panel title="Trust &amp; seller">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
+                Seller
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/sellers/${toSlug(product.seller)}`}
+                    className="text-base font-bold text-white underline-offset-2 transition hover:text-orange-200 hover:underline"
+                  >
+                    {product.seller}
+                  </Link>
+                  <Badge
+                    tone={
+                      product.sellerTag === "Provider / Developer"
+                        ? "cyan"
+                        : product.sellerTag === "Verified Seller"
+                          ? "green"
+                          : "default"
+                    }
+                  >
+                    {product.sellerTag}
+                  </Badge>
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-slate-400">
+                  <Fact label="Official website" value={websiteUrl || "—"} />
+                  <Fact label="Discord" value={discord || "—"} />
+                  <Fact label="Telegram" value={telegram || "—"} />
+                </div>
+              </div>
+
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
+                Verified payment methods
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex flex-wrap gap-2">
+                  {product.verifiedPayments.length ? (
+                    product.verifiedPayments.map((payment) => (
+                      <PaymentPill key={payment} method={payment} />
+                    ))
+                  ) : (
+                    <NoVerifiedPayments />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
+                Trust signals
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <RankingPill result={ranking} />
+                {ranking.publicSignals.length > 0 ? (
+                  <div className="mt-4">
+                    <TrustSignalsList signals={ranking.publicSignals} />
+                  </div>
+                ) : null}
+                {trustSignals.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                    {trustSignals.map((signal) => (
+                      <Badge
+                        key={signal}
+                        tone={
+                          signal.includes("Verified") ||
+                          signal.includes("Provider")
+                            ? "green"
+                            : "default"
+                        }
+                      >
+                        {signal}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {ranking.publicSignals.length === 0 &&
+                  trustSignals.length === 0 && (
+                    <p className="mt-3 text-sm text-slate-500">
+                      No trust signals yet — the seller is still completing
+                      this listing.
+                    </p>
+                  )}
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <TrustBox
+                  paymentProfiles={product.paymentProfiles ?? []}
+                  websiteUrl={websiteUrl || undefined}
+                  discord={discord || undefined}
+                  telegram={telegram || undefined}
+                  sellerTag={product.sellerTag}
+                />
+              </div>
+            </div>
+          </div>
+        </Panel>
+      </section>
+
+      {/* 5. Reviews / reputation ----------------------------------------- */}
+      <section className="mt-10">
+        <ReviewsSection
+          productId={product.id ?? null}
+          productSlug={product.slug}
+          reviews={reviews}
+          loggedIn={loggedIn}
+          isOwnSeller={isOwnSeller}
+          supabaseSourced={supabaseSourced}
+        />
+      </section>
+
+      {/* 6. FAQ ---------------------------------------------------------- */}
+      {faq.length > 0 && (
+        <section className="mt-10">
+          <FaqAccordion items={faq} />
+        </section>
+      )}
+
+      {/* 7. Final CTA ---------------------------------------------------- */}
+      <section className="mt-10">
+        <FinalCta
+          websiteUrl={websiteUrl || null}
+          websiteLabel={websiteLabel}
+          onOutboundClick={trackOutboundClick}
+        />
+      </section>
+
+      {product.id && supabaseSourced && (
+        <div className="mt-6 mb-2 flex justify-end">
+          <ReportListingButton productId={product.id} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -347,8 +588,8 @@ function MediaCarousel({
                   key={item.id}
                   type="button"
                   onClick={() => onSelect(index)}
-                  className={`relative h-20 w-28 flex-none overflow-hidden rounded-2xl border text-left transition ${
-                    active ? "border-purple-300" : "border-white/10 hover:border-white/30"
+                  className={`relative h-16 w-24 flex-none overflow-hidden rounded-xl border text-left transition ${
+                    active ? "border-orange-300" : "border-white/10 hover:border-white/30"
                   }`}
                   aria-pressed={active}
                 >
@@ -390,5 +631,216 @@ function Fact({ label, value }: { label: string; value: string }) {
       <div className="text-xs text-slate-500">{label}</div>
       <div className="mt-1 text-sm font-semibold">{value}</div>
     </div>
+  );
+}
+
+function FeaturesPanel({
+  groups,
+}: {
+  groups: Array<{ name: string; features: string[] }>;
+}) {
+  if (groups.length === 0) return null;
+  // Compact + organised: groups laid out 2-up on md+, features rendered
+  // as small chips inside each group so even long lists stay scannable.
+  return (
+    <Panel title="Features">
+      <div className="grid gap-x-6 gap-y-5 md:grid-cols-2">
+        {groups.map((group, groupIndex) => (
+          <div key={`${group.name}-${groupIndex}`}>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-orange-200/80">
+              {group.name || "Features"}
+            </div>
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {group.features.length === 0 ? (
+                <li className="text-xs text-slate-500">No items yet.</li>
+              ) : (
+                group.features.map((feature, featureIndex) => (
+                  <li
+                    key={`${feature}-${featureIndex}`}
+                    className="rounded-lg border border-white/10 bg-slate-950/40 px-2.5 py-1 text-xs text-slate-200"
+                  >
+                    {feature}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * Real reviews section. Auto-publish model: rows arrive as `approved` and
+ * show here immediately. Admins only step in when a seller appeals a
+ * review (status flips to `appealed`, which excludes it from this view).
+ *
+ * Wording: until purchase verification exists, we call these "community
+ * reviews" — never "verified buyer" — see src/lib/product-reviews.ts.
+ *
+ * The submit affordance:
+ *   - hidden when the viewer is the product's seller-owner (own-product)
+ *   - hidden in demo mode (no Supabase) — the panel is honest about it
+ *   - prompts a sign-in link when the viewer is logged out
+ *   - renders the modal button otherwise
+ */
+function ReviewsSection({
+  productId,
+  productSlug,
+  reviews,
+  loggedIn,
+  isOwnSeller,
+  supabaseSourced,
+}: {
+  productId: string | null;
+  productSlug: string;
+  reviews: ReadonlyArray<ProductPageReview>;
+  loggedIn: boolean;
+  isOwnSeller: boolean;
+  supabaseSourced: boolean;
+}) {
+  const count = reviews.length;
+  const average =
+    count > 0
+      ? Math.round(
+          (reviews.reduce((sum, r) => sum + r.rating, 0) / count) * 10,
+        ) / 10
+      : null;
+
+  const canRender = supabaseSourced && productId !== null;
+
+  return (
+    <Panel
+      title={REVIEW_PUBLIC_LABEL_PLURAL}
+      subtitle={
+        count > 0 && average !== null
+          ? `${average} / ${REVIEW_RATING_MAX} from ${count} ${
+              count === 1 ? "review" : "reviews"
+            }.`
+          : "Real, unverified buyer reviews. Sellers can appeal anything they think is unfair."
+      }
+    >
+      <div className="space-y-4">
+        {count > 0 ? (
+          <ul className="space-y-3">
+            {reviews.map((review) => (
+              <li
+                key={review.id}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-white">
+                    {review.reviewerDisplayName ?? "Buyer"}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs font-semibold text-orange-200/80">
+                  {review.rating} / {REVIEW_RATING_MAX}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-300 whitespace-pre-line">
+                  {review.body}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-5 text-sm text-slate-400">
+            No community reviews yet. Be the first to share what you saw.
+          </div>
+        )}
+
+        {canRender && !isOwnSeller && (
+          <ReviewSubmitButton
+            productId={productId}
+            productSlug={productSlug}
+            loggedIn={loggedIn}
+          />
+        )}
+        {canRender && isOwnSeller && (
+          <p className="text-xs text-slate-500">
+            You can&apos;t review your own product. Sellers can appeal
+            reviews from the dashboard&apos;s Reviews tab.
+          </p>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * Native-details accordion for FAQ. Keyboard-accessible, no JS hydration
+ * required — also schema.org/FAQPage-friendly because each Q/A is its
+ * own structured node.
+ */
+function FaqAccordion({
+  items,
+}: {
+  items: ReadonlyArray<{ q: string; a: string }>;
+}) {
+  return (
+    <Panel title="FAQ">
+      <div className="space-y-2">
+        {items.map((item, index) => (
+          <details
+            key={`${item.q}-${index}`}
+            className="group rounded-2xl border border-white/10 bg-slate-950/40 p-4 transition open:border-orange-400/30 open:bg-orange-500/[0.04]"
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-white">
+              <span>{item.q}</span>
+              <span
+                aria-hidden="true"
+                className="text-orange-300 transition group-open:rotate-180"
+              >
+                ▾
+              </span>
+            </summary>
+            <p className="mt-3 text-sm leading-6 text-slate-300">{item.a}</p>
+          </details>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function FinalCta({
+  websiteUrl,
+  websiteLabel,
+  onOutboundClick,
+}: {
+  websiteUrl: string | null;
+  websiteLabel: string;
+  onOutboundClick: () => void;
+}) {
+  return (
+    <Card className="border-orange-400/30 bg-gradient-to-br from-orange-500/15 via-slate-950 to-slate-950 p-8 text-center">
+      <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+        Ready to continue?
+      </h2>
+      <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+        Standard helps you compare trust signals before you leave for the
+        seller&apos;s official site. When you&apos;re ready, the seller
+        handles checkout, delivery, and support on their own site.
+      </p>
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        {websiteUrl ? (
+          <a
+            href={websiteUrl}
+            onClick={onOutboundClick}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400"
+          >
+            {websiteLabel}
+          </a>
+        ) : (
+          <span className="inline-flex items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-slate-300">
+            Official website not added yet
+          </span>
+        )}
+      </div>
+    </Card>
   );
 }

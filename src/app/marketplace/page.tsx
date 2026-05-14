@@ -1,6 +1,20 @@
+import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Nav, SectionHeader, Shell } from "@/components/ui";
 import { MarketplaceClient } from "@/components/marketplace-client";
+
+export const metadata: Metadata = {
+  title: "Marketplace — Standard",
+  description:
+    "Browse gaming tools on Standard. Filter by game, category, verified payment methods, and seller tag. Sort by trust, recency, or popularity.",
+  // Filter / sort state lives in query params; canonical points at the
+  // bare marketplace URL so search engines don't index every filter
+  // combination as a separate page. Per-game / per-category landing
+  // pages already own those entry points.
+  alternates: { canonical: "/marketplace" },
+};
 import { isSupabaseConfigured } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 import { getPublishedProducts } from "@/lib/repositories/products";
 import { isTimeoutError } from "@/lib/repositories/query-timeout";
 import {
@@ -53,11 +67,11 @@ async function loadProducts(): Promise<LoadResult> {
 }
 
 export default async function MarketplacePage() {
-  const result = await loadProducts();
+  const [result, user] = await Promise.all([loadProducts(), getSessionUser()]);
 
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-10">
         <SectionHeader
           eyebrow="Marketplace"
@@ -81,7 +95,9 @@ export default async function MarketplacePage() {
             product, it&apos;ll appear here.
           </div>
         )}
-        <MarketplaceClient initialProducts={result.products} />
+        <Suspense fallback={null}>
+          <MarketplaceClient initialProducts={result.products} />
+        </Suspense>
       </section>
     </Shell>
   );

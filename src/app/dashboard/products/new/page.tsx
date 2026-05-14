@@ -1,19 +1,16 @@
-import { Nav, SectionHeader, Shell } from "@/components/ui";
+import { Nav, Shell } from "@/components/ui";
 import { ProductCreateClient } from "@/components/product-create-client";
 import { isSupabaseConfigured, requireRole } from "@/lib/roles";
+import { getSessionUser } from "@/lib/session";
 
 export default async function NewProductPage() {
   await requireRole(["seller", "admin"]);
+  const user = await getSessionUser();
 
   return (
     <Shell>
-      <Nav />
-      <section className="mx-auto max-w-5xl px-6 py-10">
-        <SectionHeader
-          eyebrow="Seller dashboard"
-          title="New product"
-          text="Create a draft product first, then manage status and media from Produits."
-        />
+      <Nav user={user} />
+      <section className="mx-auto max-w-4xl px-6 py-8">
         <ProductCreateClient supabaseConfigured={isSupabaseConfigured()} />
       </section>
     </Shell>

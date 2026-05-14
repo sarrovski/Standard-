@@ -53,8 +53,13 @@ export type LocalProduct = {
 export type LocalPaymentRequest = {
   id: string;
   seller: string;
-  productSlug: string;
-  productName: string;
+  /**
+   * Legacy: per-product verifications. New requests submitted from the
+   * seller dashboard set these to null because verification is now at
+   * the seller-account level.
+   */
+  productSlug: string | null;
+  productName: string | null;
   method: PaymentMethod;
   processor: string;
   checkoutUrl: string;

@@ -55,6 +55,22 @@ export const games = [
   "Rust",
 ];
 
+/**
+ * Closed list of product categories sellers can pick from. These describe
+ * the product type / architecture (Internal, External, DMA, etc.) rather
+ * than the in-game features, so buyers can filter by what they're after.
+ * Keeping this constrained prevents typo / spelling drift across the
+ * marketplace and keeps filters meaningful.
+ */
+export const productCategories = [
+  "Internal",
+  "External",
+  "DMA",
+  "Scripts",
+  "Spoofer",
+  "Other",
+];
+
 export const paymentMethods = [
   "Crypto",
   "PayPal G&S",
@@ -148,7 +164,7 @@ export const products = [
     pricePoints: ["$6 daily", "$19 weekly", "$49 monthly"],
     delivery: "Instant",
     refundPolicy: "Visible after seller login integration",
-    accent: "from-violet-500/70 to-cyan-400/40",
+    accent: "from-orange-500/70 to-cyan-400/40",
     summary: "A polished Valorant analytics and overlay tool built to help users track performance, improve consistency, and understand each session in detail.",
     websiteUrl: "https://phantomx.example",
     websiteLabel: "Visit official website",
@@ -156,10 +172,10 @@ export const products = [
     telegram: "@phantomxupdates",
     trustSignals: ["Verified Seller", "Provider / Developer", "Payment profile reviewed", "Fast response history"],
     gallery: [
-      { title: "Hero banner", accent: "from-violet-500/60 to-fuchsia-500/40" },
+      { title: "Hero banner", accent: "from-orange-500/60 to-orange-500/40" },
       { title: "Dashboard preview", accent: "from-slate-700 to-cyan-500/30" },
-      { title: "Feature spotlight", accent: "from-indigo-500/50 to-cyan-500/30" },
-      { title: "Pricing layout", accent: "from-purple-500/50 to-slate-700" },
+      { title: "Feature spotlight", accent: "from-orange-500/50 to-cyan-500/30" },
+      { title: "Pricing layout", accent: "from-orange-500/50 to-slate-700" },
     ],
     benefits: [
       "Beautiful seller-controlled product page",
@@ -208,7 +224,7 @@ export const products = [
     pricePoints: [],
     delivery: "Pending verification",
     refundPolicy: "Pending verification",
-    accent: "from-fuchsia-500/60 to-slate-500/30",
+    accent: "from-orange-500/60 to-slate-500/30",
     summary: "A reference product that still needs more seller proof before it becomes a strong conversion page.",
     websiteUrl: "https://shadow.example",
     websiteLabel: "Go to seller website",
@@ -216,8 +232,8 @@ export const products = [
     telegram: "@shadowtools",
     trustSignals: ["Review pending", "Seller-submitted information"],
     gallery: [
-      { title: "Main visual", accent: "from-slate-700 to-fuchsia-500/30" },
-      { title: "Use case block", accent: "from-zinc-700 to-purple-500/30" },
+      { title: "Main visual", accent: "from-slate-700 to-orange-500/30" },
+      { title: "Use case block", accent: "from-zinc-700 to-orange-500/30" },
     ],
     benefits: ["Needs more proof", "Needs media refinement", "Needs payment verification"],
     faq: [
@@ -259,7 +275,7 @@ export const products = [
     pricePoints: ["$27 monthly"],
     delivery: "15 min manual",
     refundPolicy: "Pending admin review",
-    accent: "from-cyan-500/60 to-purple-500/30",
+    accent: "from-cyan-500/60 to-orange-500/30",
     summary: "A seller offer layout optimized for clear pricing, delivery expectations, and quick outbound conversion.",
     websiteUrl: "https://novakeys.example",
     websiteLabel: "Open seller offer",
@@ -268,7 +284,7 @@ export const products = [
     trustSignals: ["Verified Seller", "Known payment methods"],
     gallery: [
       { title: "Offer card", accent: "from-cyan-500/40 to-slate-700" },
-      { title: "Payment block", accent: "from-indigo-500/40 to-cyan-500/20" },
+      { title: "Payment block", accent: "from-orange-500/40 to-cyan-500/20" },
     ],
     benefits: ["Conversion-first offer layout", "Strong payment clarity"],
     faq: [
@@ -321,7 +337,7 @@ export const products = [
     pricePoints: ["$9 weekly", "$29 monthly"],
     delivery: "Instant",
     refundPolicy: "7-day limited policy",
-    accent: "from-indigo-500/70 to-cyan-500/30",
+    accent: "from-orange-500/70 to-cyan-500/30",
     summary: "A clean companion-tool page that emphasizes benefits, screenshots, and a polished CTA flow.",
     websiteUrl: "https://stratpad.example",
     websiteLabel: "Visit official website",
@@ -329,8 +345,8 @@ export const products = [
     telegram: "@stratpad",
     trustSignals: ["Verified product", "Card payment available"],
     gallery: [
-      { title: "Landing hero", accent: "from-indigo-500/50 to-cyan-500/30" },
-      { title: "Workflow section", accent: "from-slate-700 to-indigo-500/20" },
+      { title: "Landing hero", accent: "from-orange-500/50 to-cyan-500/30" },
+      { title: "Workflow section", accent: "from-slate-700 to-orange-500/20" },
       { title: "Preset library", accent: "from-cyan-500/30 to-blue-500/20" },
     ],
     benefits: ["Screenshot-driven storytelling", "Fast benefit scan"],
@@ -375,7 +391,7 @@ export const products = [
     pricePoints: ["$12 weekly", "$39 monthly"],
     delivery: "Instant",
     refundPolicy: "Visible after checkout integration",
-    accent: "from-orange-500/60 to-purple-500/30",
+    accent: "from-orange-500/60 to-orange-500/30",
     summary: "A professional product page for an official provider that mixes analytics value with strong trust and outbound conversion cues.",
     websiteUrl: "https://apexscan.example",
     websiteLabel: "Open official website",
@@ -383,9 +399,9 @@ export const products = [
     telegram: "@pulseworks",
     trustSignals: ["Provider / Developer", "Verified product", "Official site provided"],
     gallery: [
-      { title: "Main screenshot", accent: "from-orange-500/40 to-fuchsia-500/30" },
+      { title: "Main screenshot", accent: "from-orange-500/40 to-orange-500/30" },
       { title: "Analytics block", accent: "from-slate-700 to-orange-500/20" },
-      { title: "Trust section", accent: "from-purple-500/30 to-orange-500/20" },
+      { title: "Trust section", accent: "from-orange-500/30 to-orange-500/20" },
     ],
     benefits: ["Official provider presence", "Excellent outbound CTR potential"],
     faq: [

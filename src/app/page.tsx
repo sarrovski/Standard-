@@ -1,17 +1,28 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge, ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import { games, products } from "@/lib/data";
+import { toSlug } from "@/lib/slugs";
+import { getSessionUser } from "@/lib/session";
 
-export default function HomePage() {
+export const metadata: Metadata = {
+  title: "Standard — verified gaming-tool marketplace",
+  description:
+    "Compare gaming-tool sellers before you buy. Standard surfaces seller verification, verified payment methods, and trust signals on every product page.",
+  alternates: { canonical: "/" },
+};
+
+export default async function HomePage() {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 pb-16 pt-12">
         <div className="mx-auto max-w-4xl text-center">
-          <Badge tone="purple">Third-party seller verification for gaming tools</Badge>
+          <Badge tone="orange">Third-party seller verification for gaming tools</Badge>
           <h1 className="mt-6 text-5xl font-black leading-[1.04] tracking-tight md:text-7xl">
             Compare sellers before
-            <span className="bg-gradient-to-r from-purple-400 to-cyan-300 bg-clip-text text-transparent"> you buy.</span>
+            <span className="bg-gradient-to-r from-orange-400 to-orange-200 bg-clip-text text-transparent"> you buy.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-400">
             Standard acts as an independent trust layer where customers can compare sellers,
@@ -54,8 +65,8 @@ export default function HomePage() {
             {games.map((game) => (
               <Link
                 key={game}
-                href={`/marketplace?game=${encodeURIComponent(game)}`}
-                className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:border-purple-400/40"
+                href={`/games/${toSlug(game)}`}
+                className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:border-orange-400/40"
               >
                 <div className="font-bold">{game}</div>
                 <div className="mt-1 text-sm text-slate-500">

@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import { Badge, Card, Nav, Shell } from "@/components/ui";
 import { PlanCheckoutButton } from "@/components/plan-checkout-button";
+import { getSessionUser } from "@/lib/session";
+
+export const metadata: Metadata = {
+  title: "Seller plans — Standard",
+  description:
+    "Choose Launch, Growth, or Dominion to publish gaming-tool products on Standard. Verified payment methods, trust signals, and qualified traffic to your official site — independent of which plan you pick.",
+  alternates: { canonical: "/plans" },
+};
 
 type Plan = {
   name: string;
@@ -91,19 +100,21 @@ const FAQ = [
   },
 ];
 
-export default function PlansPage() {
+export default async function PlansPage() {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-16">
         <div className="mx-auto max-w-3xl text-center">
-          <Badge tone="purple">Seller subscriptions</Badge>
+          <Badge tone="orange">Seller subscriptions</Badge>
           <h1 className="mt-4 text-4xl font-black md:text-5xl">
-            Start selling trusted gaming products
+            Choose your seller plan on Standard
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-400">
-            Create product pages, prove payment methods, build trust, and grow
-            visibility inside a marketplace built for gaming sellers.
+            Get a seller dashboard, the verified-payment workflow, qualified
+            traffic from game and category landing pages, and the trust signals
+            that lift buyer confidence on every product page.
           </p>
         </div>
 
@@ -114,13 +125,13 @@ export default function PlansPage() {
               className={
                 "relative flex h-full flex-col p-6 " +
                 (plan.recommended
-                  ? "border-purple-300/50 bg-purple-500/10 shadow-purple-500/20"
+                  ? "border-orange-300/50 bg-orange-500/10 shadow-orange-500/20"
                   : "bg-slate-950/30")
               }
             >
               {plan.recommended && (
                 <div className="absolute right-5 top-5">
-                  <Badge tone="purple">Recommended</Badge>
+                  <Badge tone="orange">Recommended</Badge>
                 </div>
               )}
               <div className="pr-28 lg:pr-0">
@@ -137,7 +148,7 @@ export default function PlansPage() {
                     key={perk}
                     className="flex items-start gap-2 text-sm leading-6 text-slate-200"
                   >
-                    <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-purple-300" />
+                    <span className="mt-2 h-1.5 w-1.5 flex-none rounded-full bg-orange-300" />
                     <span>{perk}</span>
                   </li>
                 ))}
@@ -148,10 +159,6 @@ export default function PlansPage() {
                   label={`Choose ${plan.name}`}
                   variant={plan.recommended ? "primary" : "secondary"}
                 />
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  Uses the current seller subscription checkout while dedicated
-                  plan price IDs are added.
-                </p>
               </div>
             </Card>
           ))}
@@ -166,27 +173,13 @@ export default function PlansPage() {
             </p>
           </Card>
           <Card className="p-6">
-            <Badge tone="cyan">Featured add-on</Badge>
+            <Badge tone="default">Featured add-on</Badge>
             <p className="mt-3 text-sm leading-7 text-slate-400">
               Featured slots are sold separately from subscriptions and are
               subject to game/category availability.
             </p>
           </Card>
         </div>
-
-        <Card className="mt-6 p-6">
-          <Badge tone="purple">Stripe pricing TODO</Badge>
-          <p className="mt-3 text-sm leading-7 text-slate-400">
-            The current backend uses one{" "}
-            <code className="text-slate-200">
-              STRIPE_SELLER_SUBSCRIPTION_PRICE_ID
-            </code>
-            . Dedicated plan prices should be added later as{" "}
-            <code className="text-slate-200">STRIPE_LAUNCH_PRICE_ID</code>,{" "}
-            <code className="text-slate-200">STRIPE_GROWTH_PRICE_ID</code>, and{" "}
-            <code className="text-slate-200">STRIPE_DOMINION_PRICE_ID</code>.
-          </p>
-        </Card>
 
         <div className="mt-12 grid gap-4">
           <h3 className="text-xl font-bold">FAQ</h3>

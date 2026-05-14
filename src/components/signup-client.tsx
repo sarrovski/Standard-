@@ -198,7 +198,7 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
             disabled={isBusy}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-orange-400/50 disabled:opacity-60"
           />
         </label>
 
@@ -210,7 +210,7 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
             onChange={(event) => setDisplayName(event.target.value)}
             placeholder="How you want to appear on Standard"
             disabled={isBusy}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-orange-400/50 disabled:opacity-60"
           />
         </label>
 
@@ -222,7 +222,7 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
             onChange={(event) => setPassword(event.target.value)}
             placeholder="At least 8 characters"
             disabled={isBusy}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-orange-400/50 disabled:opacity-60"
           />
         </label>
 
@@ -234,7 +234,7 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
             onChange={(event) => setConfirmPassword(event.target.value)}
             placeholder="Repeat your password"
             disabled={isBusy}
-            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-orange-400/50 disabled:opacity-60"
           />
         </label>
 
@@ -257,7 +257,7 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
         <button
           type="submit"
           disabled={isBusy}
-          className="inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20 disabled:opacity-60"
+          className="inline-flex w-full justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 disabled:opacity-60"
         >
           {submittingAction === "password"
             ? "Creating account…"
@@ -270,7 +270,7 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
           type="button"
           onClick={handleMagicSignup}
           disabled={isBusy}
-          className="w-full rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white disabled:opacity-60"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-orange-400/40 hover:text-white disabled:opacity-60"
         >
           {submittingAction === "magic" ? "Sending magic link…" : "Send magic link instead"}
         </button>
@@ -278,7 +278,7 @@ export function SignupClient({ supabaseConfigured, siteUrl }: SignupClientProps)
 
       <div className="mt-6 border-t border-white/10 pt-6 text-center text-sm text-slate-400">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-purple-300 hover:text-purple-200">
+        <Link href="/login" className="font-semibold text-orange-300 hover:text-orange-200">
           Sign in
         </Link>
       </div>

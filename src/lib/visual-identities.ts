@@ -30,7 +30,7 @@ const gameIdentities: Record<string, VisualIdentity> = {
   Fortnite: {
     mark: "F",
     label: "Fortnite",
-    className: "from-sky-400/85 via-indigo-500/70 to-fuchsia-950",
+    className: "from-sky-400/85 via-orange-500/70 to-orange-950",
     logoSrc: "/brand/games/fortnite.svg",
     logoAlt: "Fortnite logo",
   },
@@ -88,7 +88,7 @@ const categoryIdentities: ReadonlyArray<{
     identity: {
       mark: "OV",
       label: "Overlay",
-      className: "border-violet-300/20 bg-violet-400/10 text-violet-100",
+      className: "border-orange-300/20 bg-orange-400/10 text-orange-100",
     },
   },
   {
@@ -112,7 +112,7 @@ const categoryIdentities: ReadonlyArray<{
     identity: {
       mark: "AI",
       label: "Assistant",
-      className: "border-fuchsia-300/20 bg-fuchsia-400/10 text-fuchsia-100",
+      className: "border-orange-300/20 bg-orange-400/10 text-orange-100",
     },
   },
 ];

@@ -1,4 +1,53 @@
+import type { Metadata } from "next";
+import Link from "next/link";
 import { Badge, ButtonLink, Card, Nav, SectionHeader, Shell } from "@/components/ui";
+import { getSessionUser } from "@/lib/session";
+
+export const metadata: Metadata = {
+  title: "Trust on Standard — verification, reviews, and seller risk",
+  description:
+    "How Standard verifies sellers and payment methods, how reviews work, how products are ranked, and how buyers can reduce risk before purchasing gaming tools.",
+  alternates: { canonical: "/trust" },
+};
+
+const trustPages = [
+  {
+    href: "/trust/payment-verification",
+    title: "Payment-method verification",
+    blurb:
+      "How Standard verifies a seller's checkout setup, what the verified badge means, and what buyers should still check.",
+  },
+  {
+    href: "/trust/provider-tags",
+    title: "Provider / Developer tags",
+    blurb:
+      "What the official-seller badge represents, who qualifies, the proof we accept, and when it can be revoked.",
+  },
+  {
+    href: "/trust/reviews",
+    title: "How reviews work",
+    blurb:
+      "Who can leave a review, why sellers can't edit or remove them, and how we handle suspicious patterns.",
+  },
+  {
+    href: "/trust/seller-risk",
+    title: "Understanding seller risk",
+    blurb:
+      "A practical guide to the buyer-side risk signals on Standard, with a pre-purchase checklist.",
+  },
+  {
+    href: "/trust/report-a-seller",
+    title: "Report a seller",
+    blurb:
+      "If a seller misrepresents themselves or breaks the rules, how to report them and what happens next.",
+  },
+  {
+    href: "/trust/how-standard-ranks-products",
+    title: "How Standard ranks products",
+    blurb:
+      "Featured slots, verification status, listing quality, and buyer signals — exactly which inputs drive ranking.",
+  },
+];
 
 const verificationSteps = [
   {
@@ -26,15 +75,16 @@ const reviewRules = [
   "Coordinated fake reviews, review bombing, or spam can lead to restrictions.",
 ];
 
-export default function TrustPage() {
+export default async function TrustPage() {
+  const user = await getSessionUser();
   return (
     <Shell>
-      <Nav />
+      <Nav user={user} />
       <section className="mx-auto max-w-7xl px-6 py-10">
         <SectionHeader
           eyebrow="Trust"
           title="Standard acts as a third-party verification layer"
-          text="Our goal is to help customers compare sellers before buying, understand payment risk, and avoid scams by using clear trust signals."
+          text="Our goal is to help buyers compare sellers before buying, understand payment risk, and reduce scams using clear, public trust signals."
         />
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
@@ -47,7 +97,7 @@ export default function TrustPage() {
             </p>
           </Card>
           <Card className="p-6">
-            <Badge tone="cyan">Provider / Developer</Badge>
+            <Badge tone="default">Provider / Developer</Badge>
             <h2 className="mt-4 text-2xl font-black">Official seller tag</h2>
             <p className="mt-3 text-sm leading-6 text-slate-400">
               The Provider / Developer tag is reserved for sellers who can show they are the official
@@ -55,13 +105,37 @@ export default function TrustPage() {
             </p>
           </Card>
           <Card className="p-6">
-            <Badge tone="purple">Reviews</Badge>
+            <Badge tone="orange">Reviews</Badge>
             <h2 className="mt-4 text-2xl font-black">Real customer feedback</h2>
             <p className="mt-3 text-sm leading-6 text-slate-400">
               Reviews are designed to come from real customers. Sellers cannot directly manipulate,
               edit, or remove reviews from their products.
             </p>
           </Card>
+        </section>
+
+        <section className="mt-10">
+          <p className="text-sm font-medium text-orange-300">Read more</p>
+          <h2 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">
+            Trust topics explained in depth
+          </h2>
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
+            {trustPages.map((page) => (
+              <Link
+                key={page.href}
+                href={page.href}
+                className="group rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition hover:border-orange-400/40 hover:bg-orange-500/[0.04]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-bold text-white">{page.title}</h3>
+                  <span aria-hidden="true" className="text-orange-300 transition group-hover:translate-x-0.5">
+                    →
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{page.blurb}</p>
+              </Link>
+            ))}
+          </div>
         </section>
 
         <section className="mt-10 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
@@ -104,6 +178,7 @@ export default function TrustPage() {
 
         <section className="mt-10 flex flex-wrap gap-3">
           <ButtonLink href="/marketplace">Browse marketplace</ButtonLink>
+          <ButtonLink href="/trust/report-a-seller" variant="secondary">Report a seller</ButtonLink>
           <ButtonLink href="/terms" variant="secondary">Read terms</ButtonLink>
         </section>
       </section>

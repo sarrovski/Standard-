@@ -5,12 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Card, MiniStat } from "@/components/ui";
 import {
-  analytics,
   paymentMethods as paymentMethodsList,
   paymentVerificationQueue,
   providerTagRequests as demoProviderTagRequests,
   sellerProducts as demoSellerProducts,
-  trafficSources,
 } from "@/lib/data";
 import {
   addPaymentRequest,
@@ -22,9 +20,7 @@ import type {
   LocalProduct,
 } from "@/lib/product-types";
 import type { PaymentMethod } from "@/lib/data";
-import { youtubeEmbedUrl } from "@/lib/youtube";
 import type {
-  UIProductMedia,
   UISellerPaymentMethodOption,
   UISellerPaymentRequest,
   UISellerProductCard,
@@ -32,11 +28,26 @@ import type {
   UISellerSubscription,
 } from "@/lib/adapters";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
+import { RankingPill } from "@/components/product-ranking-ui";
+import {
+  evaluateProductRanking,
+  type RankingInput,
+} from "@/lib/product-ranking";
+import { groupsFromFlatFeatures } from "@/lib/product-features";
+import { SellerAnalytics } from "@/components/seller-analytics";
+import {
+  SellerReviewsTab,
+  type SellerReview,
+} from "@/components/seller-reviews-tab";
+import { SellerCreatorsTab } from "@/components/seller-creators-tab";
+import type { UICreatorRequest } from "@/lib/creator-marketplace";
 
 const tabs = [
   { key: "products", label: "Produits" },
   { key: "payments", label: "Payment Verification" },
   { key: "analytics", label: "Analytics" },
+  { key: "reviews", label: "Reviews" },
+  { key: "creators", label: "Creators" },
   { key: "verification", label: "Provider Tag" },
   { key: "billing", label: "Billing" },
 ];
@@ -66,49 +77,83 @@ function normalizeTab(candidate: string | null | undefined): string {
 }
 
 /**
- * Button-based tabs for the seller dashboard.
+ * Vertical sidebar nav for the seller dashboard. Sits on the left at
+ * lg+ widths and stacks above the active panel on small screens.
  *
- * The shared <Tabs> in components/ui renders <Link> elements, which works
- * for static dashboards but caused this batch's bug: clicking a Link
- * navigated /dashboard?tab=X, but the parent client component had its
- * tab state seeded only at mount, so navigation didn't update the visible
- * panel until a full reload.
- *
- * This local component takes a click handler instead, so the parent owns
- * both the state and the URL update. Same visual styling as the shared
- * Tabs to keep design consistent.
+ * The parent owns both the active-tab state and the URL update — clicks
+ * call `onSelect`, which keeps the visible panel and `?tab=` in sync
+ * without a full reload.
  */
-function DashboardTabs({
+function DashboardSidebar({
   items,
   active,
   onSelect,
+  sellerName,
+  supabaseSourced,
+  hasProducts,
 }: {
   items: Array<{ key: string; label: string }>;
   active: string;
   onSelect: (key: string) => void;
+  sellerName: string | null;
+  supabaseSourced: boolean;
+  hasProducts: boolean;
 }) {
+  const statusLabel = !supabaseSourced
+    ? "Demo"
+    : hasProducts
+      ? "Live"
+      : "Pending";
+  const statusTone: "default" | "green" | "amber" =
+    statusLabel === "Live" ? "green" : statusLabel === "Pending" ? "amber" : "default";
+
   return (
-    <div className="flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.035] p-2">
-      {items.map((item) => {
-        const isActive = active === item.key;
-        return (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => onSelect(item.key)}
-            className={
-              "whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition " +
-              (isActive
-                ? "bg-purple-500/20 text-purple-100"
-                : "text-slate-400 hover:bg-white/[0.04] hover:text-white")
-            }
-            aria-pressed={isActive}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-    </div>
+    <aside className="lg:sticky lg:top-6 lg:self-start">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 text-sm font-black text-white">
+            {(sellerName?.[0] ?? "S").toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-white">
+              {sellerName ?? "Dashboard"}
+            </div>
+            <div className="mt-1">
+              <Badge tone={statusTone}>{statusLabel}</Badge>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <nav className="mt-4 grid gap-1 rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+        {items.map((item) => {
+          const isActive = active === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onSelect(item.key)}
+              className={
+                "flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold transition " +
+                (isActive
+                  ? "bg-orange-500/15 text-white"
+                  : "text-slate-400 hover:bg-white/[0.04] hover:text-white")
+              }
+              aria-pressed={isActive}
+            >
+              <span
+                aria-hidden="true"
+                className={
+                  "h-4 w-1 rounded-full transition " +
+                  (isActive ? "bg-orange-400" : "bg-transparent")
+                }
+              />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+    </aside>
   );
 }
 
@@ -125,6 +170,12 @@ export type DashboardInitialData = {
   sellerName: string;
   paymentMethods: UISellerPaymentMethodOption[];
   subscription: UISellerSubscription | null;
+  /** Count of verified payment methods on the seller's profile (seller-level). */
+  verifiedPaymentMethodCount: number;
+  /** Community reviews on this seller's products, any status. */
+  reviews: SellerReview[];
+  /** Creator briefs this seller has sent, any status. */
+  creatorRequests: UICreatorRequest[];
 } | null;
 
 type DashboardClientProps = {
@@ -165,18 +216,84 @@ export function DashboardClient({
   };
 
   const supabaseSourced = initialData !== null;
+  const hasProducts = (initialData?.products?.length ?? 0) > 0;
+
+  // Shared merged product list — fed to the Produits tab and the Analytics
+  // tab so they always agree on which products exist. In Supabase mode this
+  // is just the server-loaded list; in demo mode we merge data.ts demos with
+  // the localStorage-backed product builder.
+  const [demoLocalProducts, setDemoLocalProducts] = useState<LocalProduct[]>([]);
+  useEffect(() => {
+    if (supabaseSourced) return;
+    setDemoLocalProducts(getLocalProducts());
+  }, [supabaseSourced]);
+
+  const analyticsProducts = useMemo<UISellerProductCard[]>(() => {
+    if (supabaseSourced) return initialData?.products ?? [];
+    const localCards: UISellerProductCard[] = demoLocalProducts.map((product) => ({
+      id: product.slug,
+      slug: product.slug,
+      name: product.name,
+      status: product.productStatus,
+      rawStatus: "draft" as const,
+      toolStatus: "Draft / database-ready",
+      game: product.game,
+      category: product.category,
+      features: product.features,
+      views: product.activity.views,
+      outboundClicks: 0,
+      outboundCtr: "0%",
+      integrity: String(product.integrity ?? "Pending"),
+      pageTemplate: "Hero Spotlight",
+      mediaAssets: product.gallery.length,
+      website: product.websiteUrl.replace("https://", ""),
+      nextAction: "Submit for review and verify payment methods",
+      media: [],
+      summary: product.summary,
+      featureGroups: groupsFromFlatFeatures(product.features),
+      faq: product.faq.map((item) => ({ q: item.q, a: item.a })),
+      websiteUrl: product.websiteUrl,
+    }));
+    const fromSellerProducts: UISellerProductCard[] = demoSellerProducts.map(
+      (item) => {
+        const slug = item.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+        return {
+          ...item,
+          id: slug,
+          slug,
+          category: "Analytics / Overlay",
+          rawStatus: "published" as const,
+          media: [],
+          summary: "",
+          featureGroups: groupsFromFlatFeatures(item.features),
+          faq: [],
+          websiteUrl: `https://${item.website}`,
+        };
+      },
+    );
+    return [...localCards, ...fromSellerProducts];
+  }, [supabaseSourced, initialData, demoLocalProducts]);
 
   return (
-    <>
-      <div className="mt-8">
-        <DashboardTabs items={tabs} active={tab} onSelect={handleTabClick} />
-      </div>
+    <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+      <DashboardSidebar
+        items={tabs}
+        active={tab}
+        onSelect={handleTabClick}
+        sellerName={initialData?.sellerName ?? null}
+        supabaseSourced={supabaseSourced}
+        hasProducts={hasProducts}
+      />
 
-      <div className="mt-8">
+      <div className="min-w-0">
         {tab === "products" && (
           <Products
             supabaseSourced={supabaseSourced}
             initialProducts={initialData?.products ?? null}
+            verifiedPaymentMethodCount={initialData?.verifiedPaymentMethodCount}
           />
         )}
         {tab === "payments" && (
@@ -187,7 +304,29 @@ export function DashboardClient({
             paymentMethods={initialData?.paymentMethods ?? []}
           />
         )}
-        {tab === "analytics" && <Analytics />}
+        {tab === "analytics" && (
+          <SellerAnalytics
+            supabaseSourced={supabaseSourced}
+            products={analyticsProducts}
+            verifiedPaymentMethodCount={
+              supabaseSourced
+                ? initialData?.verifiedPaymentMethodCount
+                : undefined
+            }
+          />
+        )}
+        {tab === "reviews" && (
+          <SellerReviewsTab
+            supabaseSourced={supabaseSourced}
+            initialReviews={initialData?.reviews ?? []}
+          />
+        )}
+        {tab === "creators" && (
+          <SellerCreatorsTab
+            supabaseSourced={supabaseSourced}
+            requests={initialData?.creatorRequests ?? []}
+          />
+        )}
         {tab === "verification" && (
           <Verification
             supabaseSourced={supabaseSourced}
@@ -196,333 +335,6 @@ export function DashboardClient({
         )}
         {tab === "billing" && <Billing />}
       </div>
-    </>
-  );
-}
-
-// =========================================================================
-// Per-product media upload + thumbnails (Supabase mode only)
-// =========================================================================
-
-type ProductMediaApiRow = {
-  id: string;
-  storage_path: string | null;
-  public_url: string | null;
-  alt_text: string | null;
-  sort_order: number;
-  media_type?: string | null;
-  external_url?: string | null;
-  provider?: string | null;
-  video_id?: string | null;
-  thumbnail_url?: string | null;
-  title?: string | null;
-};
-
-function apiMediaToUI(row: ProductMediaApiRow): UIProductMedia {
-  const type = row.media_type === "youtube" ? "youtube" : "image";
-  return {
-    id: row.id,
-    type,
-    storagePath: row.storage_path,
-    publicUrl: row.public_url,
-    imageUrl: type === "image" ? row.public_url : null,
-    thumbnailUrl: type === "youtube" ? row.thumbnail_url ?? null : row.public_url,
-    embedUrl: type === "youtube" && row.video_id ? youtubeEmbedUrl(row.video_id) : null,
-    externalUrl: row.external_url ?? null,
-    altText: row.alt_text,
-    title: row.title ?? row.alt_text ?? (type === "youtube" ? "Product video" : "Product image"),
-    sortOrder: row.sort_order,
-  };
-}
-
-function ProductMediaPanel({
-  productId,
-  initialMedia,
-}: {
-  productId: string;
-  initialMedia: UIProductMedia[];
-}) {
-  const [media, setMedia] = useState<UIProductMedia[]>(initialMedia);
-  const [altText, setAltText] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
-  const [videoTitle, setVideoTitle] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [addingVideo, setAddingVideo] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null);
-  // Tracks the most recent successful upload so we can mark it as "Saved"
-  // briefly. Auto-clears after a few seconds so the badge doesn't stick on
-  // older items forever.
-  const [lastSavedId, setLastSavedId] = useState<string | null>(null);
-  const [savedNotice, setSavedNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!savedNotice) return;
-    const timeout = window.setTimeout(() => {
-      setSavedNotice(null);
-      setLastSavedId(null);
-    }, 4000);
-    return () => window.clearTimeout(timeout);
-  }, [savedNotice]);
-
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    // Reset the input so the same file can be re-selected later if needed.
-    event.target.value = "";
-    if (!file) return;
-    setError(null);
-    setSavedNotice(null);
-    setLastSavedId(null);
-
-    const formData = new FormData();
-    formData.append("file", file);
-    if (altText.trim()) formData.append("alt_text", altText.trim());
-
-    setUploading(true);
-    try {
-      const response = await fetch(`/api/seller/products/${productId}/media`, {
-        method: "POST",
-        body: formData,
-      });
-      const payload = (await response.json()) as {
-        media?: ProductMediaApiRow;
-        error?: string;
-        step?: string;
-        code?: string;
-        details?: string;
-      };
-      const uploaded = payload.media;
-      if (!response.ok || !uploaded) {
-        const stepLabel = payload.step ? `[${payload.step}] ` : "";
-        const detailSuffix = payload.details ? ` (${payload.details})` : "";
-        setError(
-          `${stepLabel}${payload.error ?? "Upload failed."}${detailSuffix}`,
-        );
-        return;
-      }
-      setMedia((prev) => [
-        ...prev,
-        apiMediaToUI(uploaded),
-      ]);
-      setAltText("");
-      setLastSavedId(uploaded.id);
-      setSavedNotice("Image uploaded and saved.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleAddVideo = async () => {
-    setError(null);
-    setSavedNotice(null);
-    setLastSavedId(null);
-    if (!videoUrl.trim()) {
-      setError("[validation] Enter a YouTube URL.");
-      return;
-    }
-
-    setAddingVideo(true);
-    try {
-      const response = await fetch(`/api/seller/products/${productId}/media`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "youtube",
-          url: videoUrl,
-          title: videoTitle || undefined,
-          alt_text: altText || undefined,
-        }),
-      });
-      const payload = (await response.json()) as {
-        media?: ProductMediaApiRow;
-        error?: string;
-        step?: string;
-        code?: string;
-        details?: string;
-      };
-      const added = payload.media;
-      if (!response.ok || !added) {
-        const stepLabel = payload.step ? `[${payload.step}] ` : "";
-        const detailSuffix = payload.details ? ` (${payload.details})` : "";
-        setError(`${stepLabel}${payload.error ?? "Could not add video."}${detailSuffix}`);
-        return;
-      }
-      setMedia((prev) => [...prev, apiMediaToUI(added)]);
-      setVideoUrl("");
-      setVideoTitle("");
-      setLastSavedId(added.id);
-      setSavedNotice("Video added and saved.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
-    } finally {
-      setAddingVideo(false);
-    }
-  };
-
-  const handleDelete = async (mediaId: string) => {
-    setBusyDeleteId(mediaId);
-    setError(null);
-    try {
-      const response = await fetch(`/api/seller/products/${productId}/media`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ media_id: mediaId }),
-      });
-      const payload = (await response.json()) as {
-        error?: string;
-        step?: string;
-        code?: string;
-      };
-      if (response.status >= 400 && response.status !== 207) {
-        const stepLabel = payload.step ? `[${payload.step}] ` : "";
-        setError(`${stepLabel}${payload.error ?? "Delete failed."}`);
-        return;
-      }
-      setMedia((prev) => prev.filter((m) => m.id !== mediaId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
-    } finally {
-      setBusyDeleteId(null);
-    }
-  };
-
-  return (
-    <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Media</div>
-          <p className="mt-2 text-sm text-slate-400">
-            Add uploaded images or seller-provided YouTube links.
-          </p>
-        </div>
-        <Badge tone="purple">{media.length} items</Badge>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-        {media.map((m) => {
-          const isJustSaved = m.id === lastSavedId;
-          const previewUrl = m.type === "youtube" ? m.thumbnailUrl : m.imageUrl;
-          return (
-            <div
-              key={m.id}
-              className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/40 aspect-square"
-            >
-              {previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewUrl}
-                  alt={m.altText ?? m.title ?? ""}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-slate-500">
-                  No URL
-                </div>
-              )}
-              <div className="absolute left-1 top-1 rounded-md border border-white/20 bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white">
-                {m.type === "youtube" ? "YouTube" : "Image"}
-              </div>
-              {isJustSaved && (
-                <div className="absolute bottom-1 left-1 rounded-md border border-emerald-400/40 bg-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-50">
-                  Saved
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => handleDelete(m.id)}
-                disabled={busyDeleteId === m.id}
-                className="absolute right-1 top-1 rounded-md border border-red-400/30 bg-red-500/30 px-2 py-1 text-[10px] font-bold text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-60"
-              >
-                {busyDeleteId === m.id ? "…" : "Delete"}
-              </button>
-            </div>
-          );
-        })}
-        {media.length === 0 && (
-          <div className="col-span-full rounded-xl border border-dashed border-white/15 bg-black/20 p-4 text-sm text-slate-400">
-            No media yet.
-          </div>
-        )}
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="text-sm font-semibold">Images</div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-            <label className="block">
-              <span className="text-[11px] text-slate-500">Alt text (optional)</span>
-              <input
-                value={altText}
-                onChange={(event) => setAltText(event.target.value)}
-                placeholder="Describe the image or video"
-                className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
-              />
-            </label>
-            <label
-              className={`inline-flex cursor-pointer items-center justify-center rounded-lg border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-200 ${
-                uploading ? "opacity-60" : ""
-              }`}
-            >
-              {uploading ? "Uploading..." : "Upload image"}
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={handleUpload}
-                disabled={uploading}
-                className="hidden"
-              />
-            </label>
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500">
-            Images are saved automatically as soon as they upload.
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-          <div className="text-sm font-semibold">YouTube video</div>
-          <div className="mt-3 grid gap-3">
-            <input
-              value={videoUrl}
-              onChange={(event) => setVideoUrl(event.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
-            />
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-              <input
-                value={videoTitle}
-                onChange={(event) => setVideoTitle(event.target.value)}
-                placeholder="Video title (optional)"
-                className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-white outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleAddVideo}
-                disabled={addingVideo}
-                className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-60"
-              >
-                {addingVideo ? "Adding..." : "Add video"}
-              </button>
-            </div>
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500">
-            Standard stores a safe YouTube ID and embeds from that ID.
-          </p>
-        </div>
-      </div>
-
-      {savedNotice && (
-        <div className="mt-3 rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-2 text-xs text-emerald-100">
-          {savedNotice}
-        </div>
-      )}
-
-      {error && (
-        <div className="mt-3 rounded-lg border border-red-400/30 bg-red-500/10 p-2 text-xs text-red-200">
-          {error}
-        </div>
-      )}
     </div>
   );
 }
@@ -534,24 +346,47 @@ function ProductMediaPanel({
 function Products({
   supabaseSourced,
   initialProducts,
+  verifiedPaymentMethodCount,
 }: {
   supabaseSourced: boolean;
   initialProducts: UISellerProductCard[] | null;
+  verifiedPaymentMethodCount: number | undefined;
 }) {
   const [demoProductsList, setDemoProducts] = useState<LocalProduct[]>([]);
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     if (supabaseSourced) return;
     setDemoProducts(getLocalProducts());
   }, [supabaseSourced]);
 
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-product-menu]")) {
+        setOpenMenuId(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenMenuId(null);
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openMenuId]);
+
   const displayProducts = useMemo(() => {
     if (supabaseSourced) {
       return initialProducts ?? [];
     }
-    const localCards = demoProductsList.map((product) => ({
+    const localCards: UISellerProductCard[] = demoProductsList.map((product) => ({
       id: product.slug, // demo: no real UUID, slug doubles as id
       slug: product.slug,
       name: product.name,
@@ -570,19 +405,41 @@ function Products({
       website: product.websiteUrl.replace("https://", ""),
       nextAction: "Submit for review and verify payment methods",
       media: [],
+      summary: product.summary,
+      featureGroups: groupsFromFlatFeatures(product.features),
+      faq: product.faq.map((item) => ({ q: item.q, a: item.a })),
+      websiteUrl: product.websiteUrl,
     }));
-    return [
-      ...localCards,
-      ...demoSellerProducts.map((item) => ({
+    const fromSellerProducts: UISellerProductCard[] = demoSellerProducts.map((item) => {
+      const slug = item.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      return {
         ...item,
-        id: "phantomx-tracker",
-        slug: "phantomx-tracker",
+        id: slug,
+        slug,
         category: "Analytics / Overlay",
         rawStatus: "published" as const,
         media: [],
-      })),
-    ];
+        summary: "",
+        featureGroups: groupsFromFlatFeatures(item.features),
+        faq: [],
+        websiteUrl: `https://${item.website}`,
+      };
+    });
+    return [...localCards, ...fromSellerProducts];
   }, [supabaseSourced, initialProducts, demoProductsList]);
+
+  const filteredProducts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return displayProducts;
+    return displayProducts.filter((product) =>
+      [product.name, product.game, product.website, product.category]
+        .filter((value): value is string => typeof value === "string")
+        .some((value) => value.toLowerCase().includes(query)),
+    );
+  }, [displayProducts, searchQuery]);
 
   // Real publish/archive (Supabase mode only). On success we reload the page
   // so server-side initialData reflects the change. A finer-grained client
@@ -614,12 +471,39 @@ function Products({
     }
   };
 
-  const archiveProduct = async (productId: string, productName: string) => {
+  const makePrivate = async (productId: string, productName: string) => {
     const confirmed = window.confirm(
-      `Archive "${productName}"? It will be removed from the public marketplace, but its product record and media will remain saved.`,
+      `Make "${productName}" private? It will be removed from the public marketplace and marketplace filters. The product record and media stay saved and you can restore it later.`,
     );
     if (!confirmed) return;
     await updateProductStatus(productId, "archived");
+  };
+
+  const deleteProduct = async (productId: string, productName: string) => {
+    if (!supabaseSourced) return;
+    const confirmed = window.confirm(
+      `Permanently delete "${productName}"?\n\nThis removes the product, every uploaded image and YouTube link, and any associated storage files. This action cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setActionError(null);
+    setBusyProductId(productId);
+    setOpenMenuId(null);
+    try {
+      const response = await fetch(
+        `/api/seller/products?id=${encodeURIComponent(productId)}`,
+        { method: "DELETE" },
+      );
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setActionError(payload.error ?? "Could not delete product.");
+        return;
+      }
+      window.location.reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusyProductId(null);
+    }
   };
 
   return (
@@ -635,7 +519,7 @@ function Products({
         <MiniStat label="Avg outbound CTR" value="4.93%" detail="+0.8 pts" />
       </section>
 
-      <Card className="overflow-hidden">
+      <Card>
         <div className="flex flex-col gap-4 border-b border-white/10 p-5 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-xl font-bold">Produits en ligne</h2>
@@ -645,10 +529,45 @@ function Products({
           </div>
           <Link
             href="/dashboard/products/new"
-            className="inline-flex justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-semibold"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_8px_24px_-12px_rgba(249,115,22,0.65)] transition hover:bg-orange-400"
           >
+            <span aria-hidden="true" className="text-base leading-none">+</span>
             Create product
           </Link>
+        </div>
+
+        <div className="flex flex-col gap-3 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <label className="relative w-full sm:max-w-md">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
+              <svg
+                aria-hidden="true"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search for a product"
+              className="w-full rounded-xl border border-white/10 bg-slate-950/60 py-2 pl-10 pr-3 text-sm text-white outline-none transition focus:border-orange-400/50"
+              aria-label="Search products"
+            />
+          </label>
+          <p className="text-xs text-slate-500">
+            {searchQuery.trim()
+              ? `Showing ${filteredProducts.length} of ${displayProducts.length} ${displayProducts.length === 1 ? "product" : "products"}`
+              : `${displayProducts.length} ${displayProducts.length === 1 ? "product" : "products"}`}
+          </p>
         </div>
 
         {actionError && (
@@ -663,89 +582,217 @@ function Products({
               No products yet. Create a product to start building your catalog.
             </p>
           )}
-          {displayProducts.map((product) => (
-            <div key={product.slug + product.name} className="p-5">
-              <div className="grid gap-5 xl:grid-cols-[1fr_360px] xl:items-start">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-2xl font-black">{product.name}</h3>
-                    <Badge tone={product.status === "Published" ? "green" : "amber"}>
-                      {product.status}
-                    </Badge>
-                    <Badge tone="cyan">{product.pageTemplate}</Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {product.game} • {product.toolStatus} • {product.website}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {product.features.map((feature) => (
-                      <span
-                        key={feature}
-                        className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-slate-300"
+          {displayProducts.length > 0 && filteredProducts.length === 0 && (
+            <p className="p-6 text-sm text-slate-500">
+              No products match &ldquo;{searchQuery}&rdquo;.
+            </p>
+          )}
+          {filteredProducts.map((product, productIndex) => {
+            const thumbnail = product.media?.find(
+              (item) => item.imageUrl || item.thumbnailUrl,
+            );
+            const thumbnailUrl =
+              thumbnail?.imageUrl ?? thumbnail?.thumbnailUrl ?? null;
+            const isMenuOpen = openMenuId === product.id;
+            const isBusy = busyProductId === product.id;
+            const rankingInput: RankingInput = {
+              published: product.rawStatus === "published",
+              // Seller dashboard rows belong to the current seller; we don't
+              // know their tag from this view (it lives on profiles via the
+              // session), so this is the conservative "Seller" baseline.
+              // Once the dashboard plumbs the session's tag in, this can
+              // surface "Verified Seller" / "Provider / Developer" too.
+              sellerTag: "Seller",
+              verifiedPaymentCount: supabaseSourced
+                ? verifiedPaymentMethodCount ?? 0
+                : 0,
+              hasMedia: product.media.length > 0,
+              summary: product.summary,
+              featureGroupCount: product.featureGroups.length,
+              flatFeatureCount: product.features.length,
+              faqCount: product.faq.filter(
+                (item) => item.q.trim() !== "" && item.a.trim() !== "",
+              ).length,
+            };
+            const ranking = evaluateProductRanking(rankingInput);
+            // Drop the kebab menu upward for rows near the bottom of the
+            // list so it doesn't overflow the card / viewport.
+            const dropUp =
+              filteredProducts.length > 1 &&
+              productIndex >= filteredProducts.length - 2;
+            return (
+              <div key={product.slug + product.name} className="px-5 py-3">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-slate-950/60">
+                    {thumbnailUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumbnailUrl}
+                        alt={product.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <svg
+                        aria-hidden="true"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-slate-500"
                       >
-                        {feature}
-                      </span>
-                    ))}
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <path d="m21 15-5-5L5 21" />
+                      </svg>
+                    )}
                   </div>
-                  <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="text-xs text-slate-500">Next action</div>
-                    <div className="mt-1 text-sm font-semibold text-white">
-                      {product.nextAction}
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate text-base font-semibold leading-tight">
+                        {product.name}
+                      </h3>
+                      <Badge tone={product.rawStatus === "published" ? "green" : "default"}>
+                        {product.rawStatus === "published" ? "Published" : "Private"}
+                      </Badge>
+                      <RankingPill result={ranking} />
                     </div>
+                    <p className="mt-1 truncate text-xs text-slate-400">
+                      {product.game}
+                      {product.website ? ` · ${product.website}` : ""}
+                      {` · ${product.outboundCtr} CTR · ${product.views} views`}
+                    </p>
                   </div>
-                </div>
-                <div className="rounded-3xl border border-white/10 bg-slate-950/40 p-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    <MetricCard label="Views" value={String(product.views)} />
-                    <MetricCard label="Clicks" value={String(product.outboundClicks)} />
-                    <MetricCard label="CTR" value={product.outboundCtr} />
-                    <MetricCard label="Status" value={product.status} />
-                  </div>
-                  <div className="mt-5 grid gap-2">
-                    <Link
-                      href={`/products/${product.slug}`}
-                      className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold"
+
+                  <Link
+                    href={`/products/${product.slug}`}
+                    aria-label="View public page"
+                    title="View public page"
+                    className="hidden h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] text-slate-400 transition hover:bg-white/[0.06] hover:text-white sm:inline-flex"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     >
-                      View public page
-                    </Link>
-                    {supabaseSourced && product.rawStatus === "draft" && (
-                      <button
-                        onClick={() => updateProductStatus(product.id, "published")}
-                        disabled={busyProductId === product.id}
-                        className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-center text-sm font-semibold text-emerald-200 disabled:opacity-60"
+                      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.5 1.5" />
+                      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+                    </svg>
+                  </Link>
+
+                  <div className="relative" data-product-menu>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenMenuId(isMenuOpen ? null : product.id)
+                      }
+                      aria-label="Product actions"
+                      aria-haspopup="menu"
+                      aria-expanded={isMenuOpen}
+                      disabled={isBusy}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:opacity-60"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
                       >
-                        {busyProductId === product.id ? "Publishing…" : "Publish"}
-                      </button>
-                    )}
-                    {supabaseSourced && product.rawStatus !== "archived" && (
-                      <button
-                        onClick={() => archiveProduct(product.id, product.name)}
-                        disabled={busyProductId === product.id}
-                        className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-center text-sm font-semibold text-red-200 disabled:opacity-60"
+                        <circle cx="5" cy="12" r="1.7" />
+                        <circle cx="12" cy="12" r="1.7" />
+                        <circle cx="19" cy="12" r="1.7" />
+                      </svg>
+                    </button>
+                    {isMenuOpen && (
+                      <div
+                        role="menu"
+                        className={
+                          "absolute right-0 z-20 w-52 overflow-hidden rounded-xl border border-white/10 bg-slate-900 shadow-2xl shadow-black/60 " +
+                          (dropUp ? "bottom-full mb-1" : "top-full mt-1")
+                        }
                       >
-                        {busyProductId === product.id ? "Archiving…" : "Archive"}
-                      </button>
-                    )}
-                    {supabaseSourced && product.rawStatus === "archived" && (
-                      <button
-                        onClick={() => updateProductStatus(product.id, "draft")}
-                        disabled={busyProductId === product.id}
-                        className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-center text-sm font-semibold disabled:opacity-60"
-                      >
-                        {busyProductId === product.id ? "Restoring…" : "Restore to draft"}
-                      </button>
+                        {supabaseSourced && (
+                          <Link
+                            href={`/dashboard/products/${product.id}/edit`}
+                            role="menuitem"
+                            className="block px-3 py-2 text-sm text-slate-200 hover:bg-white/[0.04]"
+                            onClick={() => setOpenMenuId(null)}
+                          >
+                            Edit
+                          </Link>
+                        )}
+                        <Link
+                          href={`/products/${product.slug}`}
+                          role="menuitem"
+                          className="block px-3 py-2 text-sm text-slate-200 hover:bg-white/[0.04]"
+                          onClick={() => setOpenMenuId(null)}
+                        >
+                          View public page
+                        </Link>
+                        {supabaseSourced && product.rawStatus !== "published" && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              updateProductStatus(product.id, "published");
+                            }}
+                            disabled={isBusy}
+                            className="block w-full px-3 py-2 text-left text-sm text-emerald-200 hover:bg-white/[0.04] disabled:opacity-60"
+                          >
+                            {isBusy ? "Publishing…" : "Publish"}
+                          </button>
+                        )}
+                        {supabaseSourced && product.rawStatus === "published" && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              makePrivate(product.id, product.name);
+                            }}
+                            disabled={isBusy}
+                            className="block w-full px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/[0.04] disabled:opacity-60"
+                          >
+                            {isBusy ? "Updating…" : "Make private"}
+                          </button>
+                        )}
+                        {supabaseSourced && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => deleteProduct(product.id, product.name)}
+                            disabled={isBusy}
+                            className="block w-full border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-60"
+                          >
+                            {isBusy ? "Working…" : "Delete"}
+                          </button>
+                        )}
+                        {!supabaseSourced && (
+                          <p className="px-3 py-2 text-xs text-slate-500">
+                            Connect Supabase to enable edit, publish, make
+                            private, and delete.
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
+
               </div>
-              {supabaseSourced && (
-                <ProductMediaPanel
-                  productId={product.id}
-                  initialMedia={product.media ?? []}
-                />
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 
@@ -770,12 +817,10 @@ function Payments({
 }) {
   // Demo state
   const [demoRequests, setDemoRequests] = useState<LocalPaymentRequest[]>([]);
-  const [demoProducts, setDemoProducts] = useState<LocalProduct[]>([]);
 
-  // Form state — used in both modes; in Supabase mode we send IDs, in demo
-  // mode we send the same labels we always used.
+  // Form state. Verification is at the seller-account level, so the only
+  // selection a seller makes is which payment method they want approved.
   const [demoMethod, setDemoMethod] = useState<PaymentMethod>("Card");
-  const [productSelection, setProductSelection] = useState(""); // slug (demo) | id (supabase)
   const [paymentMethodId, setPaymentMethodId] = useState<string>("");
   const [processor, setProcessor] = useState("Stripe");
   const [checkoutUrl, setCheckoutUrl] = useState("https://example.com/checkout");
@@ -794,7 +839,6 @@ function Payments({
 
   useEffect(() => {
     if (supabaseSourced) return;
-    setDemoProducts(getLocalProducts());
     setDemoRequests(getPaymentRequests());
   }, [supabaseSourced]);
 
@@ -813,17 +857,11 @@ function Payments({
     setSubmitOk(null);
 
     if (!supabaseSourced) {
-      const product =
-        demoProducts.find((item) => item.slug === productSelection) || demoProducts[0];
-      if (!product) {
-        setSubmitError("Create a product first.");
-        return;
-      }
       const request: LocalPaymentRequest = {
         id: crypto.randomUUID(),
-        seller: product.seller,
-        productSlug: product.slug,
-        productName: product.name,
+        seller: "Demo Seller",
+        productSlug: null,
+        productName: null,
         method: demoMethod,
         processor,
         checkoutUrl,
@@ -844,11 +882,9 @@ function Payments({
       return;
     }
 
-    // Supabase path: submit real UUIDs.
-    if (!productSelection) {
-      setSubmitError("Select a product.");
-      return;
-    }
+    // Supabase path: submit real UUIDs. No product_id — verification is
+    // at the seller-account level and applies to every product the
+    // seller publishes once admin approves.
     if (!paymentMethodId) {
       setSubmitError("Select a payment method.");
       return;
@@ -860,7 +896,6 @@ function Payments({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          product_id: productSelection,
           payment_method_id: paymentMethodId,
           external_proof_url: proofUrl || checkoutUrl || undefined,
           seller_notes: sellerNotes || undefined,
@@ -873,15 +908,13 @@ function Payments({
       }
 
       // Optimistic UI update: prepend a local row so the seller sees their
-      // submission immediately without reloading. Look up the names from our
-      // existing options to render correctly.
-      const product = (initialProducts ?? []).find((p) => p.id === productSelection);
+      // submission immediately without reloading.
       const method = paymentMethods.find((m) => m.id === paymentMethodId);
-      if (product && method && payload.request) {
+      if (method && payload.request) {
         const optimistic: UISellerPaymentRequest = {
           id: payload.request.id,
-          productName: product.name,
-          productSlug: product.slug,
+          productName: null,
+          productSlug: null,
           method: method.name as PaymentMethod,
           status: "Pending verification",
           proofNote: sellerNotes || proofUrl || "—",
@@ -921,7 +954,7 @@ function Payments({
   return (
     <div className="space-y-6">
       <Card className="p-6">
-        <Badge tone="cyan">Payment verification</Badge>
+        <Badge tone="default">Payment verification</Badge>
         <h2 className="mt-4 text-2xl font-black">Prove the payment methods you accept</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
           Payment methods stay private or under review until admin approves them. Only verified
@@ -932,11 +965,11 @@ function Payments({
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="p-6">
           <h2 className="text-2xl font-black">Add payment method</h2>
-          {supabaseSourced && (initialProducts?.length ?? 0) === 0 && (
-            <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-              You don't have any products yet. Create a product before submitting payment proof.
-            </p>
-          )}
+          <p className="mt-2 text-sm text-slate-500">
+            Verification is per seller account, not per product. Once a
+            payment method is approved it shows on every product you
+            publish.
+          </p>
           {supabaseSourced && paymentMethods.length === 0 && (
             <p className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
               No payment methods are configured in the database. Ask an admin to seed
@@ -945,28 +978,6 @@ function Payments({
           )}
 
           <form onSubmit={handleSubmit} className="mt-5 grid gap-4">
-            <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <span className="text-xs text-slate-500">Product</span>
-              <select
-                value={productSelection}
-                onChange={(event) => setProductSelection(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm"
-              >
-                <option value="">Select…</option>
-                {supabaseSourced
-                  ? (initialProducts ?? []).map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name}
-                      </option>
-                    ))
-                  : demoProducts.map((product) => (
-                      <option key={product.slug} value={product.slug}>
-                        {product.name}
-                      </option>
-                    ))}
-              </select>
-            </label>
-
             <label className="block rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <span className="text-xs text-slate-500">Payment method</span>
               {supabaseSourced ? (
@@ -1011,7 +1022,7 @@ function Payments({
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
+              className="mt-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
             >
               {submitting ? "Submitting…" : "Submit payment verification"}
             </button>
@@ -1043,8 +1054,7 @@ function Payments({
                   <PaymentPill method={item.method} />
                   <PaymentStatusPill status={item.status} />
                 </div>
-                <div className="mt-3 text-sm font-semibold">{item.productName}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.proofNote}</div>
+                <div className="mt-2 text-xs text-slate-500">{item.proofNote}</div>
               </div>
             ))}
           </div>
@@ -1057,44 +1067,6 @@ function Payments({
 // =========================================================================
 // Analytics tab — read-only, demo data only for this batch
 // =========================================================================
-
-function Analytics() {
-  return (
-    <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-      <Card className="p-6">
-        <Badge tone="green">Analytics</Badge>
-        <h2 className="mt-4 text-2xl font-black">Performance</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Real analytics integration comes after the storage / events tracking batch.
-        </p>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          {analytics.map((item) => (
-            <MiniStat key={item.label} label={item.label} value={item.value} detail={item.change} />
-          ))}
-        </div>
-      </Card>
-      <Card className="p-6">
-        <h2 className="text-2xl font-black">Traffic sources</h2>
-        <div className="mt-6 space-y-4">
-          {trafficSources.map(([source, share]) => (
-            <div key={source}>
-              <div className="flex justify-between text-sm">
-                <span>{source}</span>
-                <span>{share}%</span>
-              </div>
-              <div className="mt-2 h-2 rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-purple-400"
-                  style={{ width: `${share}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </section>
-  );
-}
 
 // =========================================================================
 // Provider Tag tab
@@ -1157,7 +1129,7 @@ function Verification({
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
       <Card className="p-6">
-        <Badge tone="purple">Provider tag request</Badge>
+        <Badge tone="orange">Provider tag request</Badge>
         <h2 className="mt-4 text-2xl font-black">Request Provider / Developer tag</h2>
         <p className="mt-2 text-sm leading-6 text-slate-400">
           If you are the official developer or provider, submit your public proof here. Admin
@@ -1172,7 +1144,7 @@ function Verification({
           <button
             type="submit"
             disabled={submitting || currentStatus === "Pending"}
-            className="rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
+            className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold disabled:opacity-60"
           >
             {currentStatus === "Pending"
               ? "Request pending review"
@@ -1253,7 +1225,7 @@ function Verification({
 function Billing() {
   return (
     <Card className="p-6">
-      <Badge tone="purple">Billing</Badge>
+      <Badge tone="orange">Billing</Badge>
       <h2 className="mt-4 text-2xl font-black">Subscription, billing portal, and featured slots</h2>
       <p className="mt-2 text-sm leading-6 text-slate-400">
         Everything money-related lives on a dedicated page so it stays organized.
@@ -1262,7 +1234,7 @@ function Billing() {
       </p>
       <Link
         href="/dashboard/billing"
-        className="mt-5 inline-flex rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white"
+        className="mt-5 inline-flex rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white"
       >
         Open billing
       </Link>
@@ -1297,14 +1269,5 @@ function DashboardTextInput({
         className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none"
       />
     </label>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-1 truncate text-lg font-black">{value}</div>
-    </div>
   );
 }

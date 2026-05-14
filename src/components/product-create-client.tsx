@@ -4,7 +4,13 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge, Card } from "@/components/ui";
+import { CategoryPicker } from "@/components/category-picker";
+import { FeatureGroupsEditor } from "@/components/feature-groups-editor";
+import { FaqEditor } from "@/components/faq-editor";
 import { addLocalProduct, slugify } from "@/lib/product-store";
+import { games, productCategories } from "@/lib/data";
+import { flattenFeatureGroups, type FeatureGroup } from "@/lib/product-features";
+import type { FaqItem } from "@/lib/product-faq";
 import type { LocalProduct } from "@/lib/product-types";
 
 type ProductCreateError = {
@@ -45,14 +51,14 @@ function createDemoProduct(form: ProductCreateForm): LocalProduct {
     confidence: "Pending",
     verifiedPayments: [],
     paymentProfiles: [],
-    features: [],
+    features: flattenFeatureGroups(form.feature_groups),
     pricePoints: [],
     delivery: "Pending verification",
     refundPolicy: "Pending verification",
-    accent: "from-violet-500/70 to-cyan-400/40",
+    accent: "from-orange-500/70 to-cyan-400/40",
     summary: form.summary,
-    websiteUrl: "",
-    websiteLabel: "Visit website",
+    websiteUrl: form.website_url,
+    websiteLabel: form.website_url ? "Visit website" : "Visit website",
     discord: "",
     telegram: "",
     trustSignals: ["Seller-submitted product"],
@@ -61,7 +67,7 @@ function createDemoProduct(form: ProductCreateForm): LocalProduct {
     faq: [
       {
         q: "What happens next?",
-        a: "Add media from Produits, verify payment methods, then publish when ready.",
+        a: "Add media on the edit page, verify payment methods, then publish when ready.",
       },
     ],
     activity: { vouches: 0, views: 0, replies: 0, lastSeen: "Just created" },
@@ -72,7 +78,10 @@ type ProductCreateForm = {
   name: string;
   game: string;
   category: string;
+  website_url: string;
   summary: string;
+  feature_groups: FeatureGroup[];
+  faq: FaqItem[];
 };
 
 export function ProductCreateClient({
@@ -83,14 +92,20 @@ export function ProductCreateClient({
   const router = useRouter();
   const [form, setForm] = useState<ProductCreateForm>({
     name: "",
-    game: "",
-    category: "",
+    game: games[0] ?? "",
+    category: productCategories[0] ?? "",
+    website_url: "",
     summary: "",
+    feature_groups: [],
+    faq: [],
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const update = (key: keyof ProductCreateForm, value: string) => {
+  const update = <K extends keyof ProductCreateForm>(
+    key: K,
+    value: ProductCreateForm[K],
+  ) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
@@ -102,6 +117,17 @@ export function ProductCreateClient({
       setError("Validation: product name, game, and category are required.");
       return;
     }
+
+    const featureGroups = form.feature_groups
+      .map((group) => ({
+        name: group.name.trim(),
+        features: group.features.map((f) => f.trim()).filter(Boolean),
+      }))
+      .filter((group) => group.name || group.features.length > 0);
+
+    const faq = form.faq
+      .map((item) => ({ q: item.q.trim(), a: item.a.trim() }))
+      .filter((item) => item.q && item.a);
 
     if (!supabaseConfigured) {
       addLocalProduct(createDemoProduct(form));
@@ -118,7 +144,10 @@ export function ProductCreateClient({
           name: form.name,
           game: form.game,
           category: form.category,
-          summary: form.summary,
+          website_url: form.website_url || null,
+          summary: form.summary || null,
+          features_grouped: featureGroups,
+          faq,
         }),
       });
       const payload = (await response.json()) as ProductCreateResponse;
@@ -126,7 +155,14 @@ export function ProductCreateClient({
         setError(formatCreateError(response.status, payload as ProductCreateError));
         return;
       }
-      router.push("/dashboard?tab=products");
+      // Send the seller straight to the per-product edit page so they
+      // can add images / YouTube links inline. Same form fields, plus
+      // the media panel below.
+      if ("product" in payload && payload.product?.id) {
+        router.push(`/dashboard/products/${payload.product.id}/edit`);
+      } else {
+        router.push("/dashboard?tab=products");
+      }
     } catch (err) {
       setError(
         formatCreateError(null, {
@@ -141,14 +177,14 @@ export function ProductCreateClient({
   };
 
   return (
-    <Card className="mt-8 p-6">
+    <Card className="p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <Badge tone="purple">Draft product</Badge>
+          <Badge tone="default">Private</Badge>
           <h2 className="mt-4 text-2xl font-black">Create product</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            Products start as drafts. Add media from Produits after creation,
-            then publish when payment and trust details are ready.
+            Same fields as the edit page. Save once and you'll land on the
+            edit page, where you can add product images and YouTube videos.
           </p>
         </div>
         <Link
@@ -160,48 +196,69 @@ export function ProductCreateClient({
       </div>
 
       <form onSubmit={submit} className="mt-6 grid gap-5">
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid gap-5 md:grid-cols-2">
           <label className="grid gap-2 text-sm font-semibold text-slate-200">
             Product name
             <input
               value={form.name}
               onChange={(event) => update("name", event.target.value)}
-              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-300/50"
-              placeholder="Matrix Inter"
+              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+              placeholder="Product name"
               required
             />
           </label>
           <label className="grid gap-2 text-sm font-semibold text-slate-200">
             Game
-            <input
+            <select
               value={form.game}
               onChange={(event) => update("game", event.target.value)}
-              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-300/50"
-              placeholder="Rust"
+              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
               required
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-semibold text-slate-200">
-            Category
-            <input
-              value={form.category}
-              onChange={(event) => update("category", event.target.value)}
-              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-300/50"
-              placeholder="Cheat"
-              required
-            />
+            >
+              {games.map((game) => (
+                <option key={game} value={game}>
+                  {game}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
+
+        <CategoryPicker
+          value={form.category}
+          onChange={(category) => update("category", category)}
+        />
+
+        <label className="grid gap-2 text-sm font-semibold text-slate-200">
+          Website URL
+          <input
+            value={form.website_url}
+            onChange={(event) => update("website_url", event.target.value)}
+            placeholder="https://example.com"
+            className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+            type="url"
+          />
+        </label>
 
         <label className="grid gap-2 text-sm font-semibold text-slate-200">
           Short summary
           <textarea
             value={form.summary}
             onChange={(event) => update("summary", event.target.value)}
-            className="min-h-28 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-300/50"
-            placeholder="rust most advanced cheat"
+            className="min-h-28 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-orange-300/50"
+            placeholder="Short description of your product"
           />
         </label>
+
+        <FeatureGroupsEditor
+          value={form.feature_groups}
+          onChange={(next) => update("feature_groups", next)}
+        />
+
+        <FaqEditor
+          value={form.faq}
+          onChange={(next) => update("faq", next)}
+        />
 
         {error ? (
           <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
@@ -213,12 +270,12 @@ export function ProductCreateClient({
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? "Creating..." : "Create product"}
+            {submitting ? "Creating…" : "Create and add media"}
           </button>
           <p className="text-xs text-slate-500">
-            Drafts use status = draft and stay private until published.
+            Drafts stay private until you publish them from Produits.
           </p>
         </div>
       </form>
