@@ -12,6 +12,7 @@ import { NoVerifiedPayments, PaymentPill } from "@/components/payment-pill";
 import { SaveProductButton } from "@/components/save-product-button";
 import { TrustBox } from "@/components/trust-box";
 import { ReportListingButton } from "@/components/report-listing-button";
+import { toSlug } from "@/lib/slugs";
 import { recordRecentlyViewed } from "@/lib/recently-viewed";
 import {
   evaluateProductRanking,
@@ -385,9 +386,12 @@ export function ProductPageClient({
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-base font-bold text-white">
+                  <Link
+                    href={`/sellers/${toSlug(product.seller)}`}
+                    className="text-base font-bold text-white underline-offset-2 transition hover:text-orange-200 hover:underline"
+                  >
                     {product.seller}
-                  </span>
+                  </Link>
                   <Badge
                     tone={
                       product.sellerTag === "Provider / Developer"
