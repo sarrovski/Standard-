@@ -1,4 +1,12 @@
-import { Card, MiniStat, Nav, SectionHeader, Shell, Badge, ButtonLink } from "@/components/ui";
+import {
+  Badge,
+  ButtonLink,
+  Card,
+  MiniStat,
+  Nav,
+  SectionHeader,
+  Shell,
+} from "@/components/ui";
 import { requireRole } from "@/lib/roles";
 
 export default async function AccountPage({
@@ -129,6 +137,37 @@ export default async function AccountPage({
             </section>
           </>
         )}
+
+        <section className="mt-8">
+          <SectionHeader
+            eyebrow="Account settings"
+            title="Security"
+            text="Manage the sign-in protections on your Standard account."
+          />
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <Card className="p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <Badge tone="amber">Not enabled</Badge>
+                  <h2 className="mt-4 text-2xl font-black">
+                    Two-factor authentication
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-500 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Set up 2FA
+                </button>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-slate-400">
+                2FA setup is coming soon. For now, use a strong password.
+              </p>
+            </Card>
+          </div>
+        </section>
       </section>
     </Shell>
   );

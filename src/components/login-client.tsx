@@ -75,6 +75,7 @@ function friendlyAuthError(message: string): string {
 export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
   const [email, setEmail] = useState(supabaseConfigured ? "" : "seller@standard.gg");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const redirectAfterPasswordLogin = async () => {
@@ -251,6 +252,28 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
             />
           </label>
+
+          <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(event) => setRememberMe(event.target.checked)}
+                disabled={isBusy}
+                className="mt-1 h-4 w-4 rounded border-white/20 bg-slate-950 text-purple-500 accent-purple-500 disabled:opacity-60"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-slate-200">
+                  Remember me
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">
+                  {rememberMe
+                    ? "Standard will use the current Supabase session behavior."
+                    : "Session-only login is not enabled yet, so Supabase session behavior is unchanged for now."}
+                </span>
+              </span>
+            </label>
+          </div>
 
           {sentMessage ? (
             <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">

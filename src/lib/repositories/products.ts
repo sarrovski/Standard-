@@ -13,6 +13,7 @@ import { withTimeout } from "@/lib/repositories/query-timeout";
  */
 
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
+type FeaturedSlotRow = Database["public"]["Tables"]["featured_slots"]["Row"];
 type SellerPaymentMethodRow =
   Database["public"]["Tables"]["seller_payment_methods"]["Row"];
 type PaymentMethodRow = Database["public"]["Tables"]["payment_methods"]["Row"];
@@ -93,6 +94,44 @@ export async function getPublishedProducts() {
     data: attachVerifiedPaymentMethods(products, paymentRes.data ?? []),
     error: null,
   };
+}
+
+export async function getActiveFeaturedProductIds(now = new Date()) {
+  const supabase = createClient();
+  const nowIso = now.toISOString();
+  const slotsRes = await withTimeout(
+    supabase
+      .from("featured_slots")
+      .select("product_id, starts_at")
+      .eq("status", "active")
+      .lte("starts_at", nowIso)
+      .gt("ends_at", nowIso)
+      .not("product_id", "is", null)
+      .order("starts_at", { ascending: false }),
+    { label: "getActiveFeaturedProductIds" },
+  );
+
+  if (slotsRes.error) {
+    return { data: null, error: slotsRes.error };
+  }
+
+  if (!slotsRes.data) {
+    return { data: [] as string[], error: null };
+  }
+
+  const seen = new Set<string>();
+  const productIds = ((slotsRes.data ?? []) as Pick<
+    FeaturedSlotRow,
+    "product_id" | "starts_at"
+  >[])
+    .map((slot) => slot.product_id)
+    .filter((productId): productId is string => {
+      if (!productId || seen.has(productId)) return false;
+      seen.add(productId);
+      return true;
+    });
+
+  return { data: productIds, error: null };
 }
 
 export async function getPublishedProductBySlug(productSlug: string) {
