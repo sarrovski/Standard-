@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAalState } from "@/lib/supabase/mfa";
 
 export type AppRole = "user" | "seller" | "admin";
 
@@ -43,6 +44,14 @@ export async function requireRole(allowedRoles: AppRole[]) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    redirect("/login");
+  }
+
+  // Enforce 2FA: a user with a verified TOTP factor must complete the login
+  // challenge before reaching any guarded route. The /login page detects the
+  // pending challenge on mount and shows the code step.
+  const aal = await getAalState(supabase);
+  if (aal.needsChallenge) {
     redirect("/login");
   }
 

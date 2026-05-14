@@ -7,7 +7,10 @@ import {
   SectionHeader,
   Shell,
 } from "@/components/ui";
-import { requireRole } from "@/lib/roles";
+import { isSupabaseConfigured, requireRole } from "@/lib/roles";
+import { createClient } from "@/lib/supabase/server";
+import { getVerifiedTotpFactor } from "@/lib/supabase/mfa";
+import { TwoFactorCard } from "@/components/two-factor-card";
 
 export default async function AccountPage({
   searchParams,
@@ -16,6 +19,16 @@ export default async function AccountPage({
 }) {
   await requireRole(["user", "seller", "admin"]);
   const sellView = searchParams?.view === "sell";
+
+  // Look up the user's verified TOTP factor so the Security card can render
+  // the right state. Demo mode (no Supabase env) skips this entirely.
+  const supabaseConfigured = isSupabaseConfigured();
+  let twoFactorFactorId: string | null = null;
+  if (supabaseConfigured) {
+    const supabase = createClient();
+    const factor = await getVerifiedTotpFactor(supabase);
+    twoFactorFactorId = factor?.id ?? null;
+  }
 
   return (
     <Shell>
@@ -146,26 +159,11 @@ export default async function AccountPage({
           />
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <Card className="p-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <Badge tone="amber">Not enabled</Badge>
-                  <h2 className="mt-4 text-2xl font-black">
-                    Two-factor authentication
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  disabled
-                  className="rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-500 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Set up 2FA
-                </button>
-              </div>
-              <p className="mt-4 text-sm leading-6 text-slate-400">
-                2FA setup is coming soon. For now, use a strong password.
-              </p>
-            </Card>
+            <TwoFactorCard
+              supabaseConfigured={supabaseConfigured}
+              initiallyEnabled={Boolean(twoFactorFactorId)}
+              factorId={twoFactorFactorId}
+            />
           </div>
         </section>
       </section>

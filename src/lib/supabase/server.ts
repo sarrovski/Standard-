@@ -1,6 +1,11 @@
 import { cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { Database } from "./types";
+import {
+  REMEMBER_COOKIE,
+  applyRememberToCookieOptions,
+  readRememberCookieValue,
+} from "./remember";
 
 /**
  * Server-side Supabase client for App Router server components, route
@@ -41,7 +46,17 @@ export function createClient() {
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
-            cookieStore.set({ name, value, ...options });
+            // Honour the "Remember me" choice: when the marker says
+            // session-only, strip maxAge/expires so refreshed auth cookies
+            // stay session-scoped instead of being re-extended to 400 days.
+            const remember = readRememberCookieValue(
+              cookieStore.get(REMEMBER_COOKIE)?.value,
+            );
+            cookieStore.set({
+              name,
+              value,
+              ...applyRememberToCookieOptions(options, remember),
+            });
           } catch {
             // Server Component render context — write not allowed. Safe to
             // ignore: middleware refreshes the session on the response.

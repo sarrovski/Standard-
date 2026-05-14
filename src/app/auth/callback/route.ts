@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/roles";
 import { getSiteUrl } from "@/lib/site-url";
+import { getAalState } from "@/lib/supabase/mfa";
 
 /**
  * Magic-link / OAuth landing route.
@@ -73,6 +74,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${siteUrl}/login?auth=exchange-failed`);
   }
   log("exchange-ok");
+
+  // Enforce 2FA on magic-link / OAuth logins too: if the user has a verified
+  // factor, send them to /login to complete the TOTP challenge before any
+  // role destination (or ?next= target).
+  const aal = await getAalState(supabase);
+  if (aal.needsChallenge) {
+    log("mfa-challenge-required");
+    return NextResponse.redirect(`${siteUrl}/login`);
+  }
 
   // If the caller asked for a specific destination and it's safe, honour it.
   if (safeNext) {

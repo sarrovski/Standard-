@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Badge, ButtonLink, Card } from "@/components/ui";
 import { saveSession } from "@/lib/product-store";
 import type { LocalSession } from "@/lib/product-types";
 import { createClient } from "@/lib/supabase/client";
+import { getAalState, getVerifiedTotpFactor } from "@/lib/supabase/mfa";
+import { setRememberCookie } from "@/lib/supabase/remember";
 
 type LoginClientProps = {
   /**
@@ -21,7 +23,7 @@ type ProfileRole = "user" | "seller" | "admin";
 
 type Status =
   | { kind: "idle" }
-  | { kind: "submitting"; action: "password" | "magic" | "reset" }
+  | { kind: "submitting"; action: "password" | "magic" | "reset" | "mfa" }
   | { kind: "sent"; message: string }
   | { kind: "error"; message: string };
 
@@ -77,6 +79,44 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  // When set, the password step is done and the account requires a TOTP code.
+  const [mfa, setMfa] = useState<{ factorId: string } | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  // True while the on-mount AAL check runs, so we don't flash the login form
+  // to a user who was bounced back here to finish a 2FA challenge.
+  const [checkingMfa, setCheckingMfa] = useState(supabaseConfigured);
+
+  // If the visitor already has a password-only session that owes a TOTP
+  // challenge (e.g. bounced here from requireRole or the magic-link callback),
+  // jump straight to the challenge step.
+  useEffect(() => {
+    if (!supabaseConfigured) {
+      setCheckingMfa(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+        const aal = await getAalState(supabase);
+        if (cancelled || !aal.needsChallenge) return;
+        const factor = await getVerifiedTotpFactor(supabase);
+        if (cancelled || !factor) return;
+        setMfa({ factorId: factor.id });
+      } catch {
+        // Ignore — fall through to the normal login form.
+      } finally {
+        if (!cancelled) setCheckingMfa(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseConfigured]);
 
   const redirectAfterPasswordLogin = async () => {
     const supabase = createClient();
@@ -120,6 +160,9 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
     }
 
     setStatus({ kind: "submitting", action: "password" });
+    // Record the "Remember me" choice before the sign-in call so it's in
+    // place when Supabase writes the session cookies.
+    setRememberCookie(rememberMe);
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithPassword({
@@ -130,6 +173,19 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
       if (error) {
         setStatus({ kind: "error", message: friendlyAuthError(error.message) });
         return;
+      }
+
+      // If the account has 2FA, switch to the TOTP challenge step instead of
+      // redirecting — the session is still aal1 until the code is verified.
+      const aal = await getAalState(supabase);
+      if (aal.needsChallenge) {
+        const factor = await getVerifiedTotpFactor(supabase);
+        if (factor) {
+          setMfaCode("");
+          setMfa({ factorId: factor.id });
+          setStatus({ kind: "idle" });
+          return;
+        }
       }
 
       await redirectAfterPasswordLogin();
@@ -156,6 +212,9 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
     }
 
     setStatus({ kind: "submitting", action: "magic" });
+    // Persist the "Remember me" choice now; when the user returns through
+    // /auth/callback the server reads this same marker.
+    setRememberCookie(rememberMe);
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOtp({
@@ -210,10 +269,131 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
     }
   };
 
+  const handleVerifyMfa = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!mfa) return;
+
+    if (mfaCode.length !== 6) {
+      setStatus({
+        kind: "error",
+        message: "Enter the 6-digit code from your authenticator app.",
+      });
+      return;
+    }
+
+    setStatus({ kind: "submitting", action: "mfa" });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: mfa.factorId,
+        code: mfaCode,
+      });
+
+      if (error) {
+        setStatus({ kind: "error", message: friendlyAuthError(error.message) });
+        return;
+      }
+
+      await redirectAfterPasswordLogin();
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message:
+          err instanceof Error
+            ? friendlyAuthError(err.message)
+            : "Unexpected error verifying the code.",
+      });
+    }
+  };
+
+  const handleCancelMfa = async () => {
+    setStatus({ kind: "submitting", action: "mfa" });
+    try {
+      // Drop the half-finished aal1 session so a refresh can't resume it.
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {
+      // Non-fatal — clearing local state below is what matters for the UI.
+    } finally {
+      setMfa(null);
+      setMfaCode("");
+      setPassword("");
+      setStatus({ kind: "idle" });
+    }
+  };
+
   const submittingAction = status.kind === "submitting" ? status.action : null;
   const isBusy = status.kind === "submitting";
   const sentMessage = status.kind === "sent" ? status.message : null;
   const errorMessage = status.kind === "error" ? status.message : null;
+
+  if (checkingMfa) {
+    return (
+      <div className="space-y-5">
+        <Card className="p-6 md:p-8">
+          <p className="text-sm text-slate-400">Checking your session…</p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (mfa) {
+    return (
+      <div className="space-y-5">
+        <Card className="p-6 md:p-8">
+          <div className="mb-8">
+            <h2 className="text-3xl font-black">Two-factor authentication</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              Enter the 6-digit code from your authenticator app to finish
+              signing in.
+            </p>
+          </div>
+
+          <form onSubmit={handleVerifyMfa} className="space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-sm text-slate-400">
+                Authentication code
+              </span>
+              <input
+                value={mfaCode}
+                onChange={(event) =>
+                  setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                placeholder="000000"
+                disabled={isBusy}
+                className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-center text-lg tracking-[0.3em] text-white outline-none transition placeholder:tracking-normal placeholder:text-slate-600 focus:border-purple-400/50 disabled:opacity-60"
+              />
+            </label>
+
+            {errorMessage ? (
+              <div className="rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
+                {errorMessage}
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={isBusy || mfaCode.length !== 6}
+              className="inline-flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-purple-500/20 disabled:opacity-60"
+            >
+              {submittingAction === "mfa" ? "Verifying…" : "Verify"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelMfa}
+              disabled={isBusy}
+              className="w-full rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-purple-400/40 hover:text-white disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </form>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -268,8 +448,8 @@ export function LoginClient({ supabaseConfigured, siteUrl }: LoginClientProps) {
                 </span>
                 <span className="mt-1 block text-xs leading-5 text-slate-500">
                   {rememberMe
-                    ? "Standard will use the current Supabase session behavior."
-                    : "Session-only login is not enabled yet, so Supabase session behavior is unchanged for now."}
+                    ? "Stay signed in on this device until you log out."
+                    : "Sign out automatically when you close your browser."}
                 </span>
               </span>
             </label>
