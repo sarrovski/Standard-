@@ -14,6 +14,8 @@ import {
   getReporterDisplayNames,
   getVerifiedPaymentMethodCountBySeller,
 } from "@/lib/repositories/admin";
+import { getAppealedReviewsForAdmin } from "@/lib/repositories/reviews";
+import type { AdminReviewItem } from "@/components/admin-client";
 import {
   adaptAdminFeaturedSlot,
   adaptAdminPaymentRequest,
@@ -112,6 +114,7 @@ async function loadAdminData(): Promise<{
   products: UIAdminProduct[] | null;
   featuredSlots: UIAdminFeaturedSlot[] | null;
   reports: UIAdminProductReport[] | null;
+  reviews: AdminReviewItem[] | null;
   realSignals: RealRiskSignal[];
 }> {
   if (!isSupabaseConfigured()) {
@@ -122,6 +125,7 @@ async function loadAdminData(): Promise<{
       products: null,
       featuredSlots: null,
       reports: null,
+      reviews: null,
       realSignals: [],
     };
   }
@@ -136,6 +140,7 @@ async function loadAdminData(): Promise<{
     pendingByProduct,
     featuredRes,
     reportsRes,
+    reviewsRes,
   ] = await Promise.all([
     getPendingPaymentVerificationRequests(),
     getPendingProviderTagRequests(),
@@ -146,6 +151,7 @@ async function loadAdminData(): Promise<{
     getPendingVerificationCountByProduct(),
     getAllFeaturedSlotsForAdmin(),
     getProductReportsForAdmin(),
+    getAppealedReviewsForAdmin(),
   ]);
 
   if (paymentRes.error) {
@@ -166,6 +172,21 @@ async function loadAdminData(): Promise<{
   if (reportsRes.error) {
     console.error("[admin] reports fetch failed:", reportsRes.error.message);
   }
+  if (reviewsRes.error) {
+    console.error("[admin] reviews fetch failed:", reviewsRes.error.message);
+  }
+
+  const reviews: AdminReviewItem[] = reviewsRes.data.map((row) => ({
+    id: row.id,
+    rating: row.rating,
+    body: row.body,
+    appealReason: row.appeal_reason,
+    createdAt: row.created_at,
+    productName: row.product?.name ?? "Unknown product",
+    productSlug: row.product?.slug ?? "",
+    sellerName: row.seller?.seller_name ?? "Unknown seller",
+    reviewerName: row.reviewer?.display_name ?? null,
+  }));
 
   const paymentRows = (paymentRes.data ?? []) as unknown as PaymentVerificationRequestWithJoins[];
   const tagRows = (tagRes.data ?? []) as unknown as ProviderTagRequestWithJoins[];
@@ -230,6 +251,7 @@ async function loadAdminData(): Promise<{
     products,
     featuredSlots,
     reports,
+    reviews,
     realSignals,
   };
 }
@@ -253,6 +275,7 @@ export default async function AdminPage({
           initialProducts={data.products}
           initialFeaturedSlots={data.featuredSlots}
           initialReports={data.reports}
+          initialReviews={data.reviews}
           realSignals={data.realSignals}
           initialTab={searchParams?.tab}
         />

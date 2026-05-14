@@ -15,6 +15,7 @@ type ProductReportReason =
   | "unsafe_or_prohibited"
   | "other";
 type ProductReportStatus = "open" | "reviewed" | "resolved";
+type ProductReviewStatus = "approved" | "appealed" | "rejected";
 
 type Table<Row> = { Row: Row; Insert: Partial<Row>; Update: Partial<Row>; Relationships: [] };
 
@@ -45,6 +46,7 @@ export type Database = {
       saved_products: Table<{ id: string; profile_id: string; product_id: string; created_at: string }>;
       product_events: Table<{ id: string; product_id: string; kind: "view" | "outbound_click"; visitor_hash: string | null; ts: string }>;
       product_reports: Table<{ id: string; product_id: string; seller_id: string | null; reporter_profile_id: string | null; reason: ProductReportReason; details: string | null; status: ProductReportStatus; visitor_hash: string | null; reviewed_by: string | null; reviewed_at: string | null; created_at: string; updated_at: string }>;
+      product_reviews: Table<{ id: string; product_id: string; seller_id: string; reviewer_profile_id: string | null; rating: number; body: string; status: ProductReviewStatus; appeal_reason: string | null; reviewed_by: string | null; reviewed_at: string | null; created_at: string; updated_at: string }>;
     };
     Views: Record<string, never>;
     Functions: {

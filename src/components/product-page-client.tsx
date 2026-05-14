@@ -18,6 +18,20 @@ import {
   type RankingInput,
 } from "@/lib/product-ranking";
 import { RankingPill, TrustSignalsList } from "@/components/product-ranking-ui";
+import { ReviewSubmitButton } from "@/components/review-submit-button";
+import {
+  REVIEW_PUBLIC_LABEL_PLURAL,
+  REVIEW_RATING_MAX,
+} from "@/lib/product-reviews";
+
+export type ProductPageReview = {
+  id: string;
+  reviewerDisplayName: string | null;
+  reviewerAvatarUrl: string | null;
+  rating: number;
+  body: string;
+  createdAt: string;
+};
 
 /**
  * Best-effort beacon to the product-events API. Uses sendBeacon so the
@@ -95,6 +109,9 @@ type ProductPageClientProps = {
   loadMessage?: string;
   initialSaved?: boolean;
   loggedIn?: boolean;
+  reviews?: ReadonlyArray<ProductPageReview>;
+  /** True when the viewer is the seller-owner of this product. They can't review. */
+  isOwnSeller?: boolean;
 };
 
 function normalizeGallery(
@@ -128,6 +145,8 @@ export function ProductPageClient({
   loadMessage,
   initialSaved = false,
   loggedIn = false,
+  reviews = [],
+  isOwnSeller = false,
 }: ProductPageClientProps) {
   const supabaseSourced = initialProduct !== null;
 
@@ -457,7 +476,14 @@ export function ProductPageClient({
 
       {/* 5. Reviews / reputation ----------------------------------------- */}
       <section className="mt-10">
-        <ReviewsSection />
+        <ReviewsSection
+          productId={product.id ?? null}
+          productSlug={product.slug}
+          reviews={reviews}
+          loggedIn={loggedIn}
+          isOwnSeller={isOwnSeller}
+          supabaseSourced={supabaseSourced}
+        />
       </section>
 
       {/* 6. FAQ ---------------------------------------------------------- */}
@@ -642,65 +668,100 @@ function FeaturesPanel({
 }
 
 /**
- * Reviews / reputation section. Reviews aren't modelled in Supabase yet
- * (no public.reviews table — see the post-PR notes). Until then this
- * surface is honest about its state instead of inventing fake content.
+ * Real reviews section. Auto-publish model: rows arrive as `approved` and
+ * show here immediately. Admins only step in when a seller appeals a
+ * review (status flips to `appealed`, which excludes it from this view).
  *
- * Future shape (sketch for when the table lands):
- *   type Review = {
- *     id: string;
- *     productId: string;
- *     reviewerDisplayName: string | null;
- *     rating: 1 | 2 | 3 | 4 | 5;
- *     body: string;
- *     createdAt: string;
- *   };
- * The component already accepts an optional `reviews` array so wiring
- * the real data later is a one-line prop change in the parent.
+ * Wording: until purchase verification exists, we call these "community
+ * reviews" — never "verified buyer" — see src/lib/product-reviews.ts.
+ *
+ * The submit affordance:
+ *   - hidden when the viewer is the product's seller-owner (own-product)
+ *   - hidden in demo mode (no Supabase) — the panel is honest about it
+ *   - prompts a sign-in link when the viewer is logged out
+ *   - renders the modal button otherwise
  */
 function ReviewsSection({
+  productId,
+  productSlug,
   reviews,
+  loggedIn,
+  isOwnSeller,
+  supabaseSourced,
 }: {
-  reviews?: ReadonlyArray<{
-    id: string;
-    reviewerDisplayName: string | null;
-    rating: number;
-    body: string;
-    createdAt: string;
-  }>;
+  productId: string | null;
+  productSlug: string;
+  reviews: ReadonlyArray<ProductPageReview>;
+  loggedIn: boolean;
+  isOwnSeller: boolean;
+  supabaseSourced: boolean;
 }) {
+  const count = reviews.length;
+  const average =
+    count > 0
+      ? Math.round(
+          (reviews.reduce((sum, r) => sum + r.rating, 0) / count) * 10,
+        ) / 10
+      : null;
+
+  const canRender = supabaseSourced && productId !== null;
+
   return (
-    <Panel title="Reviews">
-      {reviews && reviews.length > 0 ? (
-        <ul className="space-y-3">
-          {reviews.map((review) => (
-            <li
-              key={review.id}
-              className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-white">
-                  {review.reviewerDisplayName ?? "Buyer"}
-                </span>
-                <span className="text-xs text-slate-500">
-                  {new Date(review.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-              <div className="mt-1 text-xs font-semibold text-orange-200/80">
-                {review.rating} / 5
-              </div>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                {review.body}
-              </p>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-5 text-sm text-slate-400">
-          Verified buyer reviews are coming soon. Once buyers can leave
-          reviews on Standard, they&apos;ll appear here.
-        </div>
-      )}
+    <Panel
+      title={REVIEW_PUBLIC_LABEL_PLURAL}
+      subtitle={
+        count > 0 && average !== null
+          ? `${average} / ${REVIEW_RATING_MAX} from ${count} ${
+              count === 1 ? "review" : "reviews"
+            }.`
+          : "Real, unverified buyer reviews. Sellers can appeal anything they think is unfair."
+      }
+    >
+      <div className="space-y-4">
+        {count > 0 ? (
+          <ul className="space-y-3">
+            {reviews.map((review) => (
+              <li
+                key={review.id}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-white">
+                    {review.reviewerDisplayName ?? "Buyer"}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs font-semibold text-orange-200/80">
+                  {review.rating} / {REVIEW_RATING_MAX}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-300 whitespace-pre-line">
+                  {review.body}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-white/15 bg-slate-950/40 p-5 text-sm text-slate-400">
+            No community reviews yet. Be the first to share what you saw.
+          </div>
+        )}
+
+        {canRender && !isOwnSeller && (
+          <ReviewSubmitButton
+            productId={productId}
+            productSlug={productSlug}
+            loggedIn={loggedIn}
+          />
+        )}
+        {canRender && isOwnSeller && (
+          <p className="text-xs text-slate-500">
+            You can&apos;t review your own product. Sellers can appeal
+            reviews from the dashboard&apos;s Reviews tab.
+          </p>
+        )}
+      </div>
     </Panel>
   );
 }

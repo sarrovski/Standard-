@@ -7,6 +7,8 @@ import {
   getSellerDashboardData,
   getVerifiedPaymentMethodCount,
 } from "@/lib/repositories/seller";
+import { getReviewsForSeller } from "@/lib/repositories/reviews";
+import type { SellerReview } from "@/components/seller-reviews-tab";
 import {
   adaptPaymentMethodOption,
   adaptProviderTagStatus,
@@ -41,13 +43,28 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
       paymentMethods: [],
       subscription: null,
       verifiedPaymentMethodCount: 0,
+      reviews: [],
     };
   }
 
-  const [verifiedPaymentMethodCount, trafficStats] = await Promise.all([
+  const [verifiedPaymentMethodCount, trafficStats, reviewsRes] = await Promise.all([
     getVerifiedPaymentMethodCount(data.seller.id),
     getProductTrafficStats(data.seller.id),
+    getReviewsForSeller(data.seller.id),
   ]);
+
+  const reviews: SellerReview[] = reviewsRes.data.map((row) => ({
+    id: row.id,
+    productName: row.product?.name ?? "Unknown product",
+    productSlug: row.product?.slug ?? "",
+    reviewerDisplayName: row.reviewer?.display_name ?? null,
+    rating: row.rating,
+    body: row.body,
+    status: row.status,
+    appealReason: row.appeal_reason,
+    reviewedAt: row.reviewed_at,
+    createdAt: row.created_at,
+  }));
 
   return {
     products: data.products.map((row) =>
@@ -61,6 +78,7 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
     paymentMethods: data.paymentMethods.map(adaptPaymentMethodOption),
     subscription: adaptSellerSubscription(data.subscription),
     verifiedPaymentMethodCount,
+    reviews,
   };
 }
 

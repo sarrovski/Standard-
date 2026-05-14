@@ -297,6 +297,8 @@ export function sortedProductMedia(
 // ---------- Full product detail adapter (used by /products/[slug]) ---------
 
 export type UIProductDetail = UIProductCard & {
+  /** Seller record id — used for own-seller checks (review submit, appeal). */
+  sellerId: string;
   refundPolicy: string;
   websiteUrl: string;
   websiteLabel: string;
@@ -347,6 +349,7 @@ export function adaptProductDetail(row: ProductFullJoins): UIProductDetail {
 
   return {
     ...card,
+    sellerId: seller?.id ?? row.seller_id,
     paymentProfiles: profiles,
     refundPolicy: "See seller's official site",
     websiteUrl: row.website_url ?? "",

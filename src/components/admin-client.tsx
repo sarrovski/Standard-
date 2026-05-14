@@ -22,6 +22,24 @@ import type { RealRiskSignal } from "@/app/admin/page";
 import { PaymentPill, PaymentStatusPill } from "@/components/payment-pill";
 import { RankingPill } from "@/components/product-ranking-ui";
 import { evaluateProductRanking } from "@/lib/product-ranking";
+import { REVIEW_RATING_MAX } from "@/lib/product-reviews";
+
+/**
+ * Lightweight shape for the admin Reviews queue. All fields are
+ * pre-flattened server-side so the client component doesn't need to
+ * know about the underlying product_reviews schema.
+ */
+export type AdminReviewItem = {
+  id: string;
+  rating: number;
+  body: string;
+  appealReason: string | null;
+  createdAt: string;
+  productName: string;
+  productSlug: string;
+  sellerName: string;
+  reviewerName: string | null;
+};
 
 type AdminClientProps = {
   initialPaymentRequests: UIAdminPaymentRequest[] | null;
@@ -30,6 +48,7 @@ type AdminClientProps = {
   initialProducts: UIAdminProduct[] | null;
   initialFeaturedSlots: UIAdminFeaturedSlot[] | null;
   initialReports: UIAdminProductReport[] | null;
+  initialReviews: AdminReviewItem[] | null;
   realSignals: RealRiskSignal[];
   initialTab?: string;
 };
@@ -43,6 +62,7 @@ const TABS = [
   { key: "sellers", label: "Sellers" },
   { key: "products", label: "Products" },
   { key: "reports", label: "Reports" },
+  { key: "reviews", label: "Reviews" },
   { key: "featured", label: "Featured slots" },
   { key: "signals", label: "Signals" },
 ] as const;
@@ -62,6 +82,7 @@ export function AdminClient({
   initialProducts,
   initialFeaturedSlots,
   initialReports,
+  initialReviews,
   realSignals,
   initialTab,
 }: AdminClientProps) {
@@ -97,6 +118,10 @@ export function AdminClient({
     initialReports ?? [],
   );
   const openReportsCount = reports.filter((r) => r.status === "open").length;
+  const [reviews, setReviews] = useState<AdminReviewItem[]>(
+    initialReviews ?? [],
+  );
+  const appealedReviewCount = reviews.length;
 
   // Sellers tab can request the Products tab pre-filtered by seller via a
   // URL query param (?seller=<id>). Read it and pass into ProductsTab.
@@ -146,7 +171,9 @@ export function AdminClient({
                   ? pendingTagCount
                   : item.key === "reports" && openReportsCount > 0
                     ? openReportsCount
-                    : null;
+                    : item.key === "reviews" && appealedReviewCount > 0
+                      ? appealedReviewCount
+                      : null;
             return (
               <button
                 key={item.key}
@@ -263,6 +290,15 @@ export function AdminClient({
                     : r,
                 ),
               )
+            }
+          />
+        )}
+        {tab === "reviews" && (
+          <ReviewsQueueTab
+            reviews={reviews}
+            supabaseSourced={supabaseSourced}
+            onResolve={(id) =>
+              setReviews((prev) => prev.filter((row) => row.id !== id))
             }
           />
         )}
@@ -1558,6 +1594,152 @@ function SignalsTab({
           ))}
         </div>
       </section>
+    </Card>
+  );
+}
+
+
+// =========================================================================
+// Reviews queue — appealed reviews, with approve / reject actions
+// =========================================================================
+
+function ReviewsQueueTab({
+  reviews,
+  supabaseSourced,
+  onResolve,
+}: {
+  reviews: AdminReviewItem[];
+  supabaseSourced: boolean;
+  onResolve: (id: string) => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const act = async (id: string, action: "approve" | "reject") => {
+    if (!supabaseSourced) return;
+    setError(null);
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/admin/product-reviews/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Couldn't update review.");
+        return;
+      }
+      // Either action removes the row from the appealed-only queue.
+      onResolve(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 p-5">
+        <div>
+          <h2 className="text-xl font-bold">Appealed reviews</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            {supabaseSourced
+              ? "Sellers have flagged these community reviews for admin review. Approve to keep visible, reject to hide."
+              : "Demo mode — connect Supabase to load real reviews."}
+          </p>
+        </div>
+        <Badge tone={supabaseSourced ? "green" : "amber"}>
+          {supabaseSourced
+            ? `Live · ${reviews.length} appeal${reviews.length === 1 ? "" : "s"}`
+            : "Demo only"}
+        </Badge>
+      </div>
+
+      {error && (
+        <div className="m-5 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
+      {reviews.length === 0 ? (
+        <div className="p-6 text-sm text-slate-500">
+          {supabaseSourced
+            ? "Nothing to moderate. Community reviews land as approved; only seller appeals reach this queue."
+            : "Demo mode: no reviews to show."}
+        </div>
+      ) : (
+        <ul className="divide-y divide-white/10">
+          {reviews.map((review) => {
+            const isBusy = busyId === review.id;
+            return (
+              <li key={review.id} className="grid gap-3 p-5 lg:grid-cols-[1.6fr_0.4fr]">
+                <div className="min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="amber">Appealed</Badge>
+                    <Badge tone="orange">
+                      {review.rating} / {REVIEW_RATING_MAX}
+                    </Badge>
+                    {review.productSlug ? (
+                      <Link
+                        href={`/products/${review.productSlug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="truncate text-sm font-semibold text-white transition hover:text-orange-200"
+                      >
+                        {review.productName} ↗
+                      </Link>
+                    ) : (
+                      <span className="text-sm font-semibold text-white">
+                        {review.productName}
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-500">
+                      {review.sellerName}
+                    </span>
+                  </div>
+                  <p className="text-sm leading-6 text-slate-200 whitespace-pre-line">
+                    {review.body}
+                  </p>
+                  {review.appealReason && (
+                    <div className="rounded-2xl border border-amber-300/20 bg-amber-500/[0.06] p-3 text-xs text-amber-100">
+                      <span className="font-semibold uppercase tracking-wide text-amber-200">
+                        Seller appeal:
+                      </span>{" "}
+                      {review.appealReason}
+                    </div>
+                  )}
+                  <div className="text-xs text-slate-500">
+                    By {review.reviewerName ?? "Buyer"} ·{" "}
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end justify-start gap-2">
+                  <button
+                    type="button"
+                    disabled={isBusy || !supabaseSourced}
+                    onClick={() => act(review.id, "approve")}
+                    className="rounded-lg bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isBusy ? "Working…" : "Keep review"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isBusy || !supabaseSourced}
+                    onClick={() => act(review.id, "reject")}
+                    className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Remove review
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Card>
   );
 }

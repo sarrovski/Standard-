@@ -35,11 +35,16 @@ import {
 } from "@/lib/product-ranking";
 import { groupsFromFlatFeatures } from "@/lib/product-features";
 import { SellerAnalytics } from "@/components/seller-analytics";
+import {
+  SellerReviewsTab,
+  type SellerReview,
+} from "@/components/seller-reviews-tab";
 
 const tabs = [
   { key: "products", label: "Produits" },
   { key: "payments", label: "Payment Verification" },
   { key: "analytics", label: "Analytics" },
+  { key: "reviews", label: "Reviews" },
   { key: "verification", label: "Provider Tag" },
   { key: "billing", label: "Billing" },
 ];
@@ -164,6 +169,8 @@ export type DashboardInitialData = {
   subscription: UISellerSubscription | null;
   /** Count of verified payment methods on the seller's profile (seller-level). */
   verifiedPaymentMethodCount: number;
+  /** Community reviews on this seller's products, any status. */
+  reviews: SellerReview[];
 } | null;
 
 type DashboardClientProps = {
@@ -301,6 +308,12 @@ export function DashboardClient({
                 ? initialData?.verifiedPaymentMethodCount
                 : undefined
             }
+          />
+        )}
+        {tab === "reviews" && (
+          <SellerReviewsTab
+            supabaseSourced={supabaseSourced}
+            initialReviews={initialData?.reviews ?? []}
           />
         )}
         {tab === "verification" && (
