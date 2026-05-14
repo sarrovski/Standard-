@@ -3,21 +3,20 @@
 import { useState } from "react";
 
 /**
- * Subscription CTA used on /plans. POSTs to the existing
- * /api/stripe/create-checkout-session route, then follows the Stripe Checkout
- * URL it returns.
+ * Subscription CTA on /plans. POSTs to /api/stripe/create-checkout-session,
+ * then follows the Stripe Checkout URL it returns.
+ *
+ * There is a single seller plan, so this button carries no plan/price
+ * identifier — the checkout route always uses the one Stripe Price behind
+ * STRIPE_SELLER_SUBSCRIPTION_PRICE_ID, which is also the Price the /plans
+ * page reads its displayed amount from. Display and charge are the same
+ * Price object; they can't drift.
  *
  * If the user isn't authenticated, the API returns 401 and we redirect to
  * /login with a ?next= so they come back here after signing in.
  *
  * If Stripe env vars aren't configured, the API returns 500. We surface
- * that error inline so the page stays usable in demo mode (the buttons
- * themselves still render).
- *
- * TODO: The current backend has one STRIPE_SELLER_SUBSCRIPTION_PRICE_ID, so
- * every plan CTA starts the same checkout route for now. Add dedicated
- * STRIPE_LAUNCH_PRICE_ID, STRIPE_GROWTH_PRICE_ID, and
- * STRIPE_DOMINION_PRICE_ID before wiring plan-specific Stripe prices.
+ * that error inline so the page stays usable in demo mode.
  */
 export function PlanCheckoutButton({
   label,

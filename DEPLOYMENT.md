@@ -75,20 +75,48 @@ The magic-link / OAuth callback the app uses is `https://stnd.cc/auth/callback`
 
 ## 4. Stripe — dashboard settings
 
-Checkout success/cancel URLs and the billing-portal return URL are built at
-request time from `getSiteUrl()`, so they update automatically once
-`NEXT_PUBLIC_SITE_URL` / the production fallback is in effect — **no Stripe
-dashboard change needed for those.**
+### 4a. Seller plan Price (the displayed = charged amount)
 
-The one fixed URL Stripe stores is the **webhook endpoint**:
+`/plans` sells one seller subscription. The page reads the displayed price
+**live** from the Stripe Price behind `STRIPE_SELLER_SUBSCRIPTION_PRICE_ID`
+(via `getSellerPlanPricing()`), and checkout charges that **same** Price — so
+the displayed amount and the charged amount can never drift.
+
+That means the price is whatever the Stripe Price says. To set it:
+
+- Stripe → Products → the seller subscription product → its recurring Price.
+- Set it to the intended amount — **$19/mo** — recurring monthly.
+  - If the existing Price is wrong (e.g. the old $12), create a **new** Price
+    at $19/mo and point `STRIPE_SELLER_SUBSCRIPTION_PRICE_ID` at the new
+    `price_…` id. (Stripe Prices are immutable — you can't edit the amount of
+    an existing one; you create a new Price and archive the old.)
+- Use the **live-mode** Price id in production env, the test-mode id in
+  preview/test.
+- The `/plans` page will then display `$19/mo` automatically — no code change.
+
+### 4b. Webhook endpoint (perk delivery)
+
+Paying must promote the buyer to a seller. That happens in the webhook
+(`/api/stripe/webhook` → `handleSellerSubscriptionCheckout`): on
+`checkout.session.completed` it ensures a `sellers` row, sets
+`profiles.role = 'seller'`, and writes the `subscriptions` row. **If the
+webhook isn't wired correctly, people pay and get nothing** — so this matters.
 
 - Stripe → Developers → Webhooks → the endpoint for this app.
 - Endpoint URL must be: `https://stnd.cc/api/stripe/webhook`
 - If you were previously pointing at a `*.vercel.app` URL, update it (or add a
   new live-mode endpoint) and copy its signing secret into
   `STRIPE_WEBHOOK_SECRET`.
-- Confirm the endpoint is in **live mode** and subscribed to the events the
-  handler cares about (checkout/subscription events).
+- Confirm the endpoint is in **live mode** and subscribed to at least:
+  `checkout.session.completed`, `customer.subscription.created`,
+  `customer.subscription.updated`, `customer.subscription.deleted`.
+- After a real or test checkout, confirm the event shows **200** in the Stripe
+  dashboard and the buyer's `profiles.role` flipped to `seller`.
+
+Checkout success/cancel URLs and the billing-portal return URL are built at
+request time from `getSiteUrl()`, so they update automatically once
+`NEXT_PUBLIC_SITE_URL` / the production fallback is in effect — **no Stripe
+dashboard change needed for those.**
 
 ## 5. Post-cutover smoke check
 

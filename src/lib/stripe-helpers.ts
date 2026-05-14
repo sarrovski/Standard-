@@ -95,6 +95,85 @@ export async function userOwnsProduct(args: {
 }
 
 /**
+ * Pricing for the single seller subscription plan, read live from the
+ * Stripe Price referenced by `STRIPE_SELLER_SUBSCRIPTION_PRICE_ID`.
+ *
+ * This is the source of truth: the /plans page displays whatever this
+ * returns, and checkout charges that same Stripe Price — so the displayed
+ * price can never drift from the amount actually charged. To change the
+ * price, change the Stripe Price (or point the env var at a new one);
+ * no code change needed.
+ *
+ * Falls back to a static placeholder ONLY when Stripe isn't configured
+ * (demo / preview deploys) or the Price lookup fails. The fallback is
+ * flagged via `source` so the page can label it instead of implying a
+ * real charge amount.
+ */
+export type SellerPlanPricing = {
+  /** Formatted amount, e.g. "$19". */
+  amountLabel: string;
+  /** Billing interval short form, e.g. "mo". */
+  interval: string;
+  /** "stripe" when read live from the Price; "fallback" otherwise. */
+  source: "stripe" | "fallback";
+};
+
+// Only used when Stripe is unconfigured (demo) or the lookup fails. Keep
+// this in sync with the real Stripe Price as a courtesy, but it is never
+// what gets charged — checkout always uses the live Stripe Price.
+const SELLER_PLAN_FALLBACK: SellerPlanPricing = {
+  amountLabel: "$19",
+  interval: "mo",
+  source: "fallback",
+};
+
+function shortInterval(interval: string | undefined): string {
+  switch (interval) {
+    case "month":
+      return "mo";
+    case "year":
+      return "yr";
+    case "week":
+      return "wk";
+    case "day":
+      return "day";
+    default:
+      return interval ?? "mo";
+  }
+}
+
+export async function getSellerPlanPricing(): Promise<SellerPlanPricing> {
+  const priceId = process.env.STRIPE_SELLER_SUBSCRIPTION_PRICE_ID;
+  if (!process.env.STRIPE_SECRET_KEY || !priceId) {
+    return SELLER_PLAN_FALLBACK;
+  }
+  try {
+    const price = await stripe.prices.retrieve(priceId);
+    if (price.unit_amount == null) {
+      console.error(
+        "[stripe-helpers] seller plan price has no unit_amount:",
+        priceId,
+      );
+      return SELLER_PLAN_FALLBACK;
+    }
+    const amount = price.unit_amount / 100;
+    const amountLabel = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: price.currency,
+      maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    }).format(amount);
+    return {
+      amountLabel,
+      interval: shortInterval(price.recurring?.interval),
+      source: "stripe",
+    };
+  } catch (err) {
+    console.error("[stripe-helpers] getSellerPlanPricing failed:", err);
+    return SELLER_PLAN_FALLBACK;
+  }
+}
+
+/**
  * Returns true if there is currently an active featured slot for the given
  * (game, category) tuple whose ends_at is in the future. Caller decides what
  * to do when occupied (typically: return 409).
