@@ -41,6 +41,10 @@ import {
 } from "@/components/seller-reviews-tab";
 import { SellerCreatorsTab } from "@/components/seller-creators-tab";
 import type { UICreatorRequest } from "@/lib/creator-marketplace";
+import {
+  FeaturedSlotForm,
+  type FeaturedProductOption,
+} from "@/components/featured-slot-form";
 
 const tabs = [
   { key: "products", label: "Produits" },
@@ -157,6 +161,16 @@ function DashboardSidebar({
   );
 }
 
+/** A currently-active featured slot owned by the seller. */
+export type ActiveFeaturedSlot = {
+  id: string;
+  productName: string;
+  productSlug: string;
+  game: string;
+  category: string;
+  endsAt: string | null;
+};
+
 /**
  * `initialData`:
  *   - non-null => Supabase-sourced (server fetched). Demo product-store is
@@ -176,6 +190,8 @@ export type DashboardInitialData = {
   reviews: SellerReview[];
   /** Creator briefs this seller has sent, any status. */
   creatorRequests: UICreatorRequest[];
+  /** Currently-active featured slots owned by this seller. */
+  activeFeaturedSlots: ActiveFeaturedSlot[];
 } | null;
 
 type DashboardClientProps = {
@@ -294,6 +310,8 @@ export function DashboardClient({
             supabaseSourced={supabaseSourced}
             initialProducts={initialData?.products ?? null}
             verifiedPaymentMethodCount={initialData?.verifiedPaymentMethodCount}
+            activeFeaturedSlots={initialData?.activeFeaturedSlots ?? []}
+            featuredResult={searchParams.get("featured")}
           />
         )}
         {tab === "payments" && (
@@ -347,10 +365,14 @@ function Products({
   supabaseSourced,
   initialProducts,
   verifiedPaymentMethodCount,
+  activeFeaturedSlots,
+  featuredResult,
 }: {
   supabaseSourced: boolean;
   initialProducts: UISellerProductCard[] | null;
   verifiedPaymentMethodCount: number | undefined;
+  activeFeaturedSlots: ActiveFeaturedSlot[];
+  featuredResult: string | null;
 }) {
   const [demoProductsList, setDemoProducts] = useState<LocalProduct[]>([]);
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
@@ -441,6 +463,21 @@ function Products({
     );
   }, [displayProducts, searchQuery]);
 
+  // Published products are the only ones eligible for a featured slot.
+  // Derived from the already-loaded list — no extra fetch needed.
+  const featuredProductOptions = useMemo<FeaturedProductOption[]>(
+    () =>
+      (initialProducts ?? [])
+        .filter((product) => product.rawStatus === "published")
+        .map((product) => ({
+          id: product.id,
+          name: product.name,
+          game: product.game,
+          category: product.category,
+        })),
+    [initialProducts],
+  );
+
   // Real publish/archive (Supabase mode only). On success we reload the page
   // so server-side initialData reflects the change. A finer-grained client
   // refresh (router.refresh) would also work but reload keeps logic simple.
@@ -508,6 +545,18 @@ function Products({
 
   return (
     <div className="space-y-6">
+      {featuredResult === "success" && (
+        <Card className="border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          Featured slot purchase completed. Activation will appear shortly via
+          webhook.
+        </Card>
+      )}
+      {featuredResult === "cancelled" && (
+        <Card className="border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+          Featured slot purchase was cancelled.
+        </Card>
+      )}
+
       <section className="grid gap-4 md:grid-cols-4">
         <MiniStat
           label="Produits en ligne"
@@ -795,6 +844,55 @@ function Products({
           })}
         </div>
       </Card>
+
+      {supabaseSourced && (
+        <Card className="p-6">
+          <Badge tone="orange">Featured slots</Badge>
+          <h2 className="mt-4 text-2xl font-black">Boost a product to the top</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-400">
+            Featured placement raises a product&apos;s visibility inside its
+            game/category. One active slot per game/category, 30 days, paid
+            up-front via Stripe.
+          </p>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-500">
+            <li>Featured does not increase trust score.</li>
+            <li>Featured does not skip payment verification.</li>
+            <li>Provider / Developer tag is reviewed separately.</li>
+          </ul>
+
+          {activeFeaturedSlots.length > 0 && (
+            <div className="mt-6 space-y-3">
+              <div className="text-xs uppercase tracking-wide text-slate-500">
+                Currently active
+              </div>
+              {activeFeaturedSlots.map((slot) => (
+                <div
+                  key={slot.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4"
+                >
+                  <div>
+                    <div className="font-semibold">{slot.productName}</div>
+                    <div className="mt-1 text-xs text-emerald-200/70">
+                      {slot.game} • {slot.category} • ends{" "}
+                      {formatFeaturedSlotDate(slot.endsAt)}
+                    </div>
+                  </div>
+                  <Badge tone="green">Featured active</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/40 p-5">
+            <div className="text-xs uppercase tracking-wide text-slate-500">
+              Reserve a slot
+            </div>
+            <div className="mt-3">
+              <FeaturedSlotForm products={featuredProductOptions} />
+            </div>
+          </div>
+        </Card>
+      )}
 
     </div>
   );
@@ -1226,11 +1324,11 @@ function Billing() {
   return (
     <Card className="p-6">
       <Badge tone="orange">Billing</Badge>
-      <h2 className="mt-4 text-2xl font-black">Subscription, billing portal, and featured slots</h2>
+      <h2 className="mt-4 text-2xl font-black">Subscription and billing portal</h2>
       <p className="mt-2 text-sm leading-6 text-slate-400">
         Everything money-related lives on a dedicated page so it stays organized.
-        From there you can review your subscription, open the Stripe customer
-        portal, and reserve a featured slot for one of your published products.
+        From there you can review your subscription and open the Stripe customer
+        portal.
       </p>
       <Link
         href="/dashboard/billing"
@@ -1239,9 +1337,9 @@ function Billing() {
         Open billing
       </Link>
       <div className="mt-8 rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm leading-6 text-slate-400">
-        Billing is the only place to open the Stripe customer portal or reserve
-        Featured visibility. Plans remains the only place to start a seller
-        subscription.
+        Billing is the only place to open the Stripe customer portal. Plans
+        remains the only place to start a seller subscription. Featured slots
+        are reserved from the Produits tab.
       </div>
     </Card>
   );
@@ -1250,6 +1348,15 @@ function Billing() {
 // =========================================================================
 // Shared bits
 // =========================================================================
+
+function formatFeaturedSlotDate(value: string | null): string {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
 
 function DashboardTextInput({
   label,

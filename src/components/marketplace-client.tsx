@@ -7,6 +7,7 @@ import { GameLogo } from "@/components/game-logo";
 import { Badge, Card } from "@/components/ui";
 import { featuredSlots as defaultSlots, games, productCategories, products as demoProducts, paymentMethods, sellerTags } from "@/lib/data";
 import { cn } from "@/lib/helpers";
+import { toSlug } from "@/lib/slugs";
 import { getPaymentVisualIdentity } from "@/lib/payment-identities";
 import { getCategoryVisualIdentity, getGameVisualIdentity } from "@/lib/visual-identities";
 import { evaluateProductRanking, isNewListing, type RankingInput } from "@/lib/product-ranking";
@@ -466,7 +467,12 @@ export function MarketplaceClient({ initialProducts }: MarketplaceClientProps) {
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-slate-400">{product.seller}</span>
+                  <Link
+                    href={`/sellers/${toSlug(product.seller)}`}
+                    className="text-sm text-slate-400 underline-offset-2 transition hover:text-white hover:underline"
+                  >
+                    {product.seller}
+                  </Link>
                   <CategoryBadge category={product.category} />
                 </div>
 

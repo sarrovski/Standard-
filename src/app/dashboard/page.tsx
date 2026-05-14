@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/session";
 import { Nav, Shell } from "@/components/ui";
 import { DashboardClient, type DashboardInitialData } from "@/components/dashboard-client";
 import {
+  getActiveSellerFeaturedSlots,
   getProductTrafficStats,
   getSellerDashboardData,
   getVerifiedPaymentMethodCount,
@@ -47,6 +48,7 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
       verifiedPaymentMethodCount: 0,
       reviews: [],
       creatorRequests: [],
+      activeFeaturedSlots: [],
     };
   }
 
@@ -55,12 +57,35 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
     trafficStats,
     reviewsRes,
     creatorRequestsRes,
+    featuredSlotsRes,
   ] = await Promise.all([
     getVerifiedPaymentMethodCount(data.seller.id),
     getProductTrafficStats(data.seller.id),
     getReviewsForSeller(data.seller.id),
     getCreatorRequestsForSeller(data.seller.id),
+    getActiveSellerFeaturedSlots(data.seller.id),
   ]);
+
+  type FeaturedSlotRow = {
+    id: string;
+    ends_at: string | null;
+    products?: {
+      name: string;
+      slug: string;
+      game: string;
+      category: string;
+    } | null;
+  };
+  const activeFeaturedSlots = (
+    (featuredSlotsRes.data ?? []) as unknown as FeaturedSlotRow[]
+  ).map((row) => ({
+    id: row.id,
+    productName: row.products?.name ?? "—",
+    productSlug: row.products?.slug ?? "",
+    game: row.products?.game ?? "—",
+    category: row.products?.category ?? "—",
+    endsAt: row.ends_at,
+  }));
 
   const reviews: SellerReview[] = reviewsRes.data.map((row) => ({
     id: row.id,
@@ -89,6 +114,7 @@ async function loadDashboardData(): Promise<DashboardInitialData> {
     verifiedPaymentMethodCount,
     reviews,
     creatorRequests: creatorRequestsRes.data,
+    activeFeaturedSlots,
   };
 }
 
