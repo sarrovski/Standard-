@@ -3,44 +3,24 @@ import { getSessionUser } from "@/lib/session";
 import { Badge, Card, Nav, SectionHeader, Shell } from "@/components/ui";
 import { BillingActions } from "@/components/billing-actions";
 import {
-  FeaturedSlotForm,
-  type FeaturedProductOption,
-} from "@/components/featured-slot-form";
-import {
-  getActiveSellerFeaturedSlots,
   getSellerByProfileId,
-  getSellerProducts,
   getSellerSubscription,
 } from "@/lib/repositories/seller";
 import { adaptSellerSubscription, type UISellerSubscription } from "@/lib/adapters";
 
 /**
- * /dashboard/billing is the single home for everything money-related on the
- * seller side:
- *   - subscription status + Stripe billing portal
- *   - featured slot purchase
- *   - currently active featured slots owned by this seller
+ * /dashboard/billing is the home for the seller subscription + Stripe billing
+ * portal.
  *
- * Featured slot CTAs were removed from product cards in this batch so there
- * is exactly one place to start a featured checkout.
+ * Featured slot purchase used to live here too; it now lives in the dashboard
+ * Produits tab, right next to the seller's product list.
  */
-
-type ActiveFeaturedSlot = {
-  id: string;
-  productName: string;
-  productSlug: string;
-  game: string;
-  category: string;
-  endsAt: string | null;
-};
 
 type BillingViewState = {
   configured: boolean;
   subscription: UISellerSubscription | null;
   hasStripeCustomer: boolean;
   noSellerYet: boolean;
-  publishedProducts: FeaturedProductOption[];
-  activeFeaturedSlots: ActiveFeaturedSlot[];
 };
 
 async function loadBillingData(): Promise<BillingViewState> {
@@ -50,8 +30,6 @@ async function loadBillingData(): Promise<BillingViewState> {
       subscription: null,
       hasStripeCustomer: false,
       noSellerYet: false,
-      publishedProducts: [],
-      activeFeaturedSlots: [],
     };
   }
 
@@ -66,8 +44,6 @@ async function loadBillingData(): Promise<BillingViewState> {
       subscription: null,
       hasStripeCustomer: false,
       noSellerYet: true,
-      publishedProducts: [],
-      activeFeaturedSlots: [],
     };
   }
 
@@ -78,17 +54,11 @@ async function loadBillingData(): Promise<BillingViewState> {
       subscription: null,
       hasStripeCustomer: false,
       noSellerYet: true,
-      publishedProducts: [],
-      activeFeaturedSlots: [],
     };
   }
 
   const seller = sellerRes.data;
-  const [subRes, productsRes, featuredRes] = await Promise.all([
-    getSellerSubscription(seller.id),
-    getSellerProducts(seller.id),
-    getActiveSellerFeaturedSlots(seller.id),
-  ]);
+  const subRes = await getSellerSubscription(seller.id);
   const subscription = adaptSellerSubscription(subRes.data ?? null);
 
   const { data: customerRow } = await supabase
@@ -97,47 +67,11 @@ async function loadBillingData(): Promise<BillingViewState> {
     .eq("profile_id", user.id)
     .maybeSingle<{ stripe_customer_id: string }>();
 
-  type ProductRow = {
-    id: string;
-    name: string;
-    game: string;
-    category: string;
-    status: string;
-  };
-  const publishedProducts: FeaturedProductOption[] = (
-    (productsRes.data ?? []) as unknown as ProductRow[]
-  )
-    .filter((p) => p.status === "published")
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      game: p.game,
-      category: p.category,
-    }));
-
-  type FeaturedRow = {
-    id: string;
-    ends_at: string | null;
-    products?: { name: string; slug: string; game: string; category: string } | null;
-  };
-  const activeFeaturedSlots: ActiveFeaturedSlot[] = (
-    (featuredRes.data ?? []) as unknown as FeaturedRow[]
-  ).map((row) => ({
-    id: row.id,
-    productName: row.products?.name ?? "—",
-    productSlug: row.products?.slug ?? "",
-    game: row.products?.game ?? "—",
-    category: row.products?.category ?? "—",
-    endsAt: row.ends_at,
-  }));
-
   return {
     configured: true,
     subscription,
     hasStripeCustomer: Boolean(customerRow?.stripe_customer_id),
     noSellerYet: false,
-    publishedProducts,
-    activeFeaturedSlots,
   };
 }
 
@@ -160,8 +94,6 @@ export default async function BillingPage({
 
   const checkoutResult =
     typeof searchParams?.checkout === "string" ? searchParams.checkout : null;
-  const featuredResult =
-    typeof searchParams?.featured === "string" ? searchParams.featured : null;
 
   return (
     <Shell>
@@ -169,8 +101,8 @@ export default async function BillingPage({
       <section className="mx-auto max-w-5xl px-6 py-10">
         <SectionHeader
           eyebrow="Billing"
-          title="Subscription, billing portal, and featured slots"
-          text="One home for everything money-related on your seller account."
+          title="Subscription and billing portal"
+          text="Manage your seller subscription and open the Stripe customer portal. Featured slots are reserved from the Produits tab."
         />
 
         {checkoutResult === "success" && (
@@ -184,23 +116,13 @@ export default async function BillingPage({
             Subscription checkout was cancelled. You can try again from /plans.
           </Card>
         )}
-        {featuredResult === "success" && (
-          <Card className="mt-6 border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-            Featured slot purchase completed. Activation will appear shortly via webhook.
-          </Card>
-        )}
-        {featuredResult === "cancelled" && (
-          <Card className="mt-6 border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-            Featured slot purchase was cancelled.
-          </Card>
-        )}
 
         {!state.configured ? (
           <Card className="mt-8 p-8">
             <Badge tone="amber">Demo mode</Badge>
             <h2 className="mt-4 text-2xl font-black">Billing is read-only in demo mode</h2>
             <p className="mt-3 text-sm text-slate-400">
-              Connect Supabase + Stripe to manage real subscriptions and featured slots. The
+              Connect Supabase + Stripe to manage your real subscription. The
               dashboard remains clickable so you can preview the rest of the seller experience.
             </p>
           </Card>
@@ -260,60 +182,14 @@ export default async function BillingPage({
               </div>
             </Card>
 
-            {/* 2. Featured slots — purchase + active */}
+            {/* 2. Notes */}
             <Card className="p-6">
-              <Badge tone="orange">Featured slots</Badge>
-              <h2 className="mt-4 text-2xl font-black">Boost a product to the top</h2>
+              <Badge tone="amber">Good to know</Badge>
               <p className="mt-3 text-sm leading-6 text-slate-400">
-                Featured placement raises a product&apos;s visibility inside its game/category.
-                One active slot per game/category, 30 days, paid up-front via Stripe.
-              </p>
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-500">
-                <li>Featured does not increase trust score.</li>
-                <li>Featured does not skip payment verification.</li>
-                <li>Provider / Developer tag is reviewed separately.</li>
-              </ul>
-
-              {state.activeFeaturedSlots.length > 0 && (
-                <div className="mt-6 space-y-3">
-                  <div className="text-xs uppercase tracking-wide text-slate-500">
-                    Currently active
-                  </div>
-                  {state.activeFeaturedSlots.map((slot) => (
-                    <div
-                      key={slot.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4"
-                    >
-                      <div>
-                        <div className="font-semibold">{slot.productName}</div>
-                        <div className="mt-1 text-xs text-emerald-200/70">
-                          {slot.game} • {slot.category} • ends {formatDate(slot.endsAt)}
-                        </div>
-                      </div>
-                      <Badge tone="green">Featured active</Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/40 p-5">
-                <div className="text-xs uppercase tracking-wide text-slate-500">
-                  Reserve a slot
-                </div>
-                <div className="mt-3">
-                  <FeaturedSlotForm products={state.publishedProducts} />
-                </div>
-              </div>
-            </Card>
-
-            {/* 3. Notes */}
-            <Card className="p-6">
-              <Badge tone="amber">Verification still matters</Badge>
-              <p className="mt-3 text-sm leading-6 text-slate-400">
-                Featured boosts visibility but does not replace verification. Payment methods,
-                Provider / Developer tag, and trust signals are reviewed independently. A
-                seller can stop or change subscription anytime from the Stripe billing portal
-                above; cancelling does not auto-archive published products.
+                A seller can stop or change their subscription anytime from the
+                Stripe billing portal above; cancelling does not auto-archive
+                published products. Featured slots are reserved from the
+                Produits tab and are billed separately from the subscription.
               </p>
             </Card>
 

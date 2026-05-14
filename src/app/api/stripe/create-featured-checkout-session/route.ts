@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
       line_items: [
         { price: process.env.STRIPE_FEATURED_SLOT_PRICE_ID, quantity: 1 },
       ],
-      success_url: `${siteUrl}/dashboard/billing?featured=success`,
-      cancel_url: `${siteUrl}/dashboard/billing?featured=cancelled`,
+      success_url: `${siteUrl}/dashboard?tab=products&featured=success`,
+      cancel_url: `${siteUrl}/dashboard?tab=products&featured=cancelled`,
       metadata: {
         checkout_type: "featured_slot",
         product_id: parsed.product_id,
@@ -149,8 +149,8 @@ export async function POST(request: NextRequest) {
     line_items: [
       { price: process.env.STRIPE_FEATURED_SLOT_PRICE_ID, quantity: 1 },
     ],
-    success_url: `${siteUrl}/dashboard/billing?featured=success`,
-    cancel_url: `${siteUrl}/dashboard/billing?featured=cancelled`,
+    success_url: `${siteUrl}/dashboard?tab=products&featured=success`,
+    cancel_url: `${siteUrl}/dashboard?tab=products&featured=cancelled`,
     metadata: {
       checkout_type: "featured_slot",
       profile_id: user.id,

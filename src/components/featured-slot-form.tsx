@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 /**
- * Featured slot purchase UI, lives on /dashboard/billing only.
+ * Featured slot purchase UI, lives in the dashboard Produits tab.
  *
  * The seller picks a published product and we POST to
  * /api/stripe/create-featured-checkout-session, which derives game +
