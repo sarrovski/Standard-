@@ -20,7 +20,7 @@ export function Shell({ children }: { children: ReactNode }) {
 export function Nav({ user }: { user?: SessionUser | null } = {}) {
   return (
     <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-      <StandardLogo href="/" />
+      <StandardLogo href="/" height={56} />
 
 
       <div className="hidden items-center gap-7 text-sm font-medium text-slate-300 md:flex">
@@ -177,7 +177,7 @@ export function Footer() {
     <footer className="mx-auto mt-16 max-w-7xl border-t border-white/10 px-6 py-10">
       <div className="grid gap-8 md:grid-cols-[1.2fr_0.7fr_0.8fr_0.7fr]">
         <div>
-          <StandardLogo href={null} />
+          <StandardLogo href={null} height={72} />
           <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">
             Standard helps buyers compare sellers, verified payment methods, product pages, and trust signals before they leave for a seller website.
           </p>
